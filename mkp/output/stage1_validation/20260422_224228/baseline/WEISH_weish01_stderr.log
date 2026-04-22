@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "<string>", line 30, in <module>
+  File "/home/sean/mkp/old/main1weish.py", line 17, in __init__
+    self.batch_files = os.listdir(self.batch_directory) # 使用 os.listdir 获取目录中的所有文件名
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'data\\WEISH'

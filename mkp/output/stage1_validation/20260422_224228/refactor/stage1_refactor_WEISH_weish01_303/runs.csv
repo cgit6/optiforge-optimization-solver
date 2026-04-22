@@ -1,0 +1,4 @@
+problem_id,solver_id,repeat_index,seed,best_objective,feasible,objective_valid,objective_mismatch,stop_reason,runtime,evaluation_count,error,excluded_reason
+weish01,bsma_v1_008,0,303789945,4554,True,True,False,max_iterations_reached,0.0,4020,,
+weish01,bsma_v1_008,0,303789945,4554,True,True,False,max_iterations_reached,0.0,4020,,
+weish01,bsma_v1_008,0,303789945,4554,True,True,False,max_iterations_reached,0.0,4020,,

@@ -1,0 +1,2 @@
+[pytest11]
+mkp_invocation_tests = mkp.pytest_plugin

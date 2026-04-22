@@ -1,0 +1,6 @@
+/home/sean/mkp/old/main1weish.py:16: SyntaxWarning: invalid escape sequence '\W'
+  self.batch_directory = "data\WEISH"
+Traceback (most recent call last):
+  File "/home/sean/mkp/old/main1weish.py", line 2, in <module>
+    import pandas as pd
+ModuleNotFoundError: No module named 'pandas'

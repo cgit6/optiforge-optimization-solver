@@ -1,0 +1,9 @@
+solver_id: bsma_v1_008
+solver_class: BSMAV1008Solver
+stop_condition:
+  type: max_iterations
+  max_iterations: 200 # 最大迭代次數
+  max_seconds: null
+params:
+  pop_size: 20 # 種群大小
+  z: 0.08 # 轉換機率

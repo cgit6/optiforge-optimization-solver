@@ -1,0 +1,15 @@
+{
+  "dataset": "WEISH",
+  "problem_id": "weish01",
+  "seed": 101,
+  "max_iterations": 30,
+  "final_objective_old": 4554,
+  "final_objective_new": 4554,
+  "final_solution_match": true,
+  "trace_length_old": 43,
+  "trace_length_new": 43,
+  "trace_match": true,
+  "first_mismatch_index": null,
+  "first_mismatch_old": null,
+  "first_mismatch_new": null
+}

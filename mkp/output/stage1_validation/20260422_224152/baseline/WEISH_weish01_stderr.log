@@ -1,0 +1,9 @@
+/home/sean/mkp/old/main1weish.py:16: SyntaxWarning: invalid escape sequence '\W'
+  self.batch_directory = "data\WEISH"
+Traceback (most recent call last):
+  File "<string>", line 24, in <module>
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/sean/mkp/old/main1weish.py", line 10, in <module>
+    import BSCASMA2
+ModuleNotFoundError: No module named 'BSCASMA2'
