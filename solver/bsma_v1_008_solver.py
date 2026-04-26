@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy as copy
 import hashlib
-import random
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -33,6 +32,9 @@ class BSMAV1008Core:
         weights: np.ndarray,
         capacities: np.ndarray,
         seed: int | None = None,
+        *,
+        pop_size: int = 20,
+        z: float = 0.08,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -43,10 +45,10 @@ class BSMAV1008Core:
         self.seed = seed
         self.linprog_runtime = 0.0
 
-        self.pop_size = 20
+        self.pop_size = int(pop_size)
         self.max_iter = 5000
         self.cp_list = self.pseudo_utility()
-        self.z = 0.08
+        self.z = float(z)
         self.W = np.zeros([self.pop_size, self.items])
 
         self.pop_fit = np.zeros([self.pop_size], dtype=int)
@@ -79,7 +81,7 @@ class BSMAV1008Core:
         for i in range(self.pop_size):
             accumulated_resources = np.zeros([self.dim])
             for j in self.cp_list:
-                if random.uniform(0, 1) < 0.5:
+                if np.random.uniform(0.0, 1.0) < 0.5:
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
                         population[i, j] = 1
@@ -121,7 +123,6 @@ class BSMAV1008Core:
     # 執行求解
     def run(self) -> tuple[np.ndarray, int]:
         np.random.seed(self.seed)
-        random.seed(self.seed)
 
         self.pop_sol, self.pop_fit = self.sort_pop()
         self.Gbest_sol = self.pop_sol[0]
@@ -155,7 +156,7 @@ class BSMAV1008Core:
                     self.pop_sol[i] = np.zeros(self.items)
                     accumulated_resources = np.zeros([self.dim])
                     for j in self.cp_list:
-                        if random.uniform(0, 1) < 0.5:
+                        if np.random.uniform(0.0, 1.0) < 0.5:
                             accumulated_resources += self.weights[j]
                             if np.all(accumulated_resources <= self.capacities):
                                 self.pop_sol[i, j] = 1
@@ -170,6 +171,7 @@ class BSMAV1008Core:
                         loop_snap["p_i0"] = float(p)
                         loop_snap["vb0_digest"] = _digest_float_prefix(vb)
                         loop_snap["vc0_digest"] = _digest_float_prefix(vc)
+                    # 局部搜索
                     for j in range(self.items):
                         r = np.random.random()
                         a_idx, b_idx = np.random.choice(list(set(range(0, self.pop_size)) - {i}), 2, replace=False)
@@ -179,7 +181,7 @@ class BSMAV1008Core:
                             )
                         else:
                             self.pop_sol[i, j] = vc[j] * self.pop_sol[i, j]
-                        if random.uniform(0, 1) < np.abs(np.tanh(self.pop_sol[i, j])):
+                        if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
                             self.pop_sol[i, j] = 1
                         else:
                             self.pop_sol[i, j] = 0
@@ -212,11 +214,20 @@ class BSMAV1008Solver:
         if max_iterations <= 0:
             raise ValueError("max_iterations must be > 0")
 
+        raw_params = config.get("params", {})
+        if not isinstance(raw_params, dict):
+            raise ValueError("params must be a mapping when present")
+        pop_size = int(raw_params.get("pop_size", 20))
+        z = float(raw_params.get("z", 0.08))
+        if pop_size <= 0:
+            raise ValueError("params.pop_size must be > 0")
+        if not (0.0 < z <= 1.0):
+            raise ValueError("params.z must satisfy 0 < z <= 1")
+
         run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
 
-        # 與舊版一致：在建立族群前即固定 numpy/random 全域亂數（對照驗證時亦先 seed 再 __init__）
+        # 與舊版一致：在建立族群前即固定 numpy 全域亂數（對照驗證時亦先 seed 再 __init__）
         np.random.seed(run_seed)
-        random.seed(run_seed)
 
         t_alg0 = time.perf_counter()
         core = BSMAV1008Core(
@@ -227,6 +238,8 @@ class BSMAV1008Solver:
             np.asarray(problem.weights, dtype=int),    # 物品重量
             np.asarray(problem.capacities, dtype=int), # 限制容量
             seed=run_seed,
+            pop_size=pop_size,
+            z=z,
         )
         core.max_iter = int(max_iterations) # 最大迭代次數
         best_sol, best_fit = core.run() # 執行求解

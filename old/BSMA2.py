@@ -1,7 +1,6 @@
 import numpy as np
 # np.set_printoptions(suppress=True) # 設定列印選項，關閉科學記數法
 import copy as copy
-import random
 from scipy.optimize import linprog
 from scipy.special import erf
 
@@ -50,7 +49,7 @@ class BSMA_V1_008:
             for j in self.cp_list:
                 # 偽效用降序排列
                 # 測試所有累積的資源+新物件是否劣於ks的約束
-                if random.uniform(0, 1) < 0.5 :
+                if np.random.uniform(0.0, 1.0) < 0.5:
                     # 檢查該物品加入背包後是否違反限制
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
@@ -97,7 +96,6 @@ class BSMA_V1_008:
     
     def run(self):
         np.random.seed(self.seed)
-        random.seed(self.seed)
 
         self.pop_sol,self.pop_fit = self.sort_pop() # 排序
         # print(self.pop_sol)
@@ -135,7 +133,7 @@ class BSMA_V1_008:
                     for j in self.cp_list: 
                         # 偽效用降序排列
                         # 測試所有累積的資源+新物件是否劣於ks的約束
-                        if random.uniform(0, 1) < 0.5 :
+                        if np.random.uniform(0.0, 1.0) < 0.5:
                             # 檢查該物品加入背包後是否違反限制
                             accumulated_resources += self.weights[j]
                             if np.all(accumulated_resources <= self.capacities):
@@ -155,7 +153,7 @@ class BSMA_V1_008:
                             self.pop_sol[i,j] = vc[j] * self.pop_sol[i, j] 
 
                         # 轉換函數
-                        if random.uniform(0, 1) < np.abs(np.tanh(self.pop_sol[i,j])):
+                        if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i,j])):
                             self.pop_sol[i,j] = 1
                         else:
                             self.pop_sol[i,j] = 0

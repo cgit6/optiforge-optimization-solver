@@ -90,3 +90,19 @@ def test_bsma_stop_condition_max_iterations_reached():
 
     assert result.stop_reason == "max_iterations_reached"
     assert result.evaluation_count >= 20
+
+
+def test_bsma_params_pop_size_from_config_affects_evaluation_count():
+    """params.pop_size 與 stop_condition.max_iterations 一併決定 evaluation_count 上界公式。"""
+    solver = BSMAV1008Solver()
+    problem = _build_problem()
+    pop_size = 7
+    max_iter = 5
+    config = {
+        "solver_id": "bsma_v1_008",
+        "solver_class": "BSMAV1008Solver",
+        "stop_condition": {"type": "max_iterations", "max_iterations": max_iter},
+        "params": {"pop_size": pop_size, "z": 0.08},
+    }
+    result = solver.solve(problem, config, np.random.default_rng(1))
+    assert result.evaluation_count == pop_size + max_iter * pop_size

@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-import random
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -78,7 +77,6 @@ def _trace_digest_from_line(line: str) -> TraceDigest:
 def _capture_new_loop_meta(problem: ProblemModel, seed: int, max_iterations: int) -> list[dict[str, Any]]:
     """與 BSMAV1008Solver 相同前置 seed + Core 建立方式，蒐集 _loop_trace。"""
     np.random.seed(seed)
-    random.seed(seed)
     core = BSMAV1008Core(
         problem.items,
         problem.dim,
@@ -87,6 +85,8 @@ def _capture_new_loop_meta(problem: ProblemModel, seed: int, max_iterations: int
         np.asarray(problem.weights, dtype=int),
         np.asarray(problem.capacities, dtype=int),
         seed=seed,
+        pop_size=20,
+        z=0.08,
     )
     core.max_iter = int(max_iterations)
     core._loop_trace = []
@@ -117,7 +117,6 @@ def _run_old_with_trace(problem: ProblemModel, seed: int, max_iterations: int, r
     cls = getattr(bsma2, "BSMA_V1_008")
     # Make legacy initialization deterministic for strict same-seed comparison.
     np.random.seed(seed)
-    random.seed(seed)
     old_solver = cls(
         problem.items,
         problem.dim,
@@ -230,7 +229,6 @@ def _run_old_with_trace_stream_to_file(
     bsma2 = importlib.import_module("BSMA2")
     cls = getattr(bsma2, "BSMA_V1_008")
     np.random.seed(seed)
-    random.seed(seed)
     old_solver = cls(
         problem.items,
         problem.dim,
