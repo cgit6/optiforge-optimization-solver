@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mkp.problem_repository import ProblemRepository
+from mkp.engine.problem_repository import ProblemRepository
 
 
 def _write_problem_yaml(path: Path, content: str) -> None:

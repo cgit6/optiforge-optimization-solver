@@ -5,14 +5,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.contracts import ExperimentSpec, RunTask
-from mkp.problem_bank import ProblemBank
-from mkp.problem_repository import ProblemRepository
-from mkp.result_writer import ResultWriter
+from mkp.engine.contracts import ExperimentSpec, RunTask
+from mkp.engine.problem_bank import ProblemBank
+from mkp.engine.problem_repository import ProblemRepository
+from mkp.engine.solver_configs_snapshot import SolverConfigsSnapshot
 from mkp.simulator import Simulator
-from mkp.solver_config_loader import SolverConfigLoader
-from mkp.solver_registry import SolverRegistry
-from mkp.validator import Validator
+from mkp.solver.solver_registry import SolverRegistry
+from mkp.solver.validator import Validator
+from mkp.tools.result_writer import ResultWriter
 
 
 class RecordingSolver:
@@ -20,13 +20,12 @@ class RecordingSolver:
         self.first_random: int | None = None
 
     def solve(self, problem, config, rng):
-        from mkp.contracts import RunResult
+        from mkp.engine.contracts import RunResult
 
         self.first_random = int(rng.integers(0, 10_000))
         return RunResult(
             problem_id=problem.problem_id,
             solver_id=config["solver_id"],
-            repeat_index=0,
             seed=0,
             best_solution=np.array([1, 1, 1]),
             best_objective=60,
@@ -34,6 +33,7 @@ class RecordingSolver:
             evaluation_count=10,
             stop_reason="max_iterations_reached",
             runtime=0.1,
+            linprog_runtime=0.0,
             error=None,
         )
 
@@ -88,19 +88,19 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_id: str = "exp_sim") 
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        base_seed=0,
+        seed=0,
         output_dir=output_root,
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: solver)
-    config_loader = SolverConfigLoader(config_root=solver_root)
+    solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
     result_writer = ResultWriter(experiment_id=experiment_id, output_root=output_root)
     return Simulator(
         problem_bank=bank,
         solver_registry=registry,
-        solver_config_loader=config_loader,
+        solver_configs=solver_configs,
         validator=validator,
         result_writer=result_writer,
     )
@@ -154,38 +154,15 @@ def test_run_task_fail_fast_when_problem_load_fails(tmp_path: Path):
         simulator.close()
 
 
-def test_run_task_fail_fast_when_solver_config_load_fails(tmp_path: Path):
-    problem_root = tmp_path / "problems"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
-
-    repository = ProblemRepository(config_root=problem_root)
+def test_solver_snapshot_build_fails_when_solver_dir_has_no_yaml(tmp_path: Path) -> None:
     bank_spec = ExperimentSpec(
         experiment_id="exp_fail",
         dataset="WEISH",
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        base_seed=0,
+        seed=0,
         output_dir=tmp_path / "output",
     )
-    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
-    registry = SolverRegistry()
-    solver = RecordingSolver()
-    registry.register("stub_solver", lambda: solver)
-    config_loader = SolverConfigLoader(config_root=tmp_path / "missing-solvers")
-    validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_fail", output_root=tmp_path / "output")
-    simulator = Simulator(
-        problem_bank=bank,
-        solver_registry=registry,
-        solver_config_loader=config_loader,
-        validator=validator,
-        result_writer=result_writer,
-    )
-    try:
-        task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=1)
-
-        with pytest.raises(FileNotFoundError):
-            simulator.run_task(task)
-    finally:
-        simulator.close()
+    with pytest.raises(FileNotFoundError):
+        SolverConfigsSnapshot.build(bank_spec, tmp_path / "missing-solvers")

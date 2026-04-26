@@ -11,6 +11,17 @@ requires-python = ">=3.11"
 [project.entry-points.pytest11]
 mkp_invocation_tests = "mkp.pytest_plugin"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["mkp*"]
+# 原始碼在倉庫根目錄，匯入名稱仍為 `mkp`（見 package-dir）
+[tool.setuptools]
+package-dir = { "mkp" = "." }
+packages = [
+    "mkp",
+    "mkp.cli",
+    "mkp.cli.run",
+    "mkp.converter",
+    "mkp.engine",
+    "mkp.simulator",
+    "mkp.solver",
+    "mkp.tools",
+    "mkp.valid",
+]

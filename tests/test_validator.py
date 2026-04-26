@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from mkp.contracts import ProblemModel, RunResult
-from mkp.validator import Validator
+from mkp.engine.contracts import ProblemModel, RunResult
+from mkp.solver.validator import Validator
 
 
 def _build_problem() -> ProblemModel:
@@ -23,7 +23,6 @@ def _build_run_result(best_solution: np.ndarray, best_objective: int) -> RunResu
     return RunResult(
         problem_id="weish01",
         solver_id="stub_solver",
-        repeat_index=0,
         seed=42,
         best_solution=best_solution,
         best_objective=best_objective,
@@ -31,6 +30,7 @@ def _build_run_result(best_solution: np.ndarray, best_objective: int) -> RunResu
         evaluation_count=10,
         stop_reason="max_iterations_reached",
         runtime=0.1,
+        linprog_runtime=0.0,
         error=None,
     )
 

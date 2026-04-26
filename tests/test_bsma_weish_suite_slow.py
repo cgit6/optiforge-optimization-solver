@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from mkp.bsma_equivalence_batch import run_weish_equivalence_suite
+from mkp.valid.bsma_equivalence_batch import run_weish_equivalence_suite
 
 
 @pytest.mark.slow
 def test_weish01_through_30_streaming_equivalence_100k_budget():
     repo_root = Path(__file__).resolve().parents[1]
-    out = repo_root / "mkp/output/bsma_weish_suite_slow_pytest"
+    out = repo_root / "output/bsma_weish_suite_slow_pytest"
     summary = run_weish_equivalence_suite(
         repo_root=repo_root,
         seed=101,

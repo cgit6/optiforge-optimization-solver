@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mkp.bsma_equivalence import verify_equivalence
+from mkp.valid.bsma_equivalence import verify_equivalence
 
 
 def test_verify_equivalence_new_uses_same_core_as_solver():

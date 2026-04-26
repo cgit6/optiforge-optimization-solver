@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from mkp.bsma_v1_008_solver import BSMAV1008Solver
-from mkp.contracts import ProblemModel
-from mkp.solver_registry import SolverRegistry
+from mkp.engine.contracts import ProblemModel
+from mkp.solver.bsma_v1_008_solver import BSMAV1008Solver
+from mkp.solver.solver_registry import SolverRegistry
 
 
 def _build_problem() -> ProblemModel:

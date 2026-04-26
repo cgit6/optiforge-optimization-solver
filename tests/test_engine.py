@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from mkp.contracts import ExperimentSpec
 from mkp.engine import Engine, SimulationBundle
-from mkp.problem_repository import ProblemRepository
+from mkp.engine.contracts import ExperimentSpec
+from mkp.engine.problem_repository import ProblemRepository
 
 
 def _write_problem_yaml(path: Path) -> None:
@@ -57,7 +58,7 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        base_seed=7,
+        seed=7,
         output_dir=output_root / "exp_engine_1",
     )
 
@@ -71,15 +72,20 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     assert isinstance(bundle, SimulationBundle)
     assert bundle.spec is spec
     assert bundle.game_setting is not None
-    assert bundle.catalog_entries is not None
+    assert len(bundle.catalog) > 0
     assert "WEISH" in bundle.game_setting.datasets
     assert bundle.problem_bank is not None
+    assert bundle.solver_configs is not None
+    assert bundle.solver_configs.solver_ids() == frozenset(spec.solver_ids)
+    assert bundle.solver_builders
+    assert bundle.default_rng is np.random.default_rng
+    sim = bundle.NewSimulatorWithSeed("stub_solver", spec.seed)
     try:
-        results = bundle.simulator.run_batch(bundle.spec)
+        results = sim.run_sequential(spec)
         assert len(results) == 1
         assert (output_root / "exp_engine_1" / "runs.csv").exists()
     finally:
-        bundle.simulator.close()
+        sim.close()
 
 
 def test_engine_build_fails_when_catalog_has_invalid_problem_yaml(tmp_path: Path) -> None:
@@ -96,7 +102,7 @@ def test_engine_build_fails_when_catalog_has_invalid_problem_yaml(tmp_path: Path
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        base_seed=1,
+        seed=1,
         output_dir=output_root / "exp_bad_cat",
     )
 
@@ -122,7 +128,7 @@ def test_engine_build_fails_when_experiment_problem_not_in_catalog(tmp_path: Pat
         problem_ids=("not_in_folder",),
         solver_ids=("stub_solver",),
         repeat=1,
-        base_seed=1,
+        seed=1,
         output_dir=output_root / "exp_missing_pid",
     )
 
@@ -150,7 +156,7 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=2,
-        base_seed=42,
+        seed=42,
         output_dir=output_root / "exp_shm",
         execution_mode="worker_curriculum",
     )
@@ -171,8 +177,9 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
         output_root=output_root,
     )
     load_calls["n"] = 0
+    sim = bundle.NewSimulatorWithSeed("stub_solver", spec.seed)
     try:
-        bundle.simulator.run_batch(spec)
+        sim.run_batch(spec)
         assert load_calls["n"] == 0
     finally:
-        bundle.simulator.close()
+        sim.close()

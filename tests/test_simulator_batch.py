@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from mkp.contracts import ExperimentSpec, RunResult, RunTask
-from mkp.problem_bank import ProblemBank
-from mkp.problem_repository import ProblemRepository
-from mkp.result_writer import ResultWriter
+from mkp.engine.contracts import ExperimentSpec, RunResult, RunTask
+from mkp.engine.problem_bank import ProblemBank
+from mkp.engine.problem_repository import ProblemRepository
+from mkp.engine.solver_configs_snapshot import SolverConfigsSnapshot
 from mkp.simulator import Simulator
-from mkp.solver_config_loader import SolverConfigLoader
-from mkp.solver_registry import SolverRegistry
-from mkp.validator import Validator
+from mkp.solver.solver_registry import SolverRegistry
+from mkp.solver.validator import Validator
+from mkp.tools.result_writer import ResultWriter
 
 
 class CountingSolver:
@@ -24,7 +23,6 @@ class CountingSolver:
         return RunResult(
             problem_id=problem.problem_id,
             solver_id=config["solver_id"],
-            repeat_index=0,
             seed=int(rng.integers(0, np.iinfo(np.int32).max)),
             best_solution=np.array([1, 1, 1]),
             best_objective=60,
@@ -32,6 +30,7 @@ class CountingSolver:
             evaluation_count=10,
             stop_reason="max_iterations_reached",
             runtime=0.1,
+            linprog_runtime=0.0,
             error=None,
         )
 
@@ -80,8 +79,8 @@ def _build_spec() -> ExperimentSpec:
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=3,
-        base_seed=1234,
-        output_dir=Path("mkp/output/exp_batch"),
+        seed=1234,
+        output_dir=Path("output/exp_batch"),
         benchmark_enabled=False,
     )
 
@@ -97,13 +96,13 @@ def _build_simulator(tmp_path: Path) -> Simulator:
     bank = ProblemBank.build_for_spec(repository=repository, spec=_build_spec())
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
-    config_loader = SolverConfigLoader(config_root=solver_root)
+    solver_configs = SolverConfigsSnapshot.build(_build_spec(), solver_root)
     validator = Validator()
     result_writer = ResultWriter(experiment_id="exp_batch", output_root=output_root)
     return Simulator(
         problem_bank=bank,
         solver_registry=registry,
-        solver_config_loader=config_loader,
+        solver_configs=solver_configs,
         validator=validator,
         result_writer=result_writer,
     )
@@ -157,20 +156,20 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
         problem_ids=("p1", "p2"),
         solver_ids=("s_a", "s_b"),
         repeat=2,
-        base_seed=999,
-        output_dir=Path("mkp/output/exp_w"),
+        seed=999,
+        output_dir=Path("output/exp_w"),
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
     registry.register("s_a", lambda: CountingSolver())
     registry.register("s_b", lambda: CountingSolver())
-    config_loader = SolverConfigLoader(config_root=solver_root)
+    solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
     result_writer = ResultWriter(experiment_id="exp_w", output_root=tmp_path / "output")
     simulator = Simulator(
         problem_bank=bank,
         solver_registry=registry,
-        solver_config_loader=config_loader,
+        solver_configs=solver_configs,
         validator=validator,
         result_writer=result_writer,
     )
@@ -181,8 +180,8 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
             problem_ids=("p1", "p2"),
             solver_ids=("s_a", "s_b"),
             repeat=2,
-            base_seed=999,
-            output_dir=Path("mkp/output/exp_w"),
+            seed=999,
+            output_dir=Path("output/exp_w"),
             execution_mode="grid",
         )
         spec_worker = ExperimentSpec(
@@ -191,8 +190,8 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
             problem_ids=("p1", "p2"),
             solver_ids=("s_a", "s_b"),
             repeat=2,
-            base_seed=999,
-            output_dir=Path("mkp/output/exp_w"),
+            seed=999,
+            output_dir=Path("output/exp_w"),
             execution_mode="worker_curriculum",
         )
 
@@ -216,63 +215,44 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
         simulator.close()
 
 
-def test_run_batch_worker_curriculum_uses_repeat_parallel_workers(tmp_path: Path):
-    """worker_curriculum：repeat 條線同時跑；線內仍依序。以 Barrier 驗證至少 repeat 個 solve 同時活著。"""
+def test_run_batch_worker_curriculum_uses_process_pool(tmp_path: Path):
+    """worker_curriculum + ProcessPoolExecutor：repeat 條線各跑 stub_solver，回傳筆數與 summary 正確。"""
     n = 4
-    barrier = threading.Barrier(n)
-
-    class BarrierSolver:
-        def solve(self, problem, config, rng):
-            barrier.wait(timeout=15.0)
-            return RunResult(
-                problem_id=problem.problem_id,
-                solver_id=config["solver_id"],
-                repeat_index=0,
-                seed=int(rng.integers(0, np.iinfo(np.int32).max)),
-                best_solution=np.array([1, 1, 1]),
-                best_objective=60,
-                feasible=True,
-                evaluation_count=10,
-                stop_reason="max_iterations_reached",
-                runtime=0.1,
-                error=None,
-            )
-
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml", problem_id="weish01")
-    _write_solver_yaml(solver_root / "barrier_solver.yaml", solver_id="barrier_solver")
+    _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
     repository = ProblemRepository(config_root=problem_root)
     bank_spec = ExperimentSpec(
         experiment_id="exp_par",
         dataset="WEISH",
         problem_ids=("weish01",),
-        solver_ids=("barrier_solver",),
+        solver_ids=("stub_solver",),
         repeat=n,
-        base_seed=100,
-        output_dir=Path("mkp/output/exp_par"),
+        seed=100,
+        output_dir=Path("output/exp_par"),
         execution_mode="worker_curriculum",
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
-    registry.register("barrier_solver", lambda: BarrierSolver())
-    config_loader = SolverConfigLoader(config_root=solver_root)
+    registry.register("stub_solver", lambda: CountingSolver())
+    solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
     result_writer = ResultWriter(experiment_id="exp_par", output_root=tmp_path / "output")
     simulator = Simulator(
         problem_bank=bank,
         solver_registry=registry,
-        solver_config_loader=config_loader,
+        solver_configs=solver_configs,
         validator=validator,
         result_writer=result_writer,
     )
 
-    spec = bank_spec
-
     try:
-        results = simulator.run_batch(spec)
+        results = simulator.run_batch(bank_spec)
         assert len(results) == n
+        summary_json = tmp_path / "output" / "exp_par" / "summary.json"
+        assert summary_json.exists()
     finally:
         simulator.close()
 
@@ -290,8 +270,8 @@ def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
         problem_ids=("missing", "weish01"),
         solver_ids=("stub_solver",),
         repeat=1,
-        base_seed=1,
-        output_dir=Path("mkp/output/exp_batch_fail_problem"),
+        seed=1,
+        output_dir=Path("output/exp_batch_fail_problem"),
     )
 
     CountingSolver.calls = 0
@@ -300,54 +280,60 @@ def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
     assert CountingSolver.calls == 0
 
 
-def test_run_batch_fail_fast_on_solver_config_error(tmp_path: Path):
+def test_solver_snapshot_raises_when_solver_yaml_missing(tmp_path: Path) -> None:
+    solver_root = tmp_path / "solvers"
+    spec = ExperimentSpec(
+        experiment_id="exp_snap_missing",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("no_such_solver",),
+        repeat=1,
+        seed=1,
+        output_dir=Path("output/exp_snap_missing"),
+    )
+    with pytest.raises(FileNotFoundError):
+        SolverConfigsSnapshot.build(spec, solver_root)
+
+
+def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml", problem_id="weish01")
-
     solver_root = tmp_path / "solvers"
     _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
     repository = ProblemRepository(config_root=problem_root)
-    bank = ProblemBank.build_for_spec(
-        repository=repository,
-        spec=ExperimentSpec(
-            experiment_id="exp_batch_fail_solver",
-            dataset="WEISH",
-            problem_ids=("weish01",),
-            solver_ids=("stub_solver",),
-            repeat=2,
-            base_seed=1,
-            output_dir=Path("mkp/output/exp_batch_fail_solver"),
-        ),
+    bank_spec = ExperimentSpec(
+        experiment_id="exp_mismatch",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        seed=1,
+        output_dir=Path("output/exp_mismatch"),
     )
+    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
-    config_loader = SolverConfigLoader(config_root=solver_root)
+    solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_batch_fail_solver", output_root=tmp_path / "output")
+    result_writer = ResultWriter(experiment_id="exp_mismatch", output_root=tmp_path / "output")
     simulator = Simulator(
         problem_bank=bank,
         solver_registry=registry,
-        solver_config_loader=config_loader,
+        solver_configs=solver_configs,
         validator=validator,
         result_writer=result_writer,
     )
-
-    spec = ExperimentSpec(
-        experiment_id="exp_batch_fail_solver",
-        dataset="WEISH",
-        problem_ids=("weish01",),
-        solver_ids=("missing_solver",),
-        repeat=2,
-        base_seed=1,
-        output_dir=Path("mkp/output/exp_batch_fail_solver"),
-    )
-
-    CountingSolver.calls = 0
     try:
-        with pytest.raises(FileNotFoundError):
-            simulator.run_batch(spec)
-        assert CountingSolver.calls == 0
+        task = RunTask(
+            problem_id="weish01",
+            dataset="WEISH",
+            solver_id="other_solver",
+            repeat_index=0,
+            seed=1,
+        )
+        with pytest.raises(KeyError):
+            simulator.run_task(task)
     finally:
         simulator.close()
 
@@ -357,7 +343,7 @@ def test_run_batch_writes_summary_files(tmp_path: Path):
     spec = _build_spec()
 
     try:
-        results = simulator.run_batch(spec)
+        results = simulator.run_sequential(spec)
 
         assert len(results) == 3
         summary_json = tmp_path / "output" / "exp_batch" / "summary.json"

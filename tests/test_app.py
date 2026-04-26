@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from mkp.app import build_parser, create_experiment_spec, main
+from mkp.cli.run import build_parser, create_experiment_spec, main
+from mkp.cli.run import validate_execute_args
+from mkp.engine.contracts import ExperimentSpec
 
 
 def _write_problem_yaml(path: Path) -> None:
@@ -53,7 +55,7 @@ def test_create_experiment_spec_execution_mode_worker_curriculum(tmp_path: Path)
             "WEISH",
             "--problems",
             "weish01",
-            "--solvers",
+            "--solver",
             "stub_solver",
             "--repeat",
             "1",
@@ -67,6 +69,7 @@ def test_create_experiment_spec_execution_mode_worker_curriculum(tmp_path: Path)
     )
     spec = create_experiment_spec(args)
     assert spec.execution_mode == "worker_curriculum"
+    assert spec.solver_ids == ("stub_solver",)
 
 
 def test_app_cli_success_runs_batch(tmp_path: Path):
@@ -83,7 +86,7 @@ def test_app_cli_success_runs_batch(tmp_path: Path):
         "WEISH",
         "--problems",
         "weish01",
-        "--solvers",
+        "--solver",
         "stub_solver",
         "--repeat",
         "1",
@@ -113,7 +116,7 @@ def test_app_cli_worker_curriculum_runs_batch(tmp_path: Path):
         "WEISH",
         "--problems",
         "weish01",
-        "--solvers",
+        "--solver",
         "stub_solver",
         "--repeat",
         "1",
@@ -143,7 +146,7 @@ def test_app_cli_fail_fast_when_problem_yaml_missing(tmp_path: Path):
         "WEISH",
         "--problems",
         "weish01",
-        "--solvers",
+        "--solver",
         "stub_solver",
         "--repeat",
         "1",
@@ -170,7 +173,7 @@ def test_app_cli_fail_fast_when_solver_yaml_missing(tmp_path: Path):
         "WEISH",
         "--problems",
         "weish01",
-        "--solvers",
+        "--solver",
         "stub_solver",
         "--repeat",
         "1",
@@ -208,3 +211,17 @@ def test_app_cli_missing_required_arg_rejected(tmp_path: Path):
 
     with pytest.raises(SystemExit):
         main(argv, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_validate_execute_args_rejects_multiple_solvers(tmp_path: Path) -> None:
+    spec = ExperimentSpec(
+        experiment_id="e",
+        dataset="D",
+        problem_ids=("p1",),
+        solver_ids=("a", "b"),
+        repeat=1,
+        seed=1,
+        output_dir=tmp_path / "o",
+    )
+    with pytest.raises(ValueError, match="Exactly one solver is required"):
+        validate_execute_args(spec, tmp_path, tmp_path)

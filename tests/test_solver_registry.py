@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mkp.contracts import ProblemModel
-from mkp.solver_registry import SolverRegistry, StubMaxIterationsSolver
+from mkp.engine.contracts import ProblemModel
+from mkp.solver.solver_registry import SolverRegistry, StubMaxIterationsSolver
 
 
 def _build_problem() -> ProblemModel:

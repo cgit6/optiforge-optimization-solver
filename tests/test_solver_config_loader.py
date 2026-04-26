@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mkp.solver_config_loader import SolverConfigLoader
+from mkp.tools.solver_config_loader import SolverConfigLoader
 
 
 def _write_solver_yaml(path: Path, content: str) -> None:

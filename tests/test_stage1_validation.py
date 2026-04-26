@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mkp.stage1_validation import (
+from mkp.valid.stage1_validation import (
     ComparableResult,
     ValidationScenario,
     build_smoke_scenarios,

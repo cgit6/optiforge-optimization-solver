@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mkp.bsma_equivalence import max_outer_iterations_for_budget, verify_equivalence_streaming
+from mkp.valid.bsma_equivalence import max_outer_iterations_for_budget, verify_equivalence_streaming
 from mkp.converter import load_problem_model_from_repo_dat
 
 
 def test_weish_streaming_equivalence_smoke_matches_memory_path():
     """小 budget：串流驗證與記憶體 trace 驗證結果一致（weish01）。"""
-    from mkp.bsma_equivalence import verify_equivalence
+    from mkp.valid.bsma_equivalence import verify_equivalence
 
     repo_root = Path(__file__).resolve().parents[1]
     budget = 2000
     max_iter = max_outer_iterations_for_budget(budget=budget)
     seed = 101
-    trace_dir = repo_root / "mkp/output/bsma_weish_suite_test_smoke/stream_traces"
+    trace_dir = repo_root / "output/bsma_weish_suite_test_smoke/stream_traces"
     problem = load_problem_model_from_repo_dat(repo_root=repo_root, dataset="WEISH", problem_id="weish01")
 
     mem = verify_equivalence(
@@ -45,7 +45,7 @@ def test_weish_streaming_smoke_two_problems_small_budget():
     repo_root = Path(__file__).resolve().parents[1]
     budget = 2000
     max_iter = max_outer_iterations_for_budget(budget=budget)
-    trace_dir = repo_root / "mkp/output/bsma_weish_suite_test_smoke/batch_traces"
+    trace_dir = repo_root / "output/bsma_weish_suite_test_smoke/batch_traces"
     for problem_id in ("weish01", "weish30"):
         problem = load_problem_model_from_repo_dat(
             repo_root=repo_root, dataset="WEISH", problem_id=problem_id

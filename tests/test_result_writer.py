@@ -6,9 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
-from mkp.contracts import ProblemModel, RunResult
-from mkp.result_writer import ResultWriter
-from mkp.validator import Validator
+from mkp.engine.contracts import ProblemModel, RunResult
+from mkp.solver.validator import Validator
+from mkp.tools.result_writer import ResultWriter
 
 
 def _build_problem() -> ProblemModel:
@@ -28,7 +28,6 @@ def _build_run_result(solution: np.ndarray, objective: int, *, feasible: bool = 
     return RunResult(
         problem_id="weish01",
         solver_id="stub_solver",
-        repeat_index=0,
         seed=42,
         best_solution=solution,
         best_objective=objective,
@@ -36,6 +35,7 @@ def _build_run_result(solution: np.ndarray, objective: int, *, feasible: bool = 
         evaluation_count=10,
         stop_reason="max_iterations_reached",
         runtime=0.1,
+        linprog_runtime=0.0,
         error=error,
     )
 
@@ -47,7 +47,7 @@ def test_result_writer_writes_single_run_with_standard_fields(tmp_path: Path):
     run = _build_run_result(np.array([1, 1, 1]), 60)
     report = validator.validate(problem, run)
 
-    writer.write_run(run, report)
+    writer.write_run(run, report, repeat_index=0)
 
     runs_csv = tmp_path / "exp_001" / "runs.csv"
     runs_jsonl = tmp_path / "exp_001" / "runs.jsonl"
@@ -59,12 +59,16 @@ def test_result_writer_writes_single_run_with_standard_fields(tmp_path: Path):
     assert len(rows) == 1
     assert rows[0]["problem_id"] == "weish01"
     assert rows[0]["solver_id"] == "stub_solver"
+    assert rows[0]["repeat_index"] == "0"
     assert rows[0]["best_objective"] == "60"
+    assert rows[0]["linprog_runtime"] == "0.0"
 
     with runs_jsonl.open("r", encoding="utf-8") as fh:
         line = fh.readline().strip()
     payload = json.loads(line)
     assert payload["problem_id"] == "weish01"
+    assert payload["repeat_index"] == 0
+    assert payload["linprog_runtime"] == 0.0
     assert payload["feasible"] is True
     assert payload["objective_valid"] is True
 
@@ -79,9 +83,9 @@ def test_result_writer_summary_aggregation_exclusion_rules(tmp_path: Path):
     mismatch_run = _build_run_result(np.array([1, 0, 1]), 41)
 
     entries = [
-        writer.write_run(valid_run, validator.validate(problem, valid_run)),
-        writer.write_run(infeasible_run, validator.validate(problem, infeasible_run)),
-        writer.write_run(mismatch_run, validator.validate(problem, mismatch_run)),
+        writer.write_run(valid_run, validator.validate(problem, valid_run), repeat_index=0),
+        writer.write_run(infeasible_run, validator.validate(problem, infeasible_run), repeat_index=1),
+        writer.write_run(mismatch_run, validator.validate(problem, mismatch_run), repeat_index=2),
     ]
 
     summary = writer.build_summary(entries)
@@ -123,7 +127,7 @@ def test_result_writer_keeps_invalid_runs_in_outputs(tmp_path: Path):
 
     invalid_run = _build_run_result(np.array([0, 0, 3]), 91, feasible=False, error="solver_warning")
     report = validator.validate(problem, invalid_run)
-    entry = writer.write_run(invalid_run, report)
+    entry = writer.write_run(invalid_run, report, repeat_index=0)
 
     assert entry.excluded_reason in {"infeasible", "objective_mismatch"}
     assert entry.error == "solver_warning"
@@ -142,7 +146,7 @@ def test_result_writer_runtime_error_is_excluded_separately(tmp_path: Path):
     # objective 正確且可行，但 solver 帶 error，應歸類 runtime_error
     error_run = _build_run_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
     report = validator.validate(problem, error_run)
-    entry = writer.write_run(error_run, report)
+    entry = writer.write_run(error_run, report, repeat_index=0)
     summary = writer.build_summary([entry])
 
     assert entry.excluded_reason == "runtime_error"

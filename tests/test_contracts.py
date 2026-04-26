@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.contracts import ExperimentSpec, ProblemModel, RunResult, RunTask
+from mkp.engine.contracts import ExperimentSpec, ProblemModel, RunResult, RunTask
 
 
 def test_experiment_spec_valid():
@@ -13,8 +13,8 @@ def test_experiment_spec_valid():
         problem_ids=("weish01", "weish02"),
         solver_ids=("solver_a",),
         repeat=3,
-        base_seed=42,
-        output_dir=Path("mkp/output/exp_001"),
+        seed=42,
+        output_dir=Path("output/exp_001"),
         benchmark_enabled=True,
     )
     assert spec.repeat == 3
@@ -29,8 +29,8 @@ def test_experiment_spec_invalid_execution_mode():
             problem_ids=("weish01",),
             solver_ids=("solver_a",),
             repeat=1,
-            base_seed=1,
-            output_dir=Path("mkp/output/exp_001"),
+            seed=1,
+            output_dir=Path("output/exp_001"),
             execution_mode="invalid_mode",  # type: ignore[arg-type]
         )
 
@@ -52,8 +52,8 @@ def test_experiment_spec_invalid(kwargs):
         problem_ids=("weish01",),
         solver_ids=("solver_a",),
         repeat=1,
-        base_seed=1,
-        output_dir=Path("mkp/output/exp_001"),
+        seed=1,
+        output_dir=Path("output/exp_001"),
     )
     base.update(kwargs)
     with pytest.raises(ValueError):
@@ -129,7 +129,6 @@ def test_run_result_valid_and_readonly_solution():
     result = RunResult(
         problem_id="weish01",
         solver_id="solver_a",
-        repeat_index=0,
         seed=7,
         best_solution=np.array([1, 0, 1]),
         best_objective=123,
@@ -137,9 +136,11 @@ def test_run_result_valid_and_readonly_solution():
         evaluation_count=50,
         stop_reason="max_iterations_reached",
         runtime=0.25,
+        linprog_runtime=0.01,
         error=None,
     )
     assert result.best_objective == 123
+    assert result.linprog_runtime == 0.01
     assert result.best_solution.flags.writeable is False
 
 
@@ -148,10 +149,10 @@ def test_run_result_valid_and_readonly_solution():
     [
         {"problem_id": ""},
         {"solver_id": ""},
-        {"repeat_index": -1},
         {"seed": -1},
         {"evaluation_count": -1},
         {"runtime": -0.1},
+        {"linprog_runtime": -0.01},
         {"stop_reason": ""},
     ],
 )
@@ -159,7 +160,6 @@ def test_run_result_invalid(kwargs):
     base = dict(
         problem_id="weish01",
         solver_id="solver_a",
-        repeat_index=0,
         seed=7,
         best_solution=np.array([1, 0, 1]),
         best_objective=123,
@@ -167,6 +167,7 @@ def test_run_result_invalid(kwargs):
         evaluation_count=50,
         stop_reason="max_iterations_reached",
         runtime=0.25,
+        linprog_runtime=0.0,
         error=None,
     )
     base.update(kwargs)
