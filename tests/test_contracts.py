@@ -21,6 +21,20 @@ def test_experiment_spec_valid():
     assert spec.problem_ids == ("weish01", "weish02")
 
 
+def test_experiment_spec_invalid_execution_mode():
+    with pytest.raises(ValueError, match="execution_mode"):
+        ExperimentSpec(
+            experiment_id="exp_001",
+            dataset="WEISH",
+            problem_ids=("weish01",),
+            solver_ids=("solver_a",),
+            repeat=1,
+            base_seed=1,
+            output_dir=Path("mkp/output/exp_001"),
+            execution_mode="invalid_mode",  # type: ignore[arg-type]
+        )
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

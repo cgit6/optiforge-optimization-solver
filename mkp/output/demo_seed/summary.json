@@ -1,0 +1,38 @@
+{
+  "overall": {
+    "total_runs": 20,
+    "valid_run_count": 20,
+    "feasible_rate": 1.0,
+    "avg_runtime": 0.0,
+    "avg_evaluation_count": 20020.0,
+    "avg_objective": 11190.8,
+    "best_objective": 11191,
+    "excluded_counts": {
+      "infeasible": 0,
+      "objective_mismatch": 0,
+      "runtime_error": 0
+    }
+  },
+  "by_problem_solver": [
+    {
+      "problem_id": "weish30",
+      "solver_id": "bsma_v1_008",
+      "run_count": 20,
+      "valid_run_count": 20,
+      "feasible_rate": 1.0,
+      "avg_runtime": 0.0,
+      "avg_evaluation_count": 20020.0,
+      "avg_objective": 11190.8,
+      "best_objective": 11191,
+      "excluded_counts": {
+        "infeasible": 0,
+        "objective_mismatch": 0,
+        "runtime_error": 0
+      },
+      "best_known": 11191,
+      "best_known_reached_count": 19,
+      "best_known_gap_min": 0,
+      "best_known_gap_avg": 0.2
+    }
+  ]
+}

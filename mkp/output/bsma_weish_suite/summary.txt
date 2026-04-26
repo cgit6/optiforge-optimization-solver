@@ -1,5 +1,0 @@
-WEISH BSMA equivalence suite
-seed=101 budget=2000 max_iter=99 pop=20
-all_pass=True total_seconds=0.32
-
-weish01: PASS obj_old=4554 obj_new=4554 trace_len=190 stop=best_known_reached reported_eval=2000 t=0.319s

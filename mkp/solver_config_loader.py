@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ class SolverConfigLoader:
     def __init__(self, config_root: Path | str = Path("mkp/configs/solvers")) -> None:
         self._config_root = Path(config_root)
         self._yaml = YAML(typ="safe")
+        self._yaml_parse_lock = threading.Lock()
 
     def load(self, solver_id: str) -> dict[str, Any]:
         config_path = self._config_root / f"{solver_id}.yaml"
@@ -28,7 +30,8 @@ class SolverConfigLoader:
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         try:
             with path.open("r", encoding="utf-8") as fh:
-                loaded = self._yaml.load(fh)
+                with self._yaml_parse_lock:
+                    loaded = self._yaml.load(fh)
         except YAMLError as exc:
             raise ValueError(f"Invalid YAML format in {path}: {exc}") from exc
 

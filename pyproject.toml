@@ -13,4 +13,4 @@ mkp_invocation_tests = "mkp.pytest_plugin"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["mkp"]
+include = ["mkp*"]

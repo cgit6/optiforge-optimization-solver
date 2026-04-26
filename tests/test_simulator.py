@@ -5,7 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.contracts import RunTask
+from mkp.contracts import ExperimentSpec, RunTask
+from mkp.problem_bank import ProblemBank
 from mkp.problem_repository import ProblemRepository
 from mkp.result_writer import ResultWriter
 from mkp.simulator import Simulator
@@ -72,7 +73,7 @@ params: {}
     )
 
 
-def _build_simulator(tmp_path: Path, solver) -> Simulator:
+def _build_simulator(tmp_path: Path, solver, *, experiment_id: str = "exp_sim") -> Simulator:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
@@ -81,13 +82,23 @@ def _build_simulator(tmp_path: Path, solver) -> Simulator:
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     repository = ProblemRepository(config_root=problem_root)
+    bank_spec = ExperimentSpec(
+        experiment_id=experiment_id,
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        base_seed=0,
+        output_dir=output_root,
+    )
+    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: solver)
     config_loader = SolverConfigLoader(config_root=solver_root)
     validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_sim", output_root=output_root)
+    result_writer = ResultWriter(experiment_id=experiment_id, output_root=output_root)
     return Simulator(
-        problem_repository=repository,
+        problem_bank=bank,
         solver_registry=registry,
         solver_config_loader=config_loader,
         validator=validator,
@@ -98,26 +109,35 @@ def _build_simulator(tmp_path: Path, solver) -> Simulator:
 def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
     solver = RecordingSolver()
     simulator = _build_simulator(tmp_path, solver)
-    task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=123)
+    try:
+        task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=123)
 
-    run_result, report, entry = simulator.run_task(task)
+        run_result, report, entry = simulator.run_task(task)
 
-    assert run_result.problem_id == "weish01"
-    assert report.is_feasible is True
-    assert entry.problem_id == "weish01"
-    assert (tmp_path / "output" / "exp_sim" / "runs.csv").exists()
-    assert (tmp_path / "output" / "exp_sim" / "runs.jsonl").exists()
+        assert run_result.problem_id == "weish01"
+        assert report.is_feasible is True
+        assert entry.problem_id == "weish01"
+        assert (tmp_path / "output" / "exp_sim" / "runs.csv").exists()
+        assert (tmp_path / "output" / "exp_sim" / "runs.jsonl").exists()
+    finally:
+        simulator.close()
 
 
 def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
     solver1 = RecordingSolver()
-    simulator1 = _build_simulator(tmp_path / "a", solver1)
+    simulator1 = _build_simulator(tmp_path / "a", solver1, experiment_id="exp_a")
     task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=777)
-    simulator1.run_task(task)
+    try:
+        simulator1.run_task(task)
+    finally:
+        simulator1.close()
 
     solver2 = RecordingSolver()
-    simulator2 = _build_simulator(tmp_path / "b", solver2)
-    simulator2.run_task(task)
+    simulator2 = _build_simulator(tmp_path / "b", solver2, experiment_id="exp_b")
+    try:
+        simulator2.run_task(task)
+    finally:
+        simulator2.close()
 
     assert solver1.first_random == solver2.first_random
 
@@ -125,10 +145,13 @@ def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
 def test_run_task_fail_fast_when_problem_load_fails(tmp_path: Path):
     solver = RecordingSolver()
     simulator = _build_simulator(tmp_path, solver)
-    task = RunTask(problem_id="missing_problem", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=1)
+    try:
+        task = RunTask(problem_id="missing_problem", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=1)
 
-    with pytest.raises(FileNotFoundError):
-        simulator.run_task(task)
+        with pytest.raises(FileNotFoundError):
+            simulator.run_task(task)
+    finally:
+        simulator.close()
 
 
 def test_run_task_fail_fast_when_solver_config_load_fails(tmp_path: Path):
@@ -136,6 +159,16 @@ def test_run_task_fail_fast_when_solver_config_load_fails(tmp_path: Path):
     _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
 
     repository = ProblemRepository(config_root=problem_root)
+    bank_spec = ExperimentSpec(
+        experiment_id="exp_fail",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        base_seed=0,
+        output_dir=tmp_path / "output",
+    )
+    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
     solver = RecordingSolver()
     registry.register("stub_solver", lambda: solver)
@@ -143,13 +176,16 @@ def test_run_task_fail_fast_when_solver_config_load_fails(tmp_path: Path):
     validator = Validator()
     result_writer = ResultWriter(experiment_id="exp_fail", output_root=tmp_path / "output")
     simulator = Simulator(
-        problem_repository=repository,
+        problem_bank=bank,
         solver_registry=registry,
         solver_config_loader=config_loader,
         validator=validator,
         result_writer=result_writer,
     )
-    task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=1)
+    try:
+        task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=1)
 
-    with pytest.raises(FileNotFoundError):
-        simulator.run_task(task)
+        with pytest.raises(FileNotFoundError):
+            simulator.run_task(task)
+    finally:
+        simulator.close()

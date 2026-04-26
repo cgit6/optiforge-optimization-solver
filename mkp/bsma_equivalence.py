@@ -13,7 +13,7 @@ import numpy as np
 
 from .bsma_v1_008_solver import BSMAV1008Core, BSMAV1008Solver
 from .contracts import ProblemModel
-from .problem_dat_converter import load_problem_model_from_repo_dat
+from .converter import load_problem_model_from_repo_dat
 
 
 BSMA_DEFAULT_POP_SIZE = 20

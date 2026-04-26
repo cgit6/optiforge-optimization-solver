@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from mkp.bsma_equivalence import max_outer_iterations_for_budget, verify_equivalence_streaming
-from mkp.problem_dat_converter import load_problem_model_from_repo_dat
+from mkp.converter import load_problem_model_from_repo_dat
 
 
 def test_weish_streaming_equivalence_smoke_matches_memory_path():

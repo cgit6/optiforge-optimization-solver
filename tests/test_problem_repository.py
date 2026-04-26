@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -182,4 +183,34 @@ capacities: [7, 8]
 
     assert call_count["n"] == 1
     assert first is second
+
+
+def test_concurrent_loads_do_not_corrupt_yaml_parser(tmp_path: Path) -> None:
+    """ruamel YAML 實例非執行緒安全；並行 load 須通過（Simulator worker_curriculum）。"""
+    root = tmp_path / "problems"
+    _write_problem_yaml(
+        root / "WEISH" / "weish01.yaml",
+        """
+problem_id: weish01
+dataset: WEISH
+items: 3
+dim: 2
+best_known: 100
+values: [10, 20, 30]
+weights:
+  - [1, 2]
+  - [3, 4]
+  - [5, 6]
+capacities: [7, 8]
+""".strip(),
+    )
+    repo = ProblemRepository(config_root=root)
+
+    def _load(_: int) -> str:
+        return repo.load("WEISH", "weish01").problem_id
+
+    with ThreadPoolExecutor(24) as pool:
+        ids = list(pool.map(_load, range(48)))
+
+    assert ids == ["weish01"] * 48
 

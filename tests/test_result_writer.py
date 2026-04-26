@@ -87,12 +87,28 @@ def test_result_writer_summary_aggregation_exclusion_rules(tmp_path: Path):
     summary = writer.build_summary(entries)
     writer.write_summary(summary)
 
-    assert summary["total_runs"] == 3
-    assert summary["feasible_rate"] == 2 / 3
-    assert summary["avg_objective"] == 60
-    assert summary["best_objective"] == 60
-    assert summary["excluded_counts"]["infeasible"] == 1
-    assert summary["excluded_counts"]["objective_mismatch"] == 1
+    overall = summary["overall"]
+    groups = summary["by_problem_solver"]
+    assert len(groups) == 1
+    group = groups[0]
+
+    assert overall["total_runs"] == 3
+    assert overall["valid_run_count"] == 1
+    assert overall["feasible_rate"] == 2 / 3
+    assert overall["avg_objective"] == 60
+    assert overall["best_objective"] == 60
+    assert overall["excluded_counts"]["infeasible"] == 1
+    assert overall["excluded_counts"]["objective_mismatch"] == 1
+    assert overall["excluded_counts"]["runtime_error"] == 0
+
+    assert group["problem_id"] == "weish01"
+    assert group["solver_id"] == "stub_solver"
+    assert group["run_count"] == 3
+    assert group["valid_run_count"] == 1
+    assert group["best_known"] == 50
+    assert group["best_known_reached_count"] == 1
+    assert group["best_known_gap_min"] == -10
+    assert group["best_known_gap_avg"] == -10
 
     summary_json = tmp_path / "exp_002" / "summary.json"
     summary_csv = tmp_path / "exp_002" / "summary.csv"
@@ -116,3 +132,19 @@ def test_result_writer_keeps_invalid_runs_in_outputs(tmp_path: Path):
         payload = json.loads(fh.readline())
     assert payload["error"] == "solver_warning"
     assert payload["excluded_reason"] is not None
+
+
+def test_result_writer_runtime_error_is_excluded_separately(tmp_path: Path):
+    writer = ResultWriter(experiment_id="exp_004", output_root=tmp_path)
+    validator = Validator()
+    problem = _build_problem()
+
+    # objective 正確且可行，但 solver 帶 error，應歸類 runtime_error
+    error_run = _build_run_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
+    report = validator.validate(problem, error_run)
+    entry = writer.write_run(error_run, report)
+    summary = writer.build_summary([entry])
+
+    assert entry.excluded_reason == "runtime_error"
+    assert summary["overall"]["excluded_counts"]["runtime_error"] == 1
+    assert summary["overall"]["valid_run_count"] == 1

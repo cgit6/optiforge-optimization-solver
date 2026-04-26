@@ -6,21 +6,19 @@ import numpy as np
 
 from .contracts import ProblemModel, RunResult
 
-
+# 驗證結果
 @dataclass(frozen=True)
 class ValidationReport:
-    is_feasible: bool
-    feasibility_violations: tuple[int, ...]
-    objective_valid: bool
-    recomputed_objective: int
-    objective_mismatch: bool
-    best_known_reached: bool
-    best_known_gap: int
+    is_feasible: bool # 是否可行
+    feasibility_violations: tuple[int, ...] # 違反的維度索引
+    objective_valid: bool # 目標值是否正確
+    recomputed_objective: int # 重算的目標值
+    objective_mismatch: bool # 目標值是否不一致
+    best_known_reached: bool # 是否達到最佳已知解
+    best_known_gap: int # 最佳已知解的差距
 
-
+# 驗證器
 class Validator:
-    """MKP-specific validator for one run result."""
-
     def validate(self, problem: ProblemModel, run_result: RunResult) -> ValidationReport:
         solution = np.asarray(run_result.best_solution, dtype=int)
 

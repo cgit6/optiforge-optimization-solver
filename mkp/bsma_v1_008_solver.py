@@ -55,9 +55,11 @@ class BSMAV1008Core:
         self._loop_trace: list[dict[str, Any]] | None = None
 
         # 狀態緩存
-        # 鬆弛變數
+        # 鬆弛變數狀態緩存
+        # 初始解
 
 
+    # 評估效用值
     def pseudo_utility(self) -> np.ndarray:
         constraints = np.concatenate((self.capacities, np.ones(self.items)))
         i_weight = -np.concatenate((self.weights, np.eye(self.items)), axis=1)
@@ -67,6 +69,7 @@ class BSMAV1008Core:
         pseudo_utilities = (-i_profit).T / (np.matmul(shadow_price.T, self.weights.T))
         return (-pseudo_utilities).argsort()
 
+    # 初始化種群
     def initial_pop(self) -> np.ndarray:
         population = np.zeros([self.pop_size, self.items])
         for i in range(self.pop_size):
@@ -79,6 +82,7 @@ class BSMAV1008Core:
             self.pop_fit[i] = np.sum(np.multiply(self.values, population[i]))
         return population
 
+    # 修復操作
     def repair(self, trial_sol: np.ndarray, trial_fit: int) -> tuple[np.ndarray, int]:
         resource_consumption = np.sum(np.multiply(self.weights.T, trial_sol), axis=1)
         for i in np.flip(self.cp_list):
@@ -100,6 +104,7 @@ class BSMAV1008Core:
                     break
         return trial_sol, trial_fit
 
+    # 排序操作
     def sort_pop(self) -> tuple[np.ndarray, np.ndarray]:
         pop_sol = np.zeros([self.pop_size, self.items])
         pop_fit = np.zeros([self.pop_size])
@@ -109,6 +114,7 @@ class BSMAV1008Core:
             pop_fit[i] = self.pop_fit[sorted_indices[i]]
         return pop_sol, pop_fit
 
+    # 執行求解
     def run(self) -> tuple[np.ndarray, int]:
         np.random.seed(self.seed)
         random.seed(self.seed)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +18,15 @@ class ProblemRepository:
         self._config_root = Path(config_root)
         self._yaml = YAML(typ="safe")
         self._cache: dict[tuple[str, str], ProblemModel] = {}
+        self._cache_lock = threading.Lock()
+        # ruamel YAML 解析器非執行緒安全；worker_curriculum 等多線同時 load 須序列化 parse
+        self._yaml_parse_lock = threading.Lock()
 
     def load(self, dataset: str, problem_id: str) -> ProblemModel:
         key = (dataset, problem_id)
-        if key in self._cache:
-            return self._cache[key]
+        with self._cache_lock:
+            if key in self._cache:
+                return self._cache[key]
 
         file_path = self._config_root / dataset / f"{problem_id}.yaml"
         if not file_path.exists():
@@ -29,13 +34,17 @@ class ProblemRepository:
 
         data = self._read_yaml(file_path)
         model = self._build_problem_model(data, dataset=dataset, problem_id=problem_id, file_path=file_path)
-        self._cache[key] = model
-        return model
+        with self._cache_lock:
+            if key in self._cache:
+                return self._cache[key]
+            self._cache[key] = model
+            return model
 
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         try:
             with path.open("r", encoding="utf-8") as fh:
-                loaded = self._yaml.load(fh)
+                with self._yaml_parse_lock:
+                    loaded = self._yaml.load(fh)
         except YAMLError as exc:
             raise ValueError(f"Invalid YAML format in {path}: {exc}") from exc
 

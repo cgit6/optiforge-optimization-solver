@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
+
+ExecutionMode = Literal["grid", "worker_curriculum"]
 
 import numpy as np
 
@@ -29,10 +31,11 @@ class ExperimentSpec:
     dataset: str # 資料集
     problem_ids: tuple[str, ...] # 問題ID
     solver_ids: tuple[str, ...] # 求解器ID
-    repeat: int # 重複次數(獨立實驗次數)
+    repeat: int  # 獨立實驗次數；worker_curriculum 時亦為同時 worker 線數
     base_seed: int # 基礎種子
     output_dir: Path # 輸出目錄
     benchmark_enabled: bool = False # 是否啟用benchmark
+    execution_mode: ExecutionMode = "grid"  # 任務展開與執行順序
 
     def __post_init__(self) -> None:
         if not self.experiment_id.strip():
@@ -49,6 +52,10 @@ class ExperimentSpec:
             raise ValueError("problem_ids cannot contain empty value.")
         if any(not solver_id.strip() for solver_id in self.solver_ids):
             raise ValueError("solver_ids cannot contain empty value.")
+        if self.execution_mode not in ("grid", "worker_curriculum"):
+            raise ValueError(
+                "execution_mode must be 'grid' or 'worker_curriculum'."
+            )
 
 
 # 問題模型

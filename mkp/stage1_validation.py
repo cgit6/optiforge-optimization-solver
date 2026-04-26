@@ -11,8 +11,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from .app import main as app_main
-from .problem_dat_converter import ensure_problem_yaml_from_dat as ensure_problem_yaml_from_dat_file
+from .converter import ensure_problem_yaml_from_dat as ensure_problem_yaml_from_dat_file
+
+
+def _resolve_app_entry(app_entry: Callable[..., list[tuple]] | None) -> Callable[..., list[tuple]]:
+    if app_entry is not None:
+        return app_entry
+    from .app import main
+
+    return main
 
 
 @dataclass(frozen=True)
@@ -52,8 +59,9 @@ def run_refactor_once(
     output_root: Path,
     problem_root: Path,
     solver_root: Path,
-    app_entry: Callable[..., list[tuple]] = app_main,
+    app_entry: Callable[..., list[tuple]] | None = None,
 ) -> ComparableResult:
+    app_entry = _resolve_app_entry(app_entry)
     argv = [
         "--experiment-id",
         f"stage1_refactor_{scenario.dataset}_{scenario.problem_id}_{seed}",
@@ -87,8 +95,9 @@ def check_refactor_reproducible(
     output_root: Path,
     problem_root: Path,
     solver_root: Path,
-    app_entry: Callable[..., list[tuple]] = app_main,
+    app_entry: Callable[..., list[tuple]] | None = None,
 ) -> bool:
+    app_entry = _resolve_app_entry(app_entry)
     first = run_refactor_once(
         scenario=scenario,
         seed=seed,

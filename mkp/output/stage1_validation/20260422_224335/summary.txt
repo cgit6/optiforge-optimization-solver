@@ -1,3 +1,0 @@
-total_cases=3
-refactor_reproducible=3
-baseline_match=3

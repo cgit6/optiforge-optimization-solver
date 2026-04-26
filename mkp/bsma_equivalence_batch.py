@@ -13,7 +13,7 @@ from .bsma_equivalence import (
     max_outer_iterations_for_budget,
     verify_equivalence_streaming,
 )
-from .problem_dat_converter import ensure_problem_yaml_from_dat, load_problem_model_from_repo_dat
+from .converter import ensure_problem_yaml_from_dat, load_problem_model_from_repo_dat
 
 
 def default_weish_problem_ids() -> list[str]:

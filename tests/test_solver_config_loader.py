@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -105,3 +106,27 @@ def test_stop_condition_value_validation(tmp_path: Path, content: str, error_mat
 
     with pytest.raises(ValueError, match=error_match):
         loader.load("stub_solver")
+
+
+def test_concurrent_solver_config_loads(tmp_path: Path) -> None:
+    root = tmp_path / "solvers"
+    _write_solver_yaml(
+        root / "stub_solver.yaml",
+        """
+solver_id: stub_solver
+solver_class: StubMaxIterationsSolver
+stop_condition:
+  type: max_iterations
+  max_iterations: 10
+params: {}
+""".strip(),
+    )
+    loader = SolverConfigLoader(config_root=root)
+
+    def _load(_: int) -> str:
+        return loader.load("stub_solver")["solver_id"]
+
+    with ThreadPoolExecutor(16) as pool:
+        ids = list(pool.map(_load, range(32)))
+
+    assert ids == ["stub_solver"] * 32

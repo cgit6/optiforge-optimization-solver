@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mkp.app import main
+from mkp.app import build_parser, create_experiment_spec, main
 
 
 def _write_problem_yaml(path: Path) -> None:
@@ -42,6 +42,33 @@ params: {}
     )
 
 
+def test_create_experiment_spec_execution_mode_worker_curriculum(tmp_path: Path):
+    parser = build_parser()
+    out = str(tmp_path / "out")
+    args = parser.parse_args(
+        [
+            "--experiment-id",
+            "exp_mode",
+            "--dataset",
+            "WEISH",
+            "--problems",
+            "weish01",
+            "--solvers",
+            "stub_solver",
+            "--repeat",
+            "1",
+            "--base-seed",
+            "123",
+            "--output-dir",
+            out,
+            "--execution-mode",
+            "worker_curriculum",
+        ]
+    )
+    spec = create_experiment_spec(args)
+    assert spec.execution_mode == "worker_curriculum"
+
+
 def test_app_cli_success_runs_batch(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
@@ -70,6 +97,37 @@ def test_app_cli_success_runs_batch(tmp_path: Path):
     assert len(results) == 1
     assert (output_root / "exp_cli_1" / "runs.csv").exists()
     assert (output_root / "exp_cli_1" / "runs.jsonl").exists()
+
+
+def test_app_cli_worker_curriculum_runs_batch(tmp_path: Path):
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    output_root = tmp_path / "output"
+    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_solver_yaml(solver_root / "stub_solver.yaml")
+
+    argv = [
+        "--experiment-id",
+        "exp_cli_worker",
+        "--dataset",
+        "WEISH",
+        "--problems",
+        "weish01",
+        "--solvers",
+        "stub_solver",
+        "--repeat",
+        "1",
+        "--base-seed",
+        "123",
+        "--output-dir",
+        str(output_root),
+        "--execution-mode",
+        "worker_curriculum",
+    ]
+
+    results = main(argv, problem_root=problem_root, solver_root=solver_root)
+    assert len(results) == 1
+    assert (output_root / "exp_cli_worker" / "runs.csv").exists()
 
 
 def test_app_cli_fail_fast_when_problem_yaml_missing(tmp_path: Path):
