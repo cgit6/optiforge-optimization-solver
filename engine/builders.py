@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..solver.bsma_v1_008_solver import BSMAV1008Solver
+from ..solver.BSMA import BSMAV1008Solver
 from ..solver.solver_registry import SolverBuilder, StubMaxIterationsSolver
 
 

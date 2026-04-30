@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .bundle import DefaultRngFactory, Engine, SimulationBundle, build
-from .solver_configs_snapshot import SolverConfigsSnapshot
+from .assembly import DefaultRngFactory, Engine, SimulationBundle, build
+from .configs import SolverConfigsSnapshot
 
 __all__ = [
     "DefaultRngFactory",

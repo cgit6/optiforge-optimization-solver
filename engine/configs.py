@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..tools.solver_config_loader import SolverConfigLoader
-from .contracts import ExperimentSpec
+from .models import ExperimentSpec
 
 
 @dataclass(frozen=True)

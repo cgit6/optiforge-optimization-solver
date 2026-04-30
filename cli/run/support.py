@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from ... import engine
-from ...engine.contracts import ExperimentSpec
+from ...engine.models import ExperimentSpec
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MKP simulation batch.")

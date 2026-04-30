@@ -6,7 +6,7 @@ import pytest
 
 from mkp.cli.run import build_parser, create_experiment_spec, main
 from mkp.cli.run import validate_execute_args
-from mkp.engine.contracts import ExperimentSpec
+from mkp.engine.models import ExperimentSpec
 
 
 def _write_problem_yaml(path: Path) -> None:

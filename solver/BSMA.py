@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from scipy.optimize import linprog
 
-from ..engine.contracts import ProblemModel, RunResult
+from ..engine.models import ProblemModel, RunResult
 
 # 這邊要改成 可以提交狀態、對外暴露過程、
 

@@ -17,6 +17,7 @@ package-dir = { "mkp" = "." }
 packages = [
     "mkp",
     "mkp.cli",
+    "mkp.cli.convert",
     "mkp.cli.run",
     "mkp.converter",
     "mkp.engine",

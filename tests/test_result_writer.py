@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mkp.engine.contracts import ProblemModel, RunResult
+from mkp.engine.models import ProblemModel, RunResult
 from mkp.solver.validator import Validator
 from mkp.tools.result_writer import ResultWriter
 

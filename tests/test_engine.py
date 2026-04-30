@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from mkp.engine import Engine, SimulationBundle
-from mkp.engine.contracts import ExperimentSpec
-from mkp.engine.problem_repository import ProblemRepository
+from mkp.engine.models import ExperimentSpec
+from mkp.engine.repository import ProblemRepository
 
 
 def _write_problem_yaml(path: Path) -> None:

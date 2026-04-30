@@ -10,8 +10,8 @@ from typing import Any
 
 import numpy as np
 
-from .contracts import ExperimentSpec, ProblemModel
-from .problem_repository import ProblemRepository
+from .models import ExperimentSpec, ProblemModel
+from .repository import ProblemRepository
 
 _worker_problem_view: Any | None = None
 

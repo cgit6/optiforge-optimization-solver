@@ -1,12 +1,13 @@
 """MKP simulation system package."""
 
+from .cli.convert import list_converters
 from .cli.run import executeSimulator
-from .converter import ensure_problem_yaml_from_dat, list_converters, load_problem_model_from_repo_dat
+from .converter import ensure_problem_yaml_from_dat, load_problem_model_from_repo_dat
 from .engine import Engine, SimulationBundle, SolverConfigsSnapshot, build
-from .engine.contracts import ExecutionMode, ExperimentSpec, ProblemModel, RunResult, RunTask
-from .engine.problem_repository import ProblemRepository
+from .engine.models import ExecutionMode, ExperimentSpec, ProblemModel, RunResult, RunTask
+from .engine.repository import ProblemRepository
 from .simulator import Simulator
-from .solver.bsma_v1_008_solver import BSMAV1008Core, BSMAV1008Solver
+from .solver.BSMA import BSMAV1008Core, BSMAV1008Solver
 from .solver.solver_registry import SolverRegistry, StubMaxIterationsSolver
 from .solver.validator import ValidationReport, Validator
 from .tools.result_writer import ResultEntry, ResultWriter

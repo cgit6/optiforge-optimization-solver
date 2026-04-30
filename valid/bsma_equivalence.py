@@ -11,8 +11,8 @@ from typing import Any
 import numpy as np
 
 from ..converter import load_problem_model_from_repo_dat
-from ..engine.contracts import ProblemModel
-from ..solver.bsma_v1_008_solver import BSMAV1008Core, BSMAV1008Solver
+from ..engine.models import ProblemModel
+from ..solver.BSMA import BSMAV1008Core, BSMAV1008Solver
 
 
 BSMA_DEFAULT_POP_SIZE = 20

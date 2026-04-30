@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..engine.contracts import ProblemModel, RunResult
+from ..engine.models import ProblemModel, RunResult
 
 # 驗證結果
 @dataclass(frozen=True)

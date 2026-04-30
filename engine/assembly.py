@@ -12,9 +12,9 @@ from ..simulator import Simulator
 from ..solver.solver_registry import SolverBuilder, SolverRegistry
 from ..solver.validator import Validator
 from ..tools.result_writer import ResultWriter
-from .contracts import ExperimentSpec
-from .solver_configs_snapshot import SolverConfigsSnapshot
-from .problem_bank import (
+from .models import ExperimentSpec
+from .configs import SolverConfigsSnapshot
+from .bank import (
     GameSetting,
     ProblemBank,
     ProblemCatalogEntry,
@@ -22,8 +22,8 @@ from .problem_bank import (
     scan_problem_catalog,
     validate_catalog_entries,
 )
-from .problem_repository import ProblemRepository
-from .defaults import default_solver_builders
+from .repository import ProblemRepository
+from .builders import default_solver_builders
 
 DefaultRngFactory = Callable[..., np.random.Generator]
 

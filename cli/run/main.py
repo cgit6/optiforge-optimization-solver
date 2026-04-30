@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ...engine.contracts import ExperimentSpec
+from ...engine.models import ExperimentSpec
 from .support import executeSimulator, preflight_validate, build_parser, create_experiment_spec
 
 def main(

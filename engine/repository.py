@@ -8,7 +8,7 @@ import numpy as np
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from .contracts import ProblemModel
+from .models import ProblemModel
 
 
 class  ProblemRepository:

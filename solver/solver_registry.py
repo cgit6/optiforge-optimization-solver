@@ -5,7 +5,7 @@ from typing import Any, Callable, Protocol
 
 import numpy as np
 
-from ..engine.contracts import ProblemModel, RunResult
+from ..engine.models import ProblemModel, RunResult
 
 
 class Solver(Protocol):

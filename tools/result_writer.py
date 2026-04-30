@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..engine.contracts import RunResult
+from ..engine.models import RunResult
 from ..solver.validator import ValidationReport
 
 

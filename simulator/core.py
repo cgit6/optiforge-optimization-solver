@@ -6,15 +6,15 @@ from typing import Any
 
 import numpy as np
 
-from ..engine.contracts import ExperimentSpec, RunResult, RunTask
-from ..engine.solver_configs_snapshot import SolverConfigsSnapshot
-from ..engine.problem_bank import (
+from ..engine.models import ExperimentSpec, RunResult, RunTask
+from ..engine.configs import SolverConfigsSnapshot
+from ..engine.bank import (
     ProblemBank,
     ProblemShmPack,
     configure_problem_bank_worker,
     get_worker_problem_bank,
 )
-from ..solver.bsma_v1_008_solver import BSMAV1008Solver
+from ..solver.BSMA import BSMAV1008Solver
 from ..solver.solver_registry import SolverRegistry, StubMaxIterationsSolver
 from ..solver.validator import ValidationReport, Validator
 from ..tools.result_writer import ResultEntry, ResultWriter

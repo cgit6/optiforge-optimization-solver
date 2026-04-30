@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from mkp.engine.contracts import ProblemModel
-from mkp.solver.bsma_v1_008_solver import BSMAV1008Solver
+from mkp.engine.models import ProblemModel
+from mkp.solver.BSMA import BSMAV1008Solver
 from mkp.solver.solver_registry import SolverRegistry
 
 

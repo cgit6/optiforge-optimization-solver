@@ -63,4 +63,4 @@ def test_ensure_problem_yaml_from_dat_creates_yaml_when_missing(tmp_path: Path):
     yaml_path = ensure_problem_yaml_from_dat(repo_root=tmp_path, scenario=scenario)
     assert yaml_path.exists()
     content = yaml_path.read_text(encoding="utf-8")
-    assert "\"problem_id\": \"weish01\"" in content
+    assert "problem_id: weish01" in content

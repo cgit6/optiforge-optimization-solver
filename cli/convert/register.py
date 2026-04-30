@@ -4,21 +4,22 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ...converter import parse_weish_dat
+
 ConverterFn = Callable[[Path], dict[str, Any]]
 
-_CONVERTER_REGISTRY: dict[str, ConverterFn] = {}
+_CONVERTERS: dict[str, ConverterFn] = {}
 
 
 def register_converter(name: str) -> Callable[[ConverterFn], ConverterFn]:
-    """Register a converter function by name."""
     normalized = name.strip()
     if not normalized:
         raise ValueError("converter name cannot be empty")
 
     def decorator(func: ConverterFn) -> ConverterFn:
-        if normalized in _CONVERTER_REGISTRY:
-            raise ValueError(f"Converter '{normalized}' already registered")
-        _CONVERTER_REGISTRY[normalized] = func
+        if normalized in _CONVERTERS:
+            raise ValueError(f"Converter already registered: {normalized}")
+        _CONVERTERS[normalized] = func
         return func
 
     return decorator
@@ -26,10 +27,14 @@ def register_converter(name: str) -> Callable[[ConverterFn], ConverterFn]:
 
 def get_converter(name: str) -> ConverterFn:
     normalized = name.strip()
-    if normalized not in _CONVERTER_REGISTRY:
-        raise KeyError(f"Unknown converter: {normalized}")
-    return _CONVERTER_REGISTRY[normalized]
+    try:
+        return _CONVERTERS[normalized]
+    except KeyError as exc:
+        raise KeyError(f"Unknown converter: {normalized}") from exc
 
 
 def list_converters() -> tuple[str, ...]:
-    return tuple(sorted(_CONVERTER_REGISTRY.keys()))
+    return tuple(sorted(_CONVERTERS.keys()))
+
+
+register_converter("weish")(parse_weish_dat)

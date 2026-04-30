@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mkp.engine.contracts import ProblemModel, RunResult
+from mkp.engine.models import ProblemModel, RunResult
 from mkp.solver.validator import Validator
 
 

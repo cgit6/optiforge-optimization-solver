@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.engine.contracts import ExperimentSpec, RunTask
-from mkp.engine.problem_bank import ProblemBank
-from mkp.engine.problem_repository import ProblemRepository
-from mkp.engine.solver_configs_snapshot import SolverConfigsSnapshot
+from mkp.engine.models import ExperimentSpec, RunTask
+from mkp.engine.bank import ProblemBank
+from mkp.engine.repository import ProblemRepository
+from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.simulator import Simulator
 from mkp.solver.solver_registry import SolverRegistry
 from mkp.solver.validator import Validator
@@ -20,7 +20,7 @@ class RecordingSolver:
         self.first_random: int | None = None
 
     def solve(self, problem, config, rng):
-        from mkp.engine.contracts import RunResult
+        from mkp.engine.models import RunResult
 
         self.first_random = int(rng.integers(0, 10_000))
         return RunResult(

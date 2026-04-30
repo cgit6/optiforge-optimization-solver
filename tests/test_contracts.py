@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.engine.contracts import ExperimentSpec, ProblemModel, RunResult, RunTask
+from mkp.engine.models import ExperimentSpec, ProblemModel, RunResult, RunTask
 
 
 def test_experiment_spec_valid():

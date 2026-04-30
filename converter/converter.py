@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+from ruamel.yaml import YAML
 
-from ..engine.contracts import ProblemModel
-from .register import get_converter, register_converter
+from ..engine.models import ProblemModel
 
-DEFAULT_CONVERTER = "mkp_dat_v1"
+ProblemPayloadConverter = Callable[[Path], dict[str, Any]]
 
 
 def dat_file_path(*, repo_root: Path, dataset: str, problem_id: str) -> Path:
@@ -22,7 +22,8 @@ def yaml_file_path(*, repo_root: Path, dataset: str, problem_id: str) -> Path:
     return repo_root / "configs/problems" / dataset / f"{problem_id}.yaml"
 
 
-def _parse_mkp_dat_v1(dat_path: Path) -> dict[str, Any]:
+def parse_weish_dat(dat_path: Path) -> dict[str, Any]:
+    """Parse WEISH-style MKP ``.dat`` payload into standard problem fields."""
     if not dat_path.exists():
         raise FileNotFoundError(f"Missing dat file: {dat_path}")
 
@@ -54,24 +55,8 @@ def _parse_mkp_dat_v1(dat_path: Path) -> dict[str, Any]:
     }
 
 
-@register_converter(DEFAULT_CONVERTER)
-def parse_mkp_dat_v1(dat_path: Path) -> dict[str, Any]:
-    return _parse_mkp_dat_v1(dat_path)
-
-
-@register_converter("weish_dat")
-def parse_weish_dat(dat_path: Path) -> dict[str, Any]:
-    return _parse_mkp_dat_v1(dat_path)
-
-
-@register_converter("weing_dat")
-def parse_weing_dat(dat_path: Path) -> dict[str, Any]:
-    return _parse_mkp_dat_v1(dat_path)
-
-
-def parse_dat_payload(dat_path: Path, *, converter_name: str = DEFAULT_CONVERTER) -> dict[str, Any]:
-    converter = get_converter(converter_name)
-    return converter(dat_path)
+def parse_dat_payload(dat_path: Path) -> dict[str, Any]:
+    return parse_weish_dat(dat_path)
 
 
 def build_problem_model_from_dat(
@@ -79,9 +64,9 @@ def build_problem_model_from_dat(
     dataset: str,
     problem_id: str,
     dat_path: Path,
-    converter_name: str = DEFAULT_CONVERTER,
+    parser: ProblemPayloadConverter = parse_weish_dat,
 ) -> ProblemModel:
-    payload = parse_dat_payload(dat_path, converter_name=converter_name)
+    payload = parser(dat_path)
     return ProblemModel(
         problem_id=problem_id,
         dataset=dataset,
@@ -99,14 +84,14 @@ def load_problem_model_from_repo_dat(
     repo_root: Path,
     dataset: str,
     problem_id: str,
-    converter_name: str = DEFAULT_CONVERTER,
+    parser: ProblemPayloadConverter = parse_weish_dat,
 ) -> ProblemModel:
     dat_path = dat_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
     return build_problem_model_from_dat(
         dataset=dataset,
         problem_id=problem_id,
         dat_path=dat_path,
-        converter_name=converter_name,
+        parser=parser,
     )
 
 
@@ -115,11 +100,11 @@ def ensure_problem_yaml_from_dat(
     repo_root: Path,
     dataset: str,
     problem_id: str,
-    converter_name: str = DEFAULT_CONVERTER,
+    parser: ProblemPayloadConverter = parse_weish_dat,
 ) -> Path:
     """由 data/<dataset>/<problem_id>.dat 產生 configs/problems/...yaml。"""
     dat_path = dat_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
-    payload = parse_dat_payload(dat_path, converter_name=converter_name)
+    payload = parser(dat_path)
     problem_yaml = yaml_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
     problem_yaml.parent.mkdir(parents=True, exist_ok=True)
     body = {
@@ -132,5 +117,8 @@ def ensure_problem_yaml_from_dat(
         "capacities": payload["capacities"],
         "best_known": payload["best_known"],
     }
-    problem_yaml.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+    yaml = YAML()
+    yaml.default_flow_style = False
+    with problem_yaml.open("w", encoding="utf-8") as fh:
+        yaml.dump(body, fh)
     return problem_yaml
