@@ -1,4 +1,4 @@
-"""由 MKP 慣用之 .dat 檔建立 ProblemModel / 對應 YAML。"""
+"""由 MKP 題庫原始檔建立 ProblemModel / 對應 YAML。"""
 
 from __future__ import annotations
 
@@ -8,86 +8,73 @@ from typing import Any
 
 import numpy as np
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedSeq
 
 from ..engine.models import ProblemModel
 
+# 定義一個函數的界面(輸入是路徑，輸出是題目)
 ProblemPayloadConverter = Callable[[Path], dict[str, Any]]
 
 
+def _flow_sequence(values: list[Any]) -> CommentedSeq:
+    seq = CommentedSeq(values)
+    seq.fa.set_flow_style()
+    return seq
+
+
+def _weights_flow_rows(weights: list[list[Any]]) -> CommentedSeq:
+    seq = CommentedSeq(_flow_sequence(list(row)) for row in weights)
+    return seq
+
+
+# (內部函數) 原始 dat/txt 資料的路徑
 def dat_file_path(*, repo_root: Path, dataset: str, problem_id: str) -> Path:
     return repo_root / "data" / dataset / f"{problem_id}.dat"
 
 
+# (內部函數) 組合出轉換後的 yaml 保存路徑
 def yaml_file_path(*, repo_root: Path, dataset: str, problem_id: str) -> Path:
     return repo_root / "configs/problems" / dataset / f"{problem_id}.yaml"
 
 
-def parse_weish_dat(dat_path: Path) -> dict[str, Any]:
-    """Parse WEISH-style MKP ``.dat`` payload into standard problem fields."""
-    if not dat_path.exists():
-        raise FileNotFoundError(f"Missing dat file: {dat_path}")
-
-    raw_lines = [line.strip() for line in dat_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    header = raw_lines[0].split()
-    items = int(header[0])
-    dim = int(header[1])
-    best_known = int(header[2])
-    values = [int(x) for x in raw_lines[1].split()]
-    weights_by_dim = [[int(x) for x in raw_lines[2 + idx].split()] for idx in range(dim)]
-    capacities = [int(x) for x in raw_lines[2 + dim].split()]
-
-    if len(values) != items:
-        raise ValueError(f"Invalid dat values length for {dat_path}: expected {items}, got {len(values)}")
-    if len(capacities) != dim:
-        raise ValueError(f"Invalid dat capacities length for {dat_path}: expected {dim}, got {len(capacities)}")
-    for idx, row in enumerate(weights_by_dim):
-        if len(row) != items:
-            raise ValueError(f"Invalid dat weights row length at dim {idx} for {dat_path}")
-    weights = [list(row) for row in zip(*weights_by_dim)]
-
-    return {
-        "items": items,
-        "dim": dim,
-        "best_known": best_known,
-        "values": values,
-        "weights": weights,
-        "capacities": capacities,
-    }
-
-
-def parse_dat_payload(dat_path: Path) -> dict[str, Any]:
-    return parse_weish_dat(dat_path)
-
-
-def build_problem_model_from_dat(
+# 執行轉換操作
+def reshape(
     *,
     dataset: str,
     problem_id: str,
     dat_path: Path,
-    parser: ProblemPayloadConverter = parse_weish_dat,
+    parser: ProblemPayloadConverter, # 題庫轉換函數
 ) -> ProblemModel:
+    # 1. 執行轉換，給原始檔跟解析函數進行解析
     payload = parser(dat_path)
+
+    # 2. 返回轉換後的題目物件
+    # 這裡有問題，返回格式無法兼容所有問題
     return ProblemModel(
-        problem_id=problem_id,
-        dataset=dataset,
-        items=int(payload["items"]),
-        dim=int(payload["dim"]),
-        values=np.asarray(payload["values"], dtype=int),
-        weights=np.asarray(payload["weights"], dtype=int),
-        capacities=np.asarray(payload["capacities"], dtype=int),
-        best_known=int(payload["best_known"]),
+        problem_id=problem_id, # 問題編號
+        dataset=dataset, # 題庫名稱
+        items=int(payload["items"]), # 物品數量
+        dim=int(payload["dim"]), # 維度
+        values=np.asarray(payload["values"], dtype=int), # 每個物品的價值
+        weights=np.asarray(payload["weights"], dtype=int), # 物品的成本
+        capacities=np.asarray(payload["capacities"], dtype=int), # 背包容量
+        best_known=None if payload["best_known"] is None else int(payload["best_known"]), # 最佳適應值
     )
 
 
-def load_problem_model_from_repo_dat(
+def transformToMomery(
     *,
-    repo_root: Path,
-    dataset: str,
-    problem_id: str,
-    parser: ProblemPayloadConverter = parse_weish_dat,
+    repo_root: Path, # 根路徑
+    dataset: str, # 資料庫名稱
+    problem_id: str, # 問題編號
+    parser: ProblemPayloadConverter, # 解析函數
 ) -> ProblemModel:
+    """dat 轉換後保存到 Momery"""
+    # 1. 組合當前原始檔案的原始路徑
     dat_path = dat_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
-    return build_problem_model_from_dat(
+
+    # 2. 執行轉換獲取 ProblemModel 最後返回
+    return reshape(
         dataset=dataset,
         problem_id=problem_id,
         dat_path=dat_path,
@@ -95,27 +82,29 @@ def load_problem_model_from_repo_dat(
     )
 
 
-def ensure_problem_yaml_from_dat(
+# 獲取 dat 數據進行轉換後保存至 yaml 中
+def transformToYaml(
     *,
     repo_root: Path,
     dataset: str,
     problem_id: str,
-    parser: ProblemPayloadConverter = parse_weish_dat,
+    parser: ProblemPayloadConverter,
+    source_path: Path | None = None,
 ) -> Path:
-    """由 data/<dataset>/<problem_id>.dat 產生 configs/problems/...yaml。"""
-    dat_path = dat_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
+    """dat 轉換成 yaml 文件"""
+    dat_path = source_path or dat_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
     payload = parser(dat_path)
     problem_yaml = yaml_file_path(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
     problem_yaml.parent.mkdir(parents=True, exist_ok=True)
     body = {
-        "problem_id": problem_id,
-        "dataset": dataset,
-        "items": payload["items"],
-        "dim": payload["dim"],
-        "values": payload["values"],
-        "weights": payload["weights"],
-        "capacities": payload["capacities"],
-        "best_known": payload["best_known"],
+        "problem_id": problem_id, # 問題編號
+        "dataset": dataset, # 題庫名稱
+        "items": payload["items"], # 物品數量
+        "dim": payload["dim"], # 維度數量
+        "values": _flow_sequence(list(payload["values"])), # 物品價值
+        "weights": _weights_flow_rows(payload["weights"]), # 物品成本
+        "capacities": _flow_sequence(list(payload["capacities"])), # 背包容量
+        "best_known": payload["best_known"], # 題目給的最佳解
     }
     yaml = YAML()
     yaml.default_flow_style = False

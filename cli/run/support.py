@@ -8,7 +8,8 @@ from pathlib import Path
 from ... import engine
 from ...engine.models import ExperimentSpec
 
-def build_parser() -> argparse.ArgumentParser:
+# 獲取命令行參數，並解析
+def parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run MKP simulation batch.")
     parser.add_argument("--experiment-id", required=True)
     parser.add_argument("--dataset", required=True)
@@ -25,15 +26,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-
 def _split_csv_values(raw: str) -> tuple[str, ...]:
+    """"""
     values = tuple(part.strip() for part in raw.split(",") if part.strip())
     if not values:
         raise ValueError("CSV argument cannot be empty.")
     return values
 
-
 def create_experiment_spec(args: argparse.Namespace) -> ExperimentSpec:
+    """"""
     problem_ids = _split_csv_values(args.problems)
     solver = str(args.solver).strip()
     if not solver:

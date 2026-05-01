@@ -115,6 +115,48 @@ def test_engine_build_fails_when_catalog_has_invalid_problem_yaml(tmp_path: Path
         )
 
 
+def test_engine_build_fails_when_catalog_problem_has_unknown_best_known(tmp_path: Path) -> None:
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    output_root = tmp_path / "output"
+    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    (problem_root / "WEISH" / "broken.yaml").write_text(
+        """
+problem_id: broken
+dataset: WEISH
+items: 3
+dim: 2
+best_known: null
+values: [10, 20, 30]
+weights:
+  - [2, 1]
+  - [3, 2]
+  - [4, 3]
+capacities: [10, 8]
+""".strip(),
+        encoding="utf-8",
+    )
+    _write_solver_yaml(solver_root / "stub_solver.yaml")
+
+    spec = ExperimentSpec(
+        experiment_id="exp_unknown_best",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        seed=1,
+        output_dir=output_root / "exp_unknown_best",
+    )
+
+    with pytest.raises(ValueError, match="best_known must be a positive integer"):
+        Engine.build(
+            spec=spec,
+            problem_root=problem_root,
+            solver_root=solver_root,
+            output_root=output_root,
+        )
+
+
 def test_engine_build_fails_when_experiment_problem_not_in_catalog(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"

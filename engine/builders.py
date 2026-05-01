@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..solver.BSMA import BSMAV1008Solver
-from ..solver.solver_registry import SolverBuilder, StubMaxIterationsSolver
+from ..solver.registry import SolverBuilder, StubMaxIterationsSolver
 
 
 def default_solver_builders() -> dict[str, SolverBuilder]:

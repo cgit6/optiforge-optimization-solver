@@ -15,7 +15,7 @@ from ..engine.bank import (
     get_worker_problem_bank,
 )
 from ..solver.BSMA import BSMAV1008Solver
-from ..solver.solver_registry import SolverRegistry, StubMaxIterationsSolver
+from ..solver.registry import SolverRegistry, StubMaxIterationsSolver
 from ..solver.validator import ValidationReport, Validator
 from ..tools.result_writer import ResultEntry, ResultWriter
 

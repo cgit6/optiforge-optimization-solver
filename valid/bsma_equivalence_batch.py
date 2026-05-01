@@ -13,7 +13,9 @@ from .bsma_equivalence import (
     max_outer_iterations_for_budget,
     verify_equivalence_streaming,
 )
-from ..converter import ensure_problem_yaml_from_dat, load_problem_model_from_repo_dat
+from ..cli.convert import getConverter
+from ..converter import transformToYaml
+from ..engine.repository import ProblemRepository
 
 
 def default_weish_problem_ids() -> list[str]:
@@ -41,13 +43,19 @@ def run_weish_equivalence_suite(
 
     max_iter = max_outer_iterations_for_budget(budget=budget, pop_size=BSMA_DEFAULT_POP_SIZE)
     eval_upper_bound = BSMA_DEFAULT_POP_SIZE * (max_iter + 1)
+    repository = ProblemRepository(config_root=repo_root / "configs/problems")
 
     rows: list[dict[str, Any]] = []
     t_suite = time.perf_counter()
     for problem_id in problem_ids:
         if ensure_yaml:
-            ensure_problem_yaml_from_dat(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
-        problem = load_problem_model_from_repo_dat(repo_root=repo_root, dataset=dataset, problem_id=problem_id)
+            transformToYaml(
+                repo_root=repo_root,
+                dataset=dataset,
+                problem_id=problem_id,
+                parser=getConverter(dataset.lower()),
+            )
+        problem = repository.load(dataset, problem_id)
         t0 = time.perf_counter()
         report = verify_equivalence_streaming(
             repo_root=repo_root,

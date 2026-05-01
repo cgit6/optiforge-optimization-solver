@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .main import build_parser, create_experiment_spec, main
+from .main import parser, create_experiment_spec, main
 from .support import (
     executeSimulator,
     preflight_validate,
@@ -10,7 +10,7 @@ from .support import (
 )
 
 __all__ = [
-    "build_parser",
+    "parser",
     "create_experiment_spec",
     "executeSimulator",
     "main",

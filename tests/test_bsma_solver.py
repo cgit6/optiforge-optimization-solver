@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mkp.engine.models import ProblemModel
 from mkp.solver.BSMA import BSMAV1008Solver
-from mkp.solver.solver_registry import SolverRegistry
+from mkp.solver.registry import SolverRegistry
 
 
-def _build_problem() -> ProblemModel:
+def _build_problem(*, best_known: int = 34) -> ProblemModel:
     return ProblemModel(
         problem_id="weish01",
         dataset="WEISH",
@@ -25,7 +26,7 @@ def _build_problem() -> ProblemModel:
             ]
         ),
         capacities=np.array([14, 11]),
-        best_known=34,
+        best_known=best_known,
     )
 
 
@@ -106,3 +107,8 @@ def test_bsma_params_pop_size_from_config_affects_evaluation_count():
     }
     result = solver.solve(problem, config, np.random.default_rng(1))
     assert result.evaluation_count == pop_size + max_iter * pop_size
+
+
+def test_problem_model_rejects_unknown_best_known_before_bsma_runs():
+    with pytest.raises(ValueError, match="best_known must be a positive integer"):
+        _build_problem(best_known=None)  # type: ignore[arg-type]

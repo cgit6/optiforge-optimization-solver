@@ -1,0 +1,2 @@
+dataset,problem_id,seed,max_iterations,pop_size,z,initial_unsorted_match,initial_sorted_match,population_trace_match,final_objective_old,final_objective_new,final_solution_match,old_stop_iteration,new_stop_iteration,old_stop_reason,new_stop_reason,first_mismatch_phase,first_mismatch_iteration,first_mismatch_rank,first_mismatch_field,trace_csv,all_match
+WEISH,weish01,101,5,20,0.08,True,True,True,4549,4549,True,4,4,max_iterations_reached,max_iterations_reached,,,,,traces/WEISH_weish01_population.csv,True

@@ -11,7 +11,7 @@ from mkp.solver.validator import Validator
 from mkp.tools.result_writer import ResultWriter
 
 
-def _build_problem() -> ProblemModel:
+def _build_problem(*, best_known: int = 50) -> ProblemModel:
     return ProblemModel(
         problem_id="weish01",
         dataset="WEISH",
@@ -20,7 +20,7 @@ def _build_problem() -> ProblemModel:
         values=np.array([10, 20, 30]),
         weights=np.array([[2, 1], [3, 2], [4, 3]]),
         capacities=np.array([10, 8]),
-        best_known=50,
+        best_known=best_known,
     )
 
 
@@ -71,6 +71,9 @@ def test_result_writer_writes_single_run_with_standard_fields(tmp_path: Path):
     assert payload["linprog_runtime"] == 0.0
     assert payload["feasible"] is True
     assert payload["objective_valid"] is True
+    assert payload["best_known"] == 50
+    assert payload["best_known_reached"] is True
+    assert payload["best_known_gap"] == -10
 
 
 def test_result_writer_summary_aggregation_exclusion_rules(tmp_path: Path):

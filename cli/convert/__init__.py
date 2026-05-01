@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
-from .main import build_parser, main
-from .register import get_converter, list_converters, register_converter
+from ...converter import getConverter, listConverters, register as _register
+from .main import build, main
+from .register import parseCb, parseGk, parseHp, parsePb, parsePet, parseSent, parseWeing, parseWeish
+
+register = _register
 
 __all__ = [
-    "build_parser",
-    "get_converter",
-    "list_converters",
+    "build",
+    "getConverter",
+    "listConverters",
     "main",
-    "register_converter",
+    "parseCb",
+    "parseGk",
+    "parseHp",
+    "parsePb",
+    "parsePet",
+    "parseSent",
+    "parseWeing",
+    "parseWeish",
+    "register", # 註冊
 ]

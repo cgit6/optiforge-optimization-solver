@@ -214,7 +214,7 @@ class ProblemBank:
                     shape_capacities=tuple(int(x) for x in c_src.shape),
                     items=model.items,
                     dim=model.dim,
-                    best_known=int(model.best_known),
+                    best_known=model.best_known,
                 )
             )
 

@@ -68,7 +68,7 @@ class ProblemModel:
     values: np.ndarray # 物品價值
     weights: np.ndarray # 物品重量
     capacities: np.ndarray # 限制容量
-    best_known: int # 最佳已知解
+    best_known: int # 最佳已知解；模擬階段必須已知
 
     def __post_init__(self) -> None:
         if not self.problem_id.strip():
@@ -79,8 +79,16 @@ class ProblemModel:
             raise ValueError("items must be > 0.")
         if self.dim <= 0:
             raise ValueError("dim must be > 0.")
-        if self.best_known < 0:
-            raise ValueError("best_known must be >= 0.")
+        if isinstance(self.best_known, bool):
+            raise ValueError("best_known must be a positive integer.")
+        if isinstance(self.best_known, float) and not self.best_known.is_integer():
+            raise ValueError("best_known must be a positive integer.")
+        try:
+            best_known = int(self.best_known)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("best_known must be a positive integer.") from exc
+        if best_known <= 0:
+            raise ValueError("best_known must be a positive integer.")
 
         values = _as_int_array("values", self.values)
         weights = _as_int_matrix("weights", self.weights)
@@ -100,6 +108,7 @@ class ProblemModel:
         object.__setattr__(self, "values", values)
         object.__setattr__(self, "weights", weights)
         object.__setattr__(self, "capacities", capacities)
+        object.__setattr__(self, "best_known", best_known)
 
 
 # 執行任務

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from mkp.engine.models import ProblemModel
-from mkp.solver.solver_registry import SolverRegistry, StubMaxIterationsSolver
+from mkp.solver.registry import SolverRegistry, StubMaxIterationsSolver
 
 
 def _build_problem() -> ProblemModel:

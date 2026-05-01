@@ -6,7 +6,7 @@ from mkp.engine.models import ProblemModel, RunResult
 from mkp.solver.validator import Validator
 
 
-def _build_problem() -> ProblemModel:
+def _build_problem(*, best_known: int = 50) -> ProblemModel:
     return ProblemModel(
         problem_id="weish01",
         dataset="WEISH",
@@ -15,7 +15,7 @@ def _build_problem() -> ProblemModel:
         values=np.array([10, 20, 30]),
         weights=np.array([[2, 1], [3, 2], [4, 3]]),
         capacities=np.array([10, 8]),
-        best_known=50,
+        best_known=best_known,
     )
 
 

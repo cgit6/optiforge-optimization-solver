@@ -8,7 +8,7 @@ from mkp.valid.stage1_validation import (
     build_smoke_scenarios,
     check_refactor_reproducible,
     classify_diff,
-    ensure_problem_yaml_from_dat,
+    ensure_problem_yaml,
 )
 
 
@@ -51,7 +51,7 @@ def test_classify_diff_behaviors():
     assert classify_diff(refactor, baseline_best_objective=99) == "objective_mismatch"
 
 
-def test_ensure_problem_yaml_from_dat_creates_yaml_when_missing(tmp_path: Path):
+def test_ensure_problem_yaml_creates_yaml_when_missing(tmp_path: Path):
     scenario = ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma_v1_008", seeds=(1, 2, 3))
     dat_dir = tmp_path / "data/WEISH"
     dat_dir.mkdir(parents=True, exist_ok=True)
@@ -60,7 +60,7 @@ def test_ensure_problem_yaml_from_dat_creates_yaml_when_missing(tmp_path: Path):
         encoding="utf-8",
     )
 
-    yaml_path = ensure_problem_yaml_from_dat(repo_root=tmp_path, scenario=scenario)
+    yaml_path = ensure_problem_yaml(repo_root=tmp_path, scenario=scenario)
     assert yaml_path.exists()
     content = yaml_path.read_text(encoding="utf-8")
     assert "problem_id: weish01" in content

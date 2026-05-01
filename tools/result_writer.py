@@ -102,7 +102,7 @@ class ResultWriter:
                     "best_objective": max((e.best_objective for e in valid_bucket), default=None),
                     "excluded_counts": self._excluded_counts(bucket),
                     "best_known": best_known_value,
-                    "best_known_reached_count": sum(1 for e in valid_bucket if e.best_known_reached),
+                    "best_known_reached_count": sum(1 for e in valid_bucket if e.best_known_reached is True),
                     "best_known_gap_min": min(best_known_gaps) if best_known_gaps else None,
                     "best_known_gap_avg": (
                         sum(best_known_gaps) / len(best_known_gaps) if best_known_gaps else None

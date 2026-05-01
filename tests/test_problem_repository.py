@@ -40,9 +40,10 @@ capacities: [7, 8]
     assert model.dataset == "WEISH"
     assert model.items == 3
     assert model.dim == 2
+    assert model.best_known == 100
 
 
-@pytest.mark.parametrize("missing_field", ["values", "weights", "capacities"])
+@pytest.mark.parametrize("missing_field", ["best_known", "values", "weights", "capacities"])
 def test_load_missing_required_fields(tmp_path: Path, missing_field: str):
     root = tmp_path / "problems"
     lines = {
@@ -125,7 +126,7 @@ def test_load_dimension_mismatch(tmp_path: Path, content: str, error_match: str)
         repo.load("WEISH", "weish01")
 
 
-def test_load_best_known_null_fail_fast(tmp_path: Path):
+def test_load_best_known_null_fails_fast(tmp_path: Path):
     root = tmp_path / "problems"
     _write_problem_yaml(
         root / "WEISH" / "weish01.yaml",
@@ -145,7 +146,55 @@ capacities: [7, 8]
     )
 
     repo = ProblemRepository(config_root=root)
-    with pytest.raises(ValueError, match="best_known cannot be null"):
+    with pytest.raises(ValueError, match="best_known must be a positive integer"):
+        repo.load("WEISH", "weish01")
+
+
+def test_load_best_known_zero_fails_fast(tmp_path: Path):
+    root = tmp_path / "problems"
+    _write_problem_yaml(
+        root / "WEISH" / "weish01.yaml",
+        """
+problem_id: weish01
+dataset: WEISH
+items: 3
+dim: 2
+best_known: 0
+values: [10, 20, 30]
+weights:
+  - [1, 2]
+  - [3, 4]
+  - [5, 6]
+capacities: [7, 8]
+""".strip(),
+    )
+
+    repo = ProblemRepository(config_root=root)
+    with pytest.raises(ValueError, match="best_known must be a positive integer"):
+        repo.load("WEISH", "weish01")
+
+
+def test_load_best_known_negative_fail_fast(tmp_path: Path):
+    root = tmp_path / "problems"
+    _write_problem_yaml(
+        root / "WEISH" / "weish01.yaml",
+        """
+problem_id: weish01
+dataset: WEISH
+items: 3
+dim: 2
+best_known: -1
+values: [10, 20, 30]
+weights:
+  - [1, 2]
+  - [3, 4]
+  - [5, 6]
+capacities: [7, 8]
+""".strip(),
+    )
+
+    repo = ProblemRepository(config_root=root)
+    with pytest.raises(ValueError, match="best_known must be a positive integer"):
         repo.load("WEISH", "weish01")
 
 
@@ -213,4 +262,3 @@ capacities: [7, 8]
         ids = list(pool.map(_load, range(48)))
 
     assert ids == ["weish01"] * 48
-

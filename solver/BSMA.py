@@ -247,7 +247,11 @@ class BSMAV1008Solver:
 
         pop_size = int(core.pop_size)
         evaluation_count = int(pop_size + max_iterations * pop_size)
-        stop_reason = "best_known_reached" if int(best_fit) == int(problem.best_known) else "max_iterations_reached"
+        stop_reason = (
+            "best_known_reached"
+            if int(best_fit) == int(problem.best_known)
+            else "max_iterations_reached"
+        )
 
         return RunResult(
             problem_id=problem.problem_id,

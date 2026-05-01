@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from ruamel.yaml import YAML
 
-from ..converter import load_problem_model_from_repo_dat
 from ..engine.models import ProblemModel
 from ..solver.BSMA import BSMAV1008Core, BSMAV1008Solver
 
@@ -96,7 +96,8 @@ def _capture_new_loop_meta(problem: ProblemModel, seed: int, max_iterations: int
 
 def _build_problem_from_yaml(repo_root: Path, dataset: str, problem_id: str) -> ProblemModel:
     file_path = repo_root / "configs/problems" / dataset / f"{problem_id}.yaml"
-    data = json.loads(file_path.read_text(encoding="utf-8"))
+    yaml = YAML(typ="safe")
+    data = yaml.load(file_path.read_text(encoding="utf-8"))
     return ProblemModel(
         problem_id=data["problem_id"],
         dataset=data["dataset"],

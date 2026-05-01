@@ -65,9 +65,6 @@ class  ProblemRepository:
         if missing:
             raise ValueError(f"Missing required field(s) {missing} in {file_path}")
 
-        if data["best_known"] is None:
-            raise ValueError(f"best_known cannot be null in {file_path}")
-
         yaml_problem_id = str(data["problem_id"])
         yaml_dataset = str(data["dataset"])
         if yaml_problem_id != problem_id:
@@ -78,12 +75,22 @@ class  ProblemRepository:
         try:
             items = int(data["items"])
             dim = int(data["dim"])
-            best_known = int(data["best_known"])
             values = np.asarray(data["values"], dtype=int)
             weights = np.asarray(data["weights"], dtype=int)
             capacities = np.asarray(data["capacities"], dtype=int)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid data type in {file_path}: {exc}") from exc
+        raw_best_known = data["best_known"]
+        if isinstance(raw_best_known, bool) or (
+            isinstance(raw_best_known, float) and not raw_best_known.is_integer()
+        ):
+            raise ValueError(f"best_known must be a positive integer in {file_path}")
+        try:
+            best_known = int(raw_best_known)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"best_known must be a positive integer in {file_path}") from exc
+        if best_known <= 0:
+            raise ValueError(f"best_known must be a positive integer in {file_path}")
 
         if values.shape != (items,):
             raise ValueError(f"len(values) must equal items in {file_path}")

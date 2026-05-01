@@ -9,7 +9,7 @@ from typing import Callable, cast
 import numpy as np
 
 from ..simulator import Simulator
-from ..solver.solver_registry import SolverBuilder, SolverRegistry
+from ..solver.registry import SolverBuilder, SolverRegistry
 from ..solver.validator import Validator
 from ..tools.result_writer import ResultWriter
 from .models import ExperimentSpec

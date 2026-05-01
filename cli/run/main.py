@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from ...engine.models import ExperimentSpec
-from .support import executeSimulator, preflight_validate, build_parser, create_experiment_spec
+from .support import executeSimulator, preflight_validate, parser, create_experiment_spec
 
 def main(
     argv: list[str] | None = None,
@@ -12,7 +12,7 @@ def main(
     problem_root: Path | str = Path("configs/problems"),
     solver_root: Path | str = Path("configs/solvers"),
 ) -> list[tuple]:
-    parser = build_parser()
+    parser = parser()
     args = parser.parse_args(argv)
     spec = create_experiment_spec(args)
     output_root_path = Path(args.output_dir)

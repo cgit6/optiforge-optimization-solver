@@ -10,7 +10,7 @@ from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.simulator import Simulator
-from mkp.solver.solver_registry import SolverRegistry
+from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
 from mkp.tools.result_writer import ResultWriter
 

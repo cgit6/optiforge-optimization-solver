@@ -11,7 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from ..converter import ensure_problem_yaml_from_dat as ensure_problem_yaml_from_dat_file
+from ..cli.convert import getConverter
+from ..converter import transformToYaml
 
 
 def _resolve_app_entry(app_entry: Callable[..., list[tuple]] | None) -> Callable[..., list[tuple]]:
@@ -44,11 +45,12 @@ def build_smoke_scenarios() -> list[ValidationScenario]:
     ]
 
 
-def ensure_problem_yaml_from_dat(*, repo_root: Path, scenario: ValidationScenario) -> Path:
-    return ensure_problem_yaml_from_dat_file(
+def ensure_problem_yaml(*, repo_root: Path, scenario: ValidationScenario) -> Path:
+    return transformToYaml(
         repo_root=repo_root,
         dataset=scenario.dataset,
         problem_id=scenario.problem_id,
+        parser=getConverter(scenario.dataset.lower()),
     )
 
 
@@ -229,7 +231,7 @@ def run_stage1_validation(
     }
 
     for scenario in scenarios:
-        ensure_problem_yaml_from_dat(repo_root=repo_root, scenario=scenario)
+        ensure_problem_yaml(repo_root=repo_root, scenario=scenario)
         old_script = old_script_map.get(scenario.dataset)
         old_stdout = ""
         old_stderr = ""
