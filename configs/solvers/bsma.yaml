@@ -1,13 +1,20 @@
+# (必填) 求解器 ID
 solver_id: bsma
+# (必填) 求解器類別
 solver_class: BSMASolver
+# (必填) 求解屬性
 capabilities:
   problem_types: [mkp]
   encodings: [binary]
   directions: [max]
+# (必填)停止條件
 stop_condition:
   type: max_iterations
   max_iterations: 1000 # 最大迭代次數
   max_seconds: null
+# (選填)自訂義參數
 params:
   pop_size: 20 # 種群大小
   z: 0.08 # 轉換機率
+  # 選填：連續基因 → 二元判斷之比較函數（見 mkp.tools.continuous_to_binary.CTF_KINDS）；省略時等同 tanh_abs
+  # ctf: tanh_abs

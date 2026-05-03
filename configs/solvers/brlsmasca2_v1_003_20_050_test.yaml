@@ -13,3 +13,5 @@ params:
   a: 2 # SCA r1 振幅起點（隨迭代線性遞減至 0）
   z: 0.03 # SMA 全局轉換機率（test 版實際未呼叫，保留以對齊 SMA 慣例）
   prob_arr: [0.04, 0.46, 0.25, 0.25] # 動作機率分布：sma_global / sma_local / sca_sin / sca_cos
+  # 選填：見 mkp.tools.continuous_to_binary；省略時 tanh_abs
+  # ctf: tanh_abs

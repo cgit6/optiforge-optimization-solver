@@ -23,3 +23,5 @@ __pycache__
 .coverage.xml.*.*.*.
 .coverage.xml.*.*.*.*.
 
+.codex/
+.cursor/

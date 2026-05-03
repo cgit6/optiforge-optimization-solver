@@ -24,6 +24,8 @@ from numba import njit
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from ..tools.continuous_to_binary import parse_ctf_kind
+from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
 from .BSCA2_numby import _fitness_row_bsca2, _repair_bsca2_row_inplace
 from .BSMA_numby import _expect_mkp_problem_tensors
@@ -150,6 +152,7 @@ def _sma_local_row(
     pool: np.ndarray,
     vb: np.ndarray,
     vc: np.ndarray,
+    ctf_id: int,
 ) -> None:
     mf = float(max_iter)
     a = np.arctanh(-1.0 * ((iter_idx + 1) / mf) + 1.0)
@@ -175,7 +178,7 @@ def _sma_local_row(
             )
         else:
             pop_sol[row, j] = vc[j] * pop_sol[row, j]
-        if np.random.uniform(0.0, 1.0) < abs(np.tanh(pop_sol[row, j])):
+        if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[row, j]):
             pop_sol[row, j] = 1.0
         else:
             pop_sol[row, j] = 0.0
@@ -189,6 +192,7 @@ def _sca_sin_row(
     gbest_sol: np.ndarray,
     r1: float,
     items: int,
+    ctf_id: int,
 ) -> None:
     for j in range(items):
         r2 = math.pi * np.random.uniform(0.0, 2.0)
@@ -196,7 +200,7 @@ def _sca_sin_row(
         pop_sol[row, j] = individual_best_sol[row, j] + (
             r1 * math.sin(r2) * abs(r3 * gbest_sol[j] - individual_best_sol[row, j])
         )
-        if np.random.uniform(0.0, 1.0) < abs(np.tanh(pop_sol[row, j])):
+        if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[row, j]):
             pop_sol[row, j] = 1.0
         else:
             pop_sol[row, j] = 0.0
@@ -210,6 +214,7 @@ def _sca_cos_row(
     gbest_sol: np.ndarray,
     r1: float,
     items: int,
+    ctf_id: int,
 ) -> None:
     for j in range(items):
         r2 = math.pi * np.random.uniform(0.0, 2.0)
@@ -217,7 +222,7 @@ def _sca_cos_row(
         pop_sol[row, j] = individual_best_sol[row, j] + (
             r1 * math.cos(r2) * abs(r3 * gbest_sol[j] - individual_best_sol[row, j])
         )
-        if np.random.uniform(0.0, 1.0) < abs(np.tanh(pop_sol[row, j])):
+        if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[row, j]):
             pop_sol[row, j] = 1.0
         else:
             pop_sol[row, j] = 0.0
@@ -253,6 +258,7 @@ def _bscasma_main_loop_numba(
     pool: np.ndarray,
     vb: np.ndarray,
     vc: np.ndarray,
+    ctf_id: int,
 ) -> float:
     np.random.seed(rng_seed)
     gbest_fit = pop_fit[0]
@@ -285,13 +291,14 @@ def _bscasma_main_loop_numba(
                     pool,
                     vb,
                     vc,
+                    ctf_id,
                 )
                 exe_time[i, 1] += 1
             elif action == 2:
-                _sca_sin_row(pop_sol, individual_best_sol, i, gbest_sol, r1, items)
+                _sca_sin_row(pop_sol, individual_best_sol, i, gbest_sol, r1, items, ctf_id)
                 exe_time[i, 2] += 1
             elif action == 3:
-                _sca_cos_row(pop_sol, individual_best_sol, i, gbest_sol, r1, items)
+                _sca_cos_row(pop_sol, individual_best_sol, i, gbest_sol, r1, items, ctf_id)
                 exe_time[i, 3] += 1
 
             pop_fit[i] = _fitness_row_bsca2(pop_sol, i, values, items)
@@ -348,6 +355,7 @@ class BRLSMASCA2V100320050TestNumbaCore:
         z: float,
         max_iter: int,
         prob_arr: tuple[float, ...] | list[float] = (0.04, 0.46, 0.25, 0.25),
+        ctf_id: int = 0,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -364,6 +372,8 @@ class BRLSMASCA2V100320050TestNumbaCore:
             raise ValueError("a must be > 0")
         if not (0.0 < z <= 1.0):
             raise ValueError("z must satisfy 0 < z <= 1")
+
+        self.ctf_id = int(ctf_id)
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
@@ -507,6 +517,7 @@ class BRLSMASCA2V100320050TestNumbaCore:
             pool,
             vb,
             vc,
+            self.ctf_id,
         )
 
         self.exe_time = np.asarray(exe_time)
@@ -553,6 +564,8 @@ class BRLSMASCA2V100320050TestNumbaSolver:
         if not (0.0 < z <= 1.0):
             raise ValueError("params.z must satisfy 0 < z <= 1")
 
+        _, ctf_id = parse_ctf_kind(raw_params)
+
         run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
 
         np.random.seed(run_seed)
@@ -571,6 +584,7 @@ class BRLSMASCA2V100320050TestNumbaSolver:
             z=z,
             max_iter=int(max_iterations),
             prob_arr=prob_arr,
+            ctf_id=ctf_id,
         )
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0

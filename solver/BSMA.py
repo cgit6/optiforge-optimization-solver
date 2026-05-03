@@ -10,6 +10,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from ..tools.continuous_to_binary import flip_probability, parse_ctf_kind
 
 # 這邊要改成 可以提交狀態(SolveResult.addAct(狀態, 編碼, extend))、對外暴露過程(extend 物件)
 
@@ -55,6 +56,7 @@ class BSMACore:
         pop_size: int,
         z: float,
         max_iter: int,
+        ctf_kind: str = "tanh_abs",
     ) -> None:
         self.items = items
         self.dim = dim
@@ -74,6 +76,7 @@ class BSMACore:
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
+        self.ctf_kind = str(ctf_kind)
         self.cp_list = self.pseudo_utility()
         self.z = float(z)
         self.W = np.zeros([self.pop_size, self.items])
@@ -213,7 +216,9 @@ class BSMACore:
                             )
                         else:
                             self.pop_sol[i, j] = vc[j] * self.pop_sol[i, j]
-                        if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
+                        if np.random.uniform(0.0, 1.0) < flip_probability(
+                            float(self.pop_sol[i, j]), self.ctf_kind
+                        ):
                             self.pop_sol[i, j] = 1
                         else:
                             self.pop_sol[i, j] = 0
@@ -251,6 +256,7 @@ class BSMASolver:
             raise ValueError("params must be a mapping when present")
         pop_size = int(raw_params.get("pop_size", 20))
         z = float(raw_params.get("z", 0.08))
+        ctf_kind, _ = parse_ctf_kind(raw_params)
         if pop_size <= 0:
             raise ValueError("params.pop_size must be > 0")
         if not (0.0 < z <= 1.0):
@@ -273,6 +279,7 @@ class BSMASolver:
             pop_size=pop_size,
             z=z,
             max_iter=int(max_iterations),
+            ctf_kind=ctf_kind,
         )
         best_sol, best_fit = core.run() # 執行求解
         algorithm_runtime = time.perf_counter() - t_alg0

@@ -11,3 +11,5 @@ stop_condition:
 params:
   pop_size: 20
   a: 2.0
+  # 選填：ctf 與 bsca2_v1_20 相同；省略時 tanh_abs
+  # ctf: tanh_abs

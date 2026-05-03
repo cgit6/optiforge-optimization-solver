@@ -18,6 +18,8 @@ from numba import njit
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from ..tools.continuous_to_binary import parse_ctf_kind
+from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
 from .BSMA_numby import _expect_mkp_problem_tensors, _sort_pop_desc_deterministic_inplace
 
@@ -108,6 +110,7 @@ def _bsca2_main_loop_numba(
     idx_work: np.ndarray,
     acc_res: np.ndarray,
     gbest_sol: np.ndarray,
+    ctf_id: int,
 ) -> float:
     np.random.seed(rng_seed)
     gbest_fit = pop_fit[0]
@@ -133,7 +136,7 @@ def _bsca2_main_loop_numba(
                         abs(r1 * np.cos(r2)) * r3 * gbest_sol[j] - pop_sol[i, j]
                     )
 
-                if np.random.uniform(0.0, 1.0) < abs(np.tanh(pop_sol[i, j])):
+                if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[i, j]):
                     pop_sol[i, j] = 1.0
                 else:
                     pop_sol[i, j] = 0.0
@@ -173,6 +176,7 @@ class BSCA2V120NumbaCore:
         pop_size: int,
         a: float,
         max_iter: int,
+        ctf_id: int = 0,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -187,6 +191,8 @@ class BSCA2V120NumbaCore:
             raise ValueError("pop_size must be > 0")
         if a <= 0:
             raise ValueError("a must be > 0")
+
+        self.ctf_id = int(ctf_id)
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
@@ -271,6 +277,7 @@ class BSCA2V120NumbaCore:
             idx_work,
             acc_res,
             gbest_sol,
+            self.ctf_id,
         )
 
         out = np.empty(it, dtype=np.int64)
@@ -297,6 +304,7 @@ class BSCA2V120NumbaSolver:
             raise ValueError("params must be a mapping when present")
         pop_size = int(raw_params.get("pop_size", 20))
         a = float(raw_params.get("a", 2.0))
+        _, ctf_id = parse_ctf_kind(raw_params)
         if pop_size <= 0:
             raise ValueError("params.pop_size must be > 0")
         if a <= 0:
@@ -318,6 +326,7 @@ class BSCA2V120NumbaSolver:
             pop_size=pop_size,
             a=a,
             max_iter=int(max_iterations),
+            ctf_id=ctf_id,
         )
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0

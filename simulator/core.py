@@ -31,7 +31,8 @@ from ..solver.sma_mkp_modular import SMAMKPModularV1Solver
 from ..solver.sma_tsp_modular import SMATSPModularV1Solver
 from ..solver.validator import ValidationReport, Validator
 
-# 
+
+
 _PROCESS_SAFE_SOLVERS = {
     "bsma",
     "bsma_numba",
@@ -281,7 +282,12 @@ class Simulator:
         worker_cfgs = self._solver_configs.to_worker_init_dict()
         packs = self._problem_bank.export_worker_packs()
         per_line_results: list[list[SolveResult] | None] = [None] * len(lines)
-        mp_context = get_context("fork")
+        # 作業系統
+        if sys.platform == "win32":
+            mp_context = get_context("spawn") # windows 下使用 spawn 模式
+        else:
+            mp_context = get_context("fork") # 其他平台使用 fork 模式
+        
         progress_queue = mp_context.Queue()
         try:
             with _progress_bar(total=len(tasks), desc=f"{spec.experiment_id} batch") as progress:

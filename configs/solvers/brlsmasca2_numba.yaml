@@ -13,3 +13,5 @@ params:
   a: 2
   z: 0.03
   prob_arr: [0.04, 0.46, 0.25, 0.25]
+  # 選填：ctf 與 brlsmasca2_v1_003；省略時 tanh_abs
+  # ctf: tanh_abs

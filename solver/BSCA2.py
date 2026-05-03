@@ -10,6 +10,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from ..tools.continuous_to_binary import flip_probability, parse_ctf_kind
 from .BSMA import _argsort_pop_fit_desc_deterministic
 
 
@@ -29,6 +30,7 @@ class BSCA2V120Core:
         pop_size: int,
         a: float,
         max_iter: int,
+        ctf_kind: str = "tanh_abs",
     ) -> None:
         self.items = items
         self.dim = dim
@@ -48,6 +50,7 @@ class BSCA2V120Core:
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
+        self.ctf_kind = str(ctf_kind)
         self.cp_list = self.pseudo_utility()
 
         # SCA 振幅參數，舊版 BSCA2_V1_20 預設 2.0
@@ -137,7 +140,9 @@ class BSCA2V120Core:
                             abs(r1 * math.cos(r2)) * r3 * self.Gbest_sol[j] - self.pop_sol[i, j]
                         )
 
-                    if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
+                    if np.random.uniform(0.0, 1.0) < flip_probability(
+                        float(self.pop_sol[i, j]), self.ctf_kind
+                    ):
                         self.pop_sol[i, j] = 1
                     else:
                         self.pop_sol[i, j] = 0
@@ -174,6 +179,7 @@ class BSCA2V120Solver:
             raise ValueError("params must be a mapping when present")
         pop_size = int(raw_params.get("pop_size", 20))
         a = float(raw_params.get("a", 2.0))
+        ctf_kind, _ = parse_ctf_kind(raw_params)
         if pop_size <= 0:
             raise ValueError("params.pop_size must be > 0")
         if a <= 0:
@@ -195,6 +201,7 @@ class BSCA2V120Solver:
             pop_size=pop_size,
             a=a,
             max_iter=int(max_iterations),
+            ctf_kind=ctf_kind,
         )
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0

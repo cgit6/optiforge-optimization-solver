@@ -20,9 +20,11 @@ from numba import njit
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from ..tools.continuous_to_binary import parse_ctf_kind
+from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
 
-
+# 檢查資料格式
 def _expect_mkp_problem_tensors(
     values: np.ndarray,
     weights: np.ndarray,
@@ -42,6 +44,7 @@ def _digest_float_prefix(vec: np.ndarray, count: int = 8) -> str:
     return hashlib.sha256(flat.tobytes()).hexdigest()[:16]
 
 
+# 修復操作
 @njit(cache=True)
 def _repair_row_inplace(
     pop_sol: np.ndarray,
@@ -55,7 +58,7 @@ def _repair_row_inplace(
     items: int,
     dim: int,
 ) -> None:
-    """等同 ``BSMACore.repair``：資源為 ``weights.T @ trial_sol``（``trial_sol`` 可為浮點）。"""
+    """修復操作"""
     trial_fit = pop_fit[row]
     for d in range(dim):
         resource[d] = 0.0
@@ -112,7 +115,7 @@ def _sort_pop_desc_deterministic_inplace(
     pop_size: int,
     items: int,
 ) -> None:
-    """與 ``BSMA._argsort_pop_fit_desc_deterministic`` 相同規則，就地重排 ``pop_sol`` / ``pop_fit``。"""
+    """就地重排 pop_sol / pop_fit"""
     for i in range(pop_size):
         idx_work[i] = i
     for i in range(pop_size):
@@ -140,7 +143,7 @@ def _sort_pop_desc_deterministic_inplace(
 
 @njit(cache=True)
 def _fitness_row(pop_sol: np.ndarray, row: int, values: np.ndarray, items: int) -> float:
-    """等同 ``np.sum(values * pop_sol[row])``（與參考 ``BSMACore.run`` 每代更新 fitness 一致）。"""
+    """目標函數: 等同 np.sum(values * pop_sol[row])"""
     s = 0.0
     for j in range(items):
         s += float(values[j]) * pop_sol[row, j]
@@ -171,6 +174,7 @@ def _bsma_main_loop_numba(
     tmp_fit: np.ndarray,
     idx_work: np.ndarray,
     gbest_sol: np.ndarray,
+    ctf_id: int,
 ) -> float:
     """整段主迴圈單一 njit：開頭 ``np.random.seed`` 一次，Numba RNG 連續；每代決定性排序。
 
@@ -244,7 +248,7 @@ def _bsma_main_loop_numba(
                         )
                     else:
                         pop_sol[i, j] = vc[j] * pop_sol[i, j]
-                    if np.random.uniform(0.0, 1.0) < abs(np.tanh(pop_sol[i, j])):
+                    if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[i, j]):
                         pop_sol[i, j] = 1.0
                     else:
                         pop_sol[i, j] = 0.0
@@ -282,6 +286,7 @@ class BSMANumbaCore:
         pop_size: int,
         z: float,
         max_iter: int,
+        ctf_id: int = 0,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -296,6 +301,8 @@ class BSMANumbaCore:
             raise ValueError("pop_size must be > 0")
         if not (0.0 < z <= 1.0):
             raise ValueError("z must satisfy 0 < z <= 1")
+
+        self.ctf_id = int(ctf_id)
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
@@ -391,6 +398,7 @@ class BSMANumbaCore:
             tmp_fit,
             idx_work,
             gbest_sol,
+            self.ctf_id,
         )
 
         out = np.empty(it, dtype=np.int64)
@@ -417,6 +425,7 @@ class BSMANumbaSolver:
             raise ValueError("params must be a mapping when present")
         pop_size = int(raw_params.get("pop_size", 20))
         z = float(raw_params.get("z", 0.08))
+        _, ctf_id = parse_ctf_kind(raw_params)
         if pop_size <= 0:
             raise ValueError("params.pop_size must be > 0")
         if not (0.0 < z <= 1.0):
@@ -438,6 +447,7 @@ class BSMANumbaSolver:
             pop_size=pop_size,
             z=z,
             max_iter=int(max_iterations),
+            ctf_id=ctf_id,
         )
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0

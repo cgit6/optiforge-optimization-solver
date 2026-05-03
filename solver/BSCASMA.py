@@ -10,6 +10,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from ..tools.continuous_to_binary import flip_probability, parse_ctf_kind
 from .BSMA import _argsort_pop_fit_desc_deterministic
 
 
@@ -36,6 +37,7 @@ class BRLSMASCA2V100320050TestCore:
         z: float,
         max_iter: int,
         prob_arr: tuple[float, ...] | list[float] = (0.04, 0.46, 0.25, 0.25),
+        ctf_kind: str = "tanh_abs",
     ) -> None:
         self.items = items
         self.dim = dim
@@ -57,6 +59,7 @@ class BRLSMASCA2V100320050TestCore:
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
+        self.ctf_kind = str(ctf_kind)
         self.cp_list = self.pseudo_utility()
         self.cp_list_old = self.cp_list
         # 與 old _test 版一致：以 self.items * 0.15 為 std（舊版 dead code 保留）
@@ -222,7 +225,7 @@ class BRLSMASCA2V100320050TestCore:
             else:
                 self.pop_sol[i, j] = vc[j] * self.pop_sol[i, j]
 
-            if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
+            if np.random.uniform(0.0, 1.0) < flip_probability(float(self.pop_sol[i, j]), self.ctf_kind):
                 self.pop_sol[i, j] = 1
             else:
                 self.pop_sol[i, j] = 0
@@ -238,7 +241,7 @@ class BRLSMASCA2V100320050TestCore:
                 self.r1 * math.sin(r2) * abs(r3 * self.Gbest_sol[j] - self.individual_best_sol[i, j])
             )
 
-            if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
+            if np.random.uniform(0.0, 1.0) < flip_probability(float(self.pop_sol[i, j]), self.ctf_kind):
                 self.pop_sol[i, j] = 1
             else:
                 self.pop_sol[i, j] = 0
@@ -254,7 +257,7 @@ class BRLSMASCA2V100320050TestCore:
                 self.r1 * math.cos(r2) * abs(r3 * self.Gbest_sol[j] - self.individual_best_sol[i, j])
             )
 
-            if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
+            if np.random.uniform(0.0, 1.0) < flip_probability(float(self.pop_sol[i, j]), self.ctf_kind):
                 self.pop_sol[i, j] = 1
             else:
                 self.pop_sol[i, j] = 0
@@ -362,6 +365,8 @@ class BRLSMASCA2V100320050TestSolver:
         if not (0.0 < z <= 1.0):
             raise ValueError("params.z must satisfy 0 < z <= 1")
 
+        ctf_kind, _ = parse_ctf_kind(raw_params)
+
         run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
 
         np.random.seed(run_seed)
@@ -380,6 +385,7 @@ class BRLSMASCA2V100320050TestSolver:
             z=z,
             max_iter=int(max_iterations),
             prob_arr=prob_arr,
+            ctf_kind=ctf_kind,
         )
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0
