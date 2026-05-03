@@ -53,14 +53,7 @@ weing 轉換格式命令: `.venv/bin/python -m mkp.cli.convert --dataset WEING -
 執行模擬(cd /home/sean/mkp): 
 
 ```cmd
-/home/sean/mkp/.venv/bin/python -m mkp.cli.run \
-  --experiment-id my_exp \
-  --dataset WEISH \
-  --problems weish01 \
-  --solver bsma_v1_008 \
-  --repeat 1 \
-  --base-seed 101 \
-  --output-dir ./output
+.venv/bin/python -m mkp.cli.run   --experiment-id bsma_weish_repeat20_worker   --problem-type mkp   --dataset WEISH   --problems weish01,weish02,weish03,weish04,weish05,weish06,weish07,weish08,weish09,weish10,weish11,weish12,weish13,weish14,weish15,weish16,weish17,weish18,weish19,weish20,weish21,weish22,weish23,weish24,weish25,weish26,weish27,weish28,weish29,weish30   --solver bsma  --repeat 20   --base-seed 42   --output-dir output   --execution-mode worker_curriculum
 ```
 
 ## 系統層實作問題
@@ -81,3 +74,23 @@ weing 轉換格式命令: `.venv/bin/python -m mkp.cli.convert --dataset WEING -
 - 檢查一下算法架構是否需要調整
 - 考慮算法迭代時若用併發處理 thread 併發觸發 GLI 影響效能的問題
 - 在 SolveResult 添加可以提交當前狀態的 hook function。hook 會以一個共同入口提交當下狀態，在算法中調用的方式大概像 SolveResult.addAct(當前狀態, 當前編碼, 其他算法狀態) 
+- 記得添加 Gurobi 的 slover 腳本
+
+
+- 對 BSMA numba 版本在改成 支援 numba 之後，貼到 code file 中，進行測試是否可以順利執行，求解 gk 題庫 第一和第二題。 實驗(repeat) 1 次和 20 次。如果有問題就修改。實驗除了確保結果需要保持一致以外，還需要看總執行時間。最後我想知道的是算法是否有保持一樣的初始解、過程、結果，還有最後執行時間是否有縮減
+
+- 現在 傳入 `BSMANumbaCore` 物件中的資料格式並沒有被嚴格定義，我希望可以優化整個資料路徑，看能不能解析出來的時候就保持正確嚴謹的資料格式最終傳到 `BSMANumbaCore` 物件所需的資料格式盡量不要到 算法中還要做 `self.values = np.ascontiguousarray(values, dtype=np.int64)` 這種事。然後路徑中的資料格式如果更新了之後檢查其他 solver 文件的 core 物件需不需要更新資料格式。因為我這些資料是要準備給 Numba 使用的所以需要精確固定的資料格式
+
+
+## 界面
+
+- 等系統穩定+ 我完全搞懂流程之後，做一個 web 界面可以開 server 跟 前端 UI 對系統進行操作。
+
+
+## 新算法註冊
+
+1. config/<algo_name>.yaml
+2. `/home/sean/mkp/simulator/core.py` 的 `_build_process_local_registry` 函數
+3. `/home/sean/mkp/engine/builders.py` 的 `default_solver_builders` 函數
+4. `/home/sean/mkp/simulator/core.py` 的 `_PROCESS_SAFE_SOLVERS` 函數
+

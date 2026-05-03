@@ -1,3 +1,5 @@
+"""``BSCA2V120NumbaCore`` 與 ``BSCA2V120Core`` 在 GK 題上的數值對齊（需安裝 optional ``numba``）。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,9 +14,9 @@ from mkp.solver.BSCA2 import BSCA2V120Core
 from mkp.solver.BSCA2_numby import BSCA2V120NumbaCore
 
 
-def _load_weish01(repo_root: Path):
+def _load_gk(repo_root: Path, problem_id: str):
     return ProblemRepository(config_root=repo_root / "configs" / "problems").load(
-        "WEISH", "weish01", "mkp"
+        "GK", problem_id, "mkp"
     )
 
 
@@ -25,7 +27,7 @@ def _assert_cores_match_after_init(ref: BSCA2V120Core, numba: BSCA2V120NumbaCore
 
 
 def _build_cores(
-    problem, *, seed: int, max_iterations: int, pop_size: int, a: float
+    problem, *, seed: int, pop_size: int, a: float, max_iter: int
 ) -> tuple[BSCA2V120Core, BSCA2V120NumbaCore]:
     np.random.seed(seed)
     ref = BSCA2V120Core(
@@ -38,7 +40,7 @@ def _build_cores(
         seed=seed,
         pop_size=pop_size,
         a=a,
-        max_iter=max_iterations,
+        max_iter=max_iter,
     )
     np.random.seed(seed)
     numba_c = BSCA2V120NumbaCore(
@@ -51,21 +53,25 @@ def _build_cores(
         seed=seed,
         pop_size=pop_size,
         a=a,
-        max_iter=max_iterations,
+        max_iter=max_iter,
     )
     return ref, numba_c
 
 
-def test_bsca2_python_numba_weish01_seed_101_bit_identical():
-    """WEISH/weish01 + seed 101 + max_iter 30：參考 ``BSCA2V120Core`` 與 ``BSCA2V120NumbaCore`` 應完全一致。"""
+@pytest.mark.parametrize("problem_id", ("mk_gk01", "mk_gk02"))
+@pytest.mark.parametrize("repeat_idx", (0, 19))
+def test_bsca2_numba_matches_reference_gk_initial_and_result(
+    tmp_path: Path, problem_id: str, repeat_idx: int
+) -> None:
+    """同一 seed 下初始族群與最終 (best_sol, best_fit) 與參考 ``BSCA2V120Core`` 一致。"""
     repo_root = Path(__file__).resolve().parents[1]
-    problem = _load_weish01(repo_root)
-    seed = 101
-    max_iter = 30
+    problem = _load_gk(repo_root, problem_id)
+    seed = 42 + repeat_idx
+    max_iter = 80
     pop_size = 20
     a = 2.0
 
-    ref, numba_c = _build_cores(problem, seed=seed, max_iterations=max_iter, pop_size=pop_size, a=a)
+    ref, numba_c = _build_cores(problem, seed=seed, pop_size=pop_size, a=a, max_iter=max_iter)
     _assert_cores_match_after_init(ref, numba_c)
 
     sol_r, fit_r = ref.run()
@@ -75,18 +81,12 @@ def test_bsca2_python_numba_weish01_seed_101_bit_identical():
     assert np.array_equal(np.asarray(sol_r, dtype=np.int64), np.asarray(sol_n, dtype=np.int64))
 
 
-def test_bsca2_python_numba_weish01_three_seeds_bit_identical():
-    """WEISH/weish01 + seeds 101 / 202 / 303、max_iter 30：Python 與 Numba 本體逐解一致。"""
+def test_bsca2_numba_warmup_jit_smoke(tmp_path: Path) -> None:
+    """最短 smoke：確保 njit 可編譯執行。"""
     repo_root = Path(__file__).resolve().parents[1]
-    problem = _load_weish01(repo_root)
-    max_iter = 30
-    pop_size = 20
-    a = 2.0
-
-    for seed in (101, 202, 303):
-        ref, numba_c = _build_cores(problem, seed=seed, max_iterations=max_iter, pop_size=pop_size, a=a)
-        _assert_cores_match_after_init(ref, numba_c)
-        sol_r, fit_r = ref.run()
-        sol_n, fit_n = numba_c.run()
-        assert int(fit_r) == int(fit_n), f"seed={seed}"
-        assert np.array_equal(np.asarray(sol_r, dtype=np.int64), np.asarray(sol_n, dtype=np.int64)), f"seed={seed}"
+    problem = _load_gk(repo_root, "mk_gk01")
+    ref, numba_c = _build_cores(problem, seed=1, pop_size=10, a=2.0, max_iter=5)
+    _assert_cores_match_after_init(ref, numba_c)
+    sol_n, fit_n = numba_c.run()
+    assert sol_n.shape == (problem.items,)
+    assert isinstance(fit_n, int)

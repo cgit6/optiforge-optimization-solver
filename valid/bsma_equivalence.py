@@ -87,8 +87,8 @@ def _capture_new_loop_meta(problem: ProblemModel, seed: int, max_iterations: int
         seed=seed,
         pop_size=20,
         z=0.08,
+        max_iter=int(max_iterations),
     )
-    core.max_iter = int(max_iterations)
     core._loop_trace = []
     core.run()
     return list(core._loop_trace) if core._loop_trace is not None else []

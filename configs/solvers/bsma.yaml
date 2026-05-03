@@ -1,5 +1,5 @@
-solver_id: bsma_v1_008
-solver_class: BSMAV1008Solver
+solver_id: bsma
+solver_class: BSMASolver
 capabilities:
   problem_types: [mkp]
   encodings: [binary]

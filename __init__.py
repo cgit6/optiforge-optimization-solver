@@ -10,7 +10,7 @@ from .engine.repository import ProblemRepository
 from .simulator import Simulator, SimulatorResult, SimulatorRunRow
 from .solver.BSCA2 import BSCA2V120Core, BSCA2V120Solver
 from .solver.BSCASMA import BRLSMASCA2V100320050TestCore, BRLSMASCA2V100320050TestSolver
-from .solver.BSMA import BSMAV1008Core, BSMAV1008Solver
+from .solver.BSMA import BSMACore, BSMASolver
 from .solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
 from .solver.registry import SolverRegistry, StubMaxIterationsSolver
 from .solver.sma_mkp_modular import SMAMKPModularV1Solver
@@ -43,8 +43,8 @@ __all__ = [
     "BSCA2V120Solver",
     "BRLSMASCA2V100320050TestCore",
     "BRLSMASCA2V100320050TestSolver",
-    "BSMAV1008Core",
-    "BSMAV1008Solver",
+    "BSMACore",
+    "BSMASolver",
     "SMAMKPModularV1Solver",
     "SMATSPModularV1Solver",
     "NearestNeighborTSPSolver",

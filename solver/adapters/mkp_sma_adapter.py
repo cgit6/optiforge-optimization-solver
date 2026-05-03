@@ -25,7 +25,9 @@ class MKPSMAAdapter:
         result = linprog(constraints, i_weight, i_profit)
         self.linprog_runtime = time.perf_counter() - t_lp0
         shadow_price = result.x[: len(self.problem.capacities)]
-        pseudo_utilities = (-i_profit).T / (np.matmul(shadow_price.T, self.problem.weights.T))
+        denom = np.matmul(shadow_price.T, self.problem.weights.T)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pseudo_utilities = (-i_profit).T / denom
         return (-pseudo_utilities).argsort()
 
     def initial_position(self, rng: np.random.Generator, pop_size: int) -> np.ndarray:

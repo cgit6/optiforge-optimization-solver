@@ -191,8 +191,22 @@ def scan_problem_catalog(problem_root: Path) -> tuple[list[ProblemCatalogEntry],
 
 
 def validate_catalog_entries(repository: ProblemRepository, entries: list[ProblemCatalogEntry]) -> None:
+    """載入並驗證 catalog 內每一題（全題庫）；CI 或維護工具可呼叫。
+
+    日常 `engine.build` 改用 :func:`validate_spec_problems_in_repository` 以避免對未使用題目重複 I/O。
+    """
     for entry in entries:
         repository.load(entry.dataset, entry.problem_id, entry.problem_type)
+
+
+def validate_spec_problems_in_repository(repository: ProblemRepository, spec: ExperimentSpec) -> None:
+    """僅對本次實驗的題目呼叫 ``repository.load``（語意與舊版全量驗證的子集一致）。"""
+    seen: set[str] = set()
+    for pid in spec.problem_ids:
+        if pid in seen:
+            continue
+        seen.add(pid)
+        repository.load(spec.dataset, pid, spec.problem_type)
 
 
 def assert_spec_problems_in_catalog(spec: ExperimentSpec, entries: list[ProblemCatalogEntry]) -> None:

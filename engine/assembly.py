@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, cast
@@ -19,7 +20,7 @@ from .bank import (
     ProblemCatalogEntry,
     assert_spec_problems_in_catalog,
     scan_problem_catalog,
-    validate_catalog_entries,
+    validate_spec_problems_in_repository,
 )
 from .repository import ProblemRepository
 from .builders import default_solver_builders
@@ -37,11 +38,21 @@ def build(
 ) -> SimulationBundle:
     """掃描與驗證題庫、建 ProblemBank 與 bundle；不在此建立 `Simulator`。"""
     problem_repository = ProblemRepository(config_root=problem_root)
+    print(f"[mkp] scanning problem catalog under {problem_root} ...", file=sys.stderr, flush=True)
     raw_catalog, game_setting = scan_problem_catalog(problem_root)
-    validate_catalog_entries(problem_repository, list(raw_catalog))
     assert_spec_problems_in_catalog(spec, list(raw_catalog))
+    n_problems = len(set(spec.problem_ids))
+    print(
+        f"[mkp] loading {n_problems} experiment problem(s) ...",
+        file=sys.stderr,
+        flush=True,
+    )
+    validate_spec_problems_in_repository(problem_repository, spec)
+    print("[mkp] loading solver configs ...", file=sys.stderr, flush=True)
     solver_configs = SolverConfigsSnapshot.build(spec, Path(solver_root))
+    print("[mkp] building shared-memory problem bank ...", file=sys.stderr, flush=True)
     problem_bank = ProblemBank.build_for_spec(repository=problem_repository, spec=spec)
+    print("[mkp] engine build done.", file=sys.stderr, flush=True)
     builders = dict(solver_builders) if solver_builders is not None else default_solver_builders()
     return SimulationBundle(
         spec=spec,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy as copy
 import math
-import random
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -11,6 +10,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from .BSMA import _argsort_pop_fit_desc_deterministic
 
 
 class BSCA2V120Core:
@@ -26,8 +26,9 @@ class BSCA2V120Core:
         capacities: np.ndarray,
         seed: int | None = None,
         *,
-        pop_size: int = 20,
-        a: float = 2.0,
+        pop_size: int,
+        a: float,
+        max_iter: int,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -38,8 +39,15 @@ class BSCA2V120Core:
         self.seed = seed
         self.linprog_runtime = 0.0
 
+        if max_iter <= 0:
+            raise ValueError("max_iter must be > 0")
+        if pop_size <= 0:
+            raise ValueError("pop_size must be > 0")
+        if a <= 0:
+            raise ValueError("a must be > 0")
+
         self.pop_size = int(pop_size)
-        self.max_iter = 5000
+        self.max_iter = int(max_iter)
         self.cp_list = self.pseudo_utility()
 
         # SCA 振幅參數，舊版 BSCA2_V1_20 預設 2.0
@@ -58,15 +66,17 @@ class BSCA2V120Core:
         result = linprog(constraints, i_weight, i_profit)
         self.linprog_runtime = time.perf_counter() - t_lp0
         shadow_price = result.x[: len(self.capacities)]
-        pseudo_utilities = (-i_profit).T / (np.matmul(shadow_price.T, self.weights.T))
-        return (-pseudo_utilities).argsort()
+        denom = np.matmul(shadow_price.T, self.weights.T)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pseudo_utilities = (-i_profit).T / denom
+        return np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
 
     def initial_pop(self) -> np.ndarray:
         population = np.zeros([self.pop_size, self.items])
         for i in range(self.pop_size):
             accumulated_resources = np.zeros([self.dim])
             for j in self.cp_list:
-                if random.uniform(0, 1) < 0.5:
+                if np.random.uniform(0.0, 1.0) < 0.5:
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
                         population[i, j] = 1
@@ -95,28 +105,27 @@ class BSCA2V120Core:
     def sort_pop(self) -> tuple[np.ndarray, np.ndarray]:
         pop_sol = np.zeros([self.pop_size, self.items])
         pop_fit = np.zeros([self.pop_size])
-        sorted_indices = np.argsort(self.pop_fit)[::-1]
+        sorted_indices = _argsort_pop_fit_desc_deterministic(self.pop_fit, self.pop_size)
         for i in range(self.pop_size):
             pop_sol[i] = self.pop_sol[sorted_indices[i]]
             pop_fit[i] = self.pop_fit[sorted_indices[i]]
         return pop_sol, pop_fit
 
     def run(self) -> tuple[np.ndarray, int]:
-        random.seed(self.seed)
         np.random.seed(self.seed)
 
         self.pop_sol, self.pop_fit = self.sort_pop()
-        self.Gbest_sol = self.pop_sol[0]
-        self.Gbest_fit = self.pop_fit[0]
+        self.Gbest_sol = copy.deepcopy(self.pop_sol[0])
+        self.Gbest_fit = copy.deepcopy(self.pop_fit[0])
 
         for iter in range(self.max_iter):
             for i in range(self.pop_size):
                 r1 = self.a - self.a * (iter / self.max_iter)
 
                 for j in range(self.items):
-                    r2 = math.pi * random.uniform(0.0, 2.0)
-                    r3 = random.uniform(0.0, 2.0)
-                    r4 = random.uniform(0.0, 1.0)
+                    r2 = math.pi * np.random.uniform(0.0, 2.0)
+                    r3 = np.random.uniform(0.0, 2.0)
+                    r4 = np.random.uniform(0.0, 1.0)
 
                     # 維持 BSCA2_V1_20 原本 abs/括號位置：abs(r1*sin(r2)) * r3 * Gbest - sol
                     if r4 < 0.5:
@@ -128,7 +137,7 @@ class BSCA2V120Core:
                             abs(r1 * math.cos(r2)) * r3 * self.Gbest_sol[j] - self.pop_sol[i, j]
                         )
 
-                    if random.uniform(0, 1) < np.abs(np.tanh(self.pop_sol[i, j])):
+                    if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
                         self.pop_sol[i, j] = 1
                     else:
                         self.pop_sol[i, j] = 0
@@ -172,8 +181,6 @@ class BSCA2V120Solver:
 
         run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
 
-        # 與舊版一致：在建立族群前同步固定 random 與 numpy 全域亂數（雙源 RNG）
-        random.seed(run_seed)
         np.random.seed(run_seed)
 
         t_alg0 = time.perf_counter()
@@ -181,14 +188,14 @@ class BSCA2V120Solver:
             problem.items,
             problem.dim,
             problem.best_known,
-            np.asarray(problem.values, dtype=int),
-            np.asarray(problem.weights, dtype=int),
-            np.asarray(problem.capacities, dtype=int),
+            problem.values,
+            problem.weights,
+            problem.capacities,
             seed=run_seed,
             pop_size=pop_size,
             a=a,
+            max_iter=int(max_iterations),
         )
-        core.max_iter = int(max_iterations)
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0
 

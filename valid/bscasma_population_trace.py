@@ -493,9 +493,9 @@ def _run_new_trace(
         pop_size=pop_size,
         a=a,
         z=z,
+        max_iter=int(max_iterations),
         prob_arr=prob_arr,
     )
-    solver.max_iter = int(max_iterations)
     return _safe_run_with_trace(solver)
 
 

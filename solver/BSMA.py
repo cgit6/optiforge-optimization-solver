@@ -11,7 +11,7 @@ from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
 
-# 這邊要改成 可以提交狀態、對外暴露過程、
+# 這邊要改成 可以提交狀態(SolveResult.addAct(狀態, 編碼, extend))、對外暴露過程(extend 物件)
 
 
 # 摘要化浮點數陣列
@@ -20,8 +20,27 @@ def _digest_float_prefix(vec: np.ndarray, count: int = 8) -> str:
     return hashlib.sha256(flat.tobytes()).hexdigest()[:16]
 
 
-class BSMAV1008Core:
-    """與 old/BSMA2.py::BSMA_V1_008 相同邏輯（不 import old，供驗證與除錯對照）。"""
+def _argsort_pop_fit_desc_deterministic(pop_fit: np.ndarray, pop_size: int) -> np.ndarray:
+    """回傳長度 ``pop_size`` 的列索引：依 ``pop_fit`` **非遞增**；同適配值時**列索引較小者在前**。
+
+    用於取代 ``np.argsort(pop_fit)[::-1]``：NumPy 預設 ``argsort`` 在同值時的相對順序未定義，
+    且與 Numba 內建 ``argsort`` 可能不一致。``BSMA_numby`` 主迴圈排序須與此函式邏輯相同（njit 複製）。"""
+    idx = np.arange(pop_size, dtype=np.int64)
+    for i in range(pop_size):
+        bi = i
+        for j in range(i + 1, pop_size):
+            ia = int(idx[j])
+            ib = int(idx[bi])
+            fa = float(pop_fit[ia])
+            fb = float(pop_fit[ib])
+            if fa > fb or (fa == fb and ia < ib):
+                bi = j
+        idx[i], idx[bi] = idx[bi], idx[i]
+    return idx
+
+
+class BSMACore:
+    """與 old/BSMA2.py::BSMA 相同邏輯（不 import old，供驗證與除錯對照）。"""
 
     def __init__(
         self,
@@ -33,8 +52,9 @@ class BSMAV1008Core:
         capacities: np.ndarray,
         seed: int | None = None,
         *,
-        pop_size: int = 20,
-        z: float = 0.08,
+        pop_size: int,
+        z: float,
+        max_iter: int,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -45,8 +65,15 @@ class BSMAV1008Core:
         self.seed = seed
         self.linprog_runtime = 0.0
 
+        if max_iter <= 0:
+            raise ValueError("max_iter must be > 0")
+        if pop_size <= 0:
+            raise ValueError("pop_size must be > 0")
+        if not (0.0 < z <= 1.0):
+            raise ValueError("z must satisfy 0 < z <= 1")
+
         self.pop_size = int(pop_size)
-        self.max_iter = 5000
+        self.max_iter = int(max_iter)
         self.cp_list = self.pseudo_utility()
         self.z = float(z)
         self.W = np.zeros([self.pop_size, self.items])
@@ -72,8 +99,11 @@ class BSMAV1008Core:
         result = linprog(constraints, i_weight, i_profit)
         self.linprog_runtime = time.perf_counter() - t_lp0
         shadow_price = result.x[: len(self.capacities)]
-        pseudo_utilities = (-i_profit).T / (np.matmul(shadow_price.T, self.weights.T))
-        return (-pseudo_utilities).argsort()
+        denom = np.matmul(shadow_price.T, self.weights.T)
+        # linprog 退化時分母可能為 0（舊 BSMA2 同一公式）；除法仍產生 inf/nan，僅抑制已知 RuntimeWarning
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pseudo_utilities = (-i_profit).T / denom
+        return np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
 
     # 初始化種群
     def initial_pop(self) -> np.ndarray:
@@ -114,7 +144,7 @@ class BSMAV1008Core:
     def sort_pop(self) -> tuple[np.ndarray, np.ndarray]:
         pop_sol = np.zeros([self.pop_size, self.items])
         pop_fit = np.zeros([self.pop_size])
-        sorted_indices = np.argsort(self.pop_fit)[::-1]
+        sorted_indices = _argsort_pop_fit_desc_deterministic(self.pop_fit, self.pop_size)
         for i in range(self.pop_size):
             pop_sol[i] = self.pop_sol[sorted_indices[i]]
             pop_fit[i] = self.pop_fit[sorted_indices[i]]
@@ -125,8 +155,10 @@ class BSMAV1008Core:
         np.random.seed(self.seed)
 
         self.pop_sol, self.pop_fit = self.sort_pop()
-        self.Gbest_sol = self.pop_sol[0]
-        self.Gbest_fit = self.pop_fit[0]
+        # 須與改進分支一致使用 ``deepcopy``：若與 ``pop_sol[0]`` 共用視圖，則在 ``i == 0`` 局部搜尋內層
+        # ``j`` 迴圈中 ``Gbest_sol[j]`` 會隨 ``pop_sol[0, j]`` 即時變動，與 Numba 版（獨立 ``gbest_sol`` 緩衝）無法對齊。
+        self.Gbest_sol = copy.deepcopy(self.pop_sol[0])
+        self.Gbest_fit = copy.deepcopy(self.pop_fit[0])
 
         for iter in range(self.max_iter):
             self.W = np.zeros([self.pop_size, self.items])
@@ -202,13 +234,13 @@ class BSMAV1008Core:
 
 
 @dataclass
-class BSMAV1008Solver:
-    """BSMA V1.008：內建與 old/BSMA2 相同演算法本體（BSMAV1008Core），不使用 import old。"""
+class BSMASolver:
+    """BSMA：內建與 old/BSMA2 相同演算法本體（BSMACore），不使用 import old。"""
 
     def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
         stop_condition = config.get("stop_condition", {})
         if stop_condition.get("type") != "max_iterations":
-            raise ValueError("bsma_v1_008 only supports stop_condition.type=max_iterations")
+            raise ValueError("bsma only supports stop_condition.type=max_iterations")
 
         max_iterations = int(stop_condition.get("max_iterations", 0))
         if max_iterations <= 0:
@@ -230,18 +262,18 @@ class BSMAV1008Solver:
         np.random.seed(run_seed)
 
         t_alg0 = time.perf_counter()
-        core = BSMAV1008Core(
+        core = BSMACore(
             problem.items,                             # 物品數量
             problem.dim,                               # 限制維度數量
             problem.best_known,                        # 最佳已知解
-            np.asarray(problem.values, dtype=int),     # 物品價值
-            np.asarray(problem.weights, dtype=int),    # 物品重量
-            np.asarray(problem.capacities, dtype=int), # 限制容量
+            problem.values,
+            problem.weights,
+            problem.capacities,
             seed=run_seed,
             pop_size=pop_size,
             z=z,
+            max_iter=int(max_iterations),
         )
-        core.max_iter = int(max_iterations) # 最大迭代次數
         best_sol, best_fit = core.run() # 執行求解
         algorithm_runtime = time.perf_counter() - t_alg0
 
@@ -255,7 +287,7 @@ class BSMAV1008Solver:
 
         return SolveResult(
             problem_id=problem.problem_id,
-            solver_id=str(config.get("solver_id", "bsma_v1_008")),
+            solver_id=str(config.get("solver_id", "bsma")),
             seed=run_seed,
             best_solution=np.asarray(best_sol, dtype=int),
             best_objective=int(best_fit),

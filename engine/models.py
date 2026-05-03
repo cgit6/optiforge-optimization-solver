@@ -11,14 +11,16 @@ Direction = Literal["max", "min"]
 
 
 def _as_int_array(name: str, data: np.ndarray | list[int]) -> np.ndarray:
-    arr = np.asarray(data, dtype=int)
+    """Normalize to ``int64`` C-contiguous (shared contract for solvers / Numba)."""
+    arr = np.ascontiguousarray(np.asarray(data, dtype=np.int64))
     if arr.ndim != 1:
         raise ValueError(f"{name} must be a 1D integer array.")
     return arr
 
 
 def _as_int_matrix(name: str, data: np.ndarray | list[list[int]]) -> np.ndarray:
-    arr = np.asarray(data, dtype=int)
+    """Normalize to ``int64`` C-contiguous 2D matrix."""
+    arr = np.ascontiguousarray(np.asarray(data, dtype=np.int64))
     if arr.ndim != 2:
         raise ValueError(f"{name} must be a 2D integer matrix.")
     return arr
@@ -102,6 +104,13 @@ class BaseProblem:
 
 @dataclass(frozen=True, kw_only=True)
 class MKPProblem(BaseProblem):
+    """MKP 題目。
+
+    After ``__post_init__``, ``values``, ``weights``, and ``capacities`` are guaranteed
+    ``dtype=np.int64``, C-contiguous, and read-only. Solvers should use them directly
+    without re-casting inside hot paths.
+    """
+
     items: int
     dim: int
     values: np.ndarray
@@ -155,7 +164,7 @@ class TSPProblem(BaseProblem):
         super().__post_init__()
         if self.n_cities <= 1:
             raise ValueError("n_cities must be > 1.")
-        distances = np.asarray(self.distance_matrix, dtype=int)
+        distances = np.ascontiguousarray(np.asarray(self.distance_matrix, dtype=np.int64))
         if distances.shape != (self.n_cities, self.n_cities):
             raise ValueError("distance_matrix shape must be (n_cities, n_cities).")
         if not np.all(np.diag(distances) == 0):

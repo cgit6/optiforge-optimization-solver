@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy as copy
 import math
-import random
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -11,6 +10,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from ..engine.models import ProblemModel, SolveResult
+from .BSMA import _argsort_pop_fit_desc_deterministic
 
 
 class BRLSMASCA2V100320050TestCore:
@@ -31,9 +31,10 @@ class BRLSMASCA2V100320050TestCore:
         capacities: np.ndarray,
         seed: int | None = None,
         *,
-        pop_size: int = 20,
-        a: float = 2,
-        z: float = 0.03,
+        pop_size: int,
+        a: float,
+        z: float,
+        max_iter: int,
         prob_arr: tuple[float, ...] | list[float] = (0.04, 0.46, 0.25, 0.25),
     ) -> None:
         self.items = items
@@ -45,8 +46,17 @@ class BRLSMASCA2V100320050TestCore:
         self.seed = seed
         self.linprog_runtime = 0.0
 
+        if max_iter <= 0:
+            raise ValueError("max_iter must be > 0")
+        if pop_size <= 0:
+            raise ValueError("pop_size must be > 0")
+        if a <= 0:
+            raise ValueError("a must be > 0")
+        if not (0.0 < z <= 1.0):
+            raise ValueError("z must satisfy 0 < z <= 1")
+
         self.pop_size = int(pop_size)
-        self.max_iter = 5000
+        self.max_iter = int(max_iter)
         self.cp_list = self.pseudo_utility()
         self.cp_list_old = self.cp_list
         # 與 old _test 版一致：以 self.items * 0.15 為 std（舊版 dead code 保留）
@@ -68,7 +78,7 @@ class BRLSMASCA2V100320050TestCore:
         self.pop_sol: np.ndarray | None = None
 
         # 個體最佳表現
-        self.individual_best_sol = np.zeros([self.pop_size, self.items], dtype=int)
+        self.individual_best_sol = np.zeros([self.pop_size, self.items])
         self.individual_best_fit = np.zeros([self.pop_size], dtype=int)
 
         self.Gbest_sol: np.ndarray | None = None
@@ -86,7 +96,7 @@ class BRLSMASCA2V100320050TestCore:
         probabilities = list(self._prob_arr_template)
         elements = [0, 1, 2, 3]
         random_selection = np.random.choice(elements, size=self.pop_size, p=probabilities)
-        return random_selection
+        return np.asarray(random_selection, dtype=np.int64)
 
     def pseudo_utility(self) -> np.ndarray:
         constraints = np.concatenate((self.capacities, np.ones(self.items)))
@@ -96,15 +106,18 @@ class BRLSMASCA2V100320050TestCore:
         result = linprog(constraints, i_weight, i_profit)
         self.linprog_runtime = time.perf_counter() - t_lp0
         shadow_price = result.x[: len(self.capacities)]
-        pseudo_utilities = (-i_profit).T / (np.matmul(shadow_price.T, self.weights.T))
-        return (-pseudo_utilities).argsort()
+        denom = np.matmul(shadow_price.T, self.weights.T)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pseudo_utilities = (-i_profit).T / denom
+        x = (-np.asarray(pseudo_utilities, dtype=np.float64)).ravel()
+        return np.ascontiguousarray(np.argsort(x, kind="stable").astype(np.int64))
 
     def initial_pop(self) -> None:
         self.pop_sol = np.zeros([self.pop_size, self.items])
         for i in range(self.pop_size):
             accumulated_resources = np.zeros([self.dim])
             for j in self.cp_list:
-                if random.uniform(0, 1) < 0.5:
+                if np.random.uniform(0.0, 1.0) < 0.5:
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
                         self.pop_sol[i, j] = 1
@@ -134,11 +147,13 @@ class BRLSMASCA2V100320050TestCore:
         return trial_sol, trial_fit
 
     def sort_pop(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        pop_sol = np.zeros([self.pop_size, self.items], dtype=int)
+        # 與 ``BSMA.sort_pop`` 一致：``pop_sol``／``individual_best_sol`` 用 float64，
+        # 否則 ``sma_local``／``sca_*`` 寫入浮點中間值再塞進 int 陣列會被 NumPy 向零截斷，與 Numba 全程 float 版不一致。
+        pop_sol = np.zeros([self.pop_size, self.items])
         pop_fit = np.zeros([self.pop_size], dtype=int)
-        sorted_indices = np.argsort(self.pop_fit)[::-1]
+        sorted_indices = _argsort_pop_fit_desc_deterministic(self.pop_fit, self.pop_size)
 
-        individual_best_sol = np.zeros([self.pop_size, self.items], dtype=int)
+        individual_best_sol = np.zeros([self.pop_size, self.items])
         individual_best_fit = np.zeros([self.pop_size], dtype=int)
 
         for i in range(self.pop_size):
@@ -151,33 +166,36 @@ class BRLSMASCA2V100320050TestCore:
         return pop_sol, pop_fit, individual_best_sol, individual_best_fit
 
     def policy(self, i: int) -> int:
-        r = random.uniform(0, 1)
+        r = np.random.uniform(0.0, 1.0)
         if r < 0.9:
-            action = self.best_method[i]
-        else:
-            array = [0, 1, 2, 3]
-            filtered_array = [x for x in array if x != self.best_method[i]]
-            action = random.choice(filtered_array)
-        return int(action)
+            return int(self.best_method[i])
+        bm = int(self.best_method[i])
+        pool = np.array([x for x in (0, 1, 2, 3) if x != bm], dtype=np.int64)
+        return int(np.random.choice(pool))
 
     def update_sma_weight(self) -> None:
         # 與舊版完全一致；S=0 時除以 0 行為亦保留（log10(0+1)=0，不會 NaN，但 fitness 全相等時實際上 S 會是 0）
         self.W = np.zeros([self.pop_size, self.items])
-        worst_fit = self.pop_fit[-1]
-        best_fit = self.pop_fit[0]
+        worst_fit = float(self.pop_fit[-1])
+        best_fit = float(self.pop_fit[0])
         S = best_fit - worst_fit
+        if S <= 0.0:
+            S = 0.0001
 
         for i in range(self.pop_size):
+            ratio = (best_fit - float(self.pop_fit[i])) / S + 1.0
+            logr = np.log10(ratio)
+            # 與 ``BSMACore`` 相同：``i < pop_size / 2``（真除法）
             if i < self.pop_size / 2:
-                self.W[i, :] = 1 + np.random.random([self.items]) * np.log10((best_fit - self.pop_fit[i]) / (S) + 1)
+                self.W[i, :] = 1.0 + np.random.random(self.items) * logr
             else:
-                self.W[i, :] = 1 - np.random.random([self.items]) * np.log10((best_fit - self.pop_fit[i]) / (S) + 1)
+                self.W[i, :] = 1.0 - np.random.random(self.items) * logr
 
     def sma_global(self, i: int) -> None:
         self.pop_sol[i] = np.zeros(self.items)
         accumulated_resources = np.zeros([self.dim])
         for j in self.cp_list:
-            if random.uniform(0, 1) < 0.5:
+            if np.random.uniform(0.0, 1.0) < 0.5:
                 accumulated_resources += self.weights[j]
                 if np.all(accumulated_resources <= self.capacities):
                     self.pop_sol[i, j] = 1
@@ -194,7 +212,9 @@ class BRLSMASCA2V100320050TestCore:
 
         for j in range(self.items):
             r = np.random.random()
-            a_idx, b_idx = np.random.choice(list(set(range(0, self.pop_size)) - {i}), 2, replace=False)
+            opts = np.array([k for k in range(self.pop_size) if k != i], dtype=np.int64)
+            pair = np.random.choice(opts, 2, replace=False)
+            a_idx, b_idx = int(pair[0]), int(pair[1])
             if r < p:
                 self.pop_sol[i, j] = self.Gbest_sol[j] + vb[j] * (
                     self.W[i, j] * self.pop_sol[a_idx, j] - self.pop_sol[b_idx, j]
@@ -202,7 +222,7 @@ class BRLSMASCA2V100320050TestCore:
             else:
                 self.pop_sol[i, j] = vc[j] * self.pop_sol[i, j]
 
-            if random.uniform(0, 1) < np.abs(np.tanh(self.pop_sol[i, j])):
+            if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
                 self.pop_sol[i, j] = 1
             else:
                 self.pop_sol[i, j] = 0
@@ -211,14 +231,14 @@ class BRLSMASCA2V100320050TestCore:
 
     def sca_sin(self, i: int) -> None:
         for j in range(self.items):
-            r2 = math.pi * random.uniform(0.0, 2.0)
-            r3 = random.uniform(0.0, 2.0)
+            r2 = math.pi * np.random.uniform(0.0, 2.0)
+            r3 = np.random.uniform(0.0, 2.0)
 
             self.pop_sol[i, j] = self.individual_best_sol[i, j] + (
                 self.r1 * math.sin(r2) * abs(r3 * self.Gbest_sol[j] - self.individual_best_sol[i, j])
             )
 
-            if random.uniform(0, 1) < np.abs(np.tanh(self.pop_sol[i, j])):
+            if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
                 self.pop_sol[i, j] = 1
             else:
                 self.pop_sol[i, j] = 0
@@ -227,14 +247,14 @@ class BRLSMASCA2V100320050TestCore:
 
     def sca_cos(self, i: int) -> None:
         for j in range(self.items):
-            r2 = math.pi * random.uniform(0.0, 2.0)
-            r3 = random.uniform(0.0, 2.0)
+            r2 = math.pi * np.random.uniform(0.0, 2.0)
+            r3 = np.random.uniform(0.0, 2.0)
 
             self.pop_sol[i, j] = self.individual_best_sol[i, j] + (
                 self.r1 * math.cos(r2) * abs(r3 * self.Gbest_sol[j] - self.individual_best_sol[i, j])
             )
 
-            if random.uniform(0, 1) < np.abs(np.tanh(self.pop_sol[i, j])):
+            if np.random.uniform(0.0, 1.0) < np.abs(np.tanh(self.pop_sol[i, j])):
                 self.pop_sol[i, j] = 1
             else:
                 self.pop_sol[i, j] = 0
@@ -260,7 +280,6 @@ class BRLSMASCA2V100320050TestCore:
                 self.prob_arr[index, 0] = 1 - self.prob_arr[index, 1]
 
     def run(self) -> tuple[np.ndarray, int]:
-        random.seed(self.seed)
         np.random.seed(self.seed)
 
         self.pop_sol, self.pop_fit, self.individual_best_sol, self.individual_best_fit = self.sort_pop()
@@ -345,7 +364,6 @@ class BRLSMASCA2V100320050TestSolver:
 
         run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
 
-        random.seed(run_seed)
         np.random.seed(run_seed)
 
         t_alg0 = time.perf_counter()
@@ -353,16 +371,16 @@ class BRLSMASCA2V100320050TestSolver:
             problem.items,
             problem.dim,
             problem.best_known,
-            np.asarray(problem.values, dtype=int),
-            np.asarray(problem.weights, dtype=int),
-            np.asarray(problem.capacities, dtype=int),
+            problem.values,
+            problem.weights,
+            problem.capacities,
             seed=run_seed,
             pop_size=pop_size,
             a=a,
             z=z,
+            max_iter=int(max_iterations),
             prob_arr=prob_arr,
         )
-        core.max_iter = int(max_iterations)
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0
 

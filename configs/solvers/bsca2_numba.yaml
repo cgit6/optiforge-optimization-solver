@@ -1,0 +1,13 @@
+solver_id: bsca2_numba
+solver_class: BSCA2V120NumbaSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 1000
+  max_seconds: null
+params:
+  pop_size: 20
+  a: 2.0

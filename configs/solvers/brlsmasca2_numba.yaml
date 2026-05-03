@@ -1,0 +1,15 @@
+solver_id: brlsmasca2_numba
+solver_class: BRLSMASCA2V100320050TestNumbaSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 1000
+  max_seconds: null
+params:
+  pop_size: 20
+  a: 2
+  z: 0.03
+  prob_arr: [0.04, 0.46, 0.25, 0.25]

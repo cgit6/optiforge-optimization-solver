@@ -94,7 +94,8 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
         sim.close()
 
 
-def test_engine_build_fails_when_catalog_has_invalid_problem_yaml(tmp_path: Path) -> None:
+def test_engine_build_fails_when_experiment_problem_yaml_is_invalid(tmp_path: Path) -> None:
+    """僅本次 spec 指到的題目會被 load 驗證；壞檔必須在 problem_ids 內才會讓 build 失敗。"""
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
@@ -105,7 +106,7 @@ def test_engine_build_fails_when_catalog_has_invalid_problem_yaml(tmp_path: Path
     spec = ExperimentSpec(
         experiment_id="exp_bad_cat",
         dataset="WEISH",
-        problem_ids=("weish01",),
+        problem_ids=("broken",),
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
@@ -121,7 +122,38 @@ def test_engine_build_fails_when_catalog_has_invalid_problem_yaml(tmp_path: Path
         )
 
 
-def test_engine_build_fails_when_catalog_problem_has_unknown_best_known(tmp_path: Path) -> None:
+def test_engine_build_succeeds_when_unused_catalog_yaml_is_invalid(tmp_path: Path) -> None:
+    """目錄內其他題目的壞檔不阻擋 build（與舊版「全庫驗證」語意不同）。"""
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    output_root = tmp_path / "output"
+    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    (problem_root / "WEISH" / "broken.yaml").write_text("items: not_a_mapping\n", encoding="utf-8")
+    _write_solver_yaml(solver_root / "stub_solver.yaml")
+
+    spec = ExperimentSpec(
+        experiment_id="exp_ok_unused_bad",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        seed=1,
+        output_dir=output_root / "exp_ok_unused_bad",
+    )
+
+    bundle = Engine.build(
+        spec=spec,
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=output_root,
+    )
+    try:
+        assert bundle.problem_bank.get("WEISH", "weish01").problem_id == "weish01"
+    finally:
+        bundle.problem_bank.close()
+
+
+def test_engine_build_fails_when_experiment_problem_has_unknown_best_known(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
@@ -147,7 +179,7 @@ capacities: [10, 8]
     spec = ExperimentSpec(
         experiment_id="exp_unknown_best",
         dataset="WEISH",
-        problem_ids=("weish01",),
+        problem_ids=("broken",),
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,

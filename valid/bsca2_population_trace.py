@@ -415,8 +415,8 @@ def _run_new_trace(
         seed=seed,
         pop_size=pop_size,
         a=a,
+        max_iter=int(max_iterations),
     )
-    solver.max_iter = int(max_iterations)
     return solver.run_with_population_trace()
 
 
