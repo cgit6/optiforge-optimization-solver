@@ -1,0 +1,11 @@
+# 執行模擬器（cli.run / engine / simulator / solvers）之第三方依賴
+# 版本與目前 .venv 中 pip freeze 一致；不含 pytest 等僅測試用套件
+numpy==2.4.4
+scipy==1.17.1
+numba==0.65.1
+llvmlite==0.47.0
+tqdm==4.67.3
+ruamel.yaml==0.19.1
+
+# 本倉庫以套件名 mkp 安裝後方可 import mkp、執行 python -m mkp.cli.run
+-e .
