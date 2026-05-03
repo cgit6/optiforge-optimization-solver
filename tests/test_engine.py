@@ -8,6 +8,7 @@ import pytest
 from mkp.engine import Engine, SimulationBundle
 from mkp.engine.models import ExperimentSpec
 from mkp.engine.repository import ProblemRepository
+from mkp.tools.stat import write_simulator_result
 
 
 def _write_problem_yaml(path: Path) -> None:
@@ -36,6 +37,10 @@ def _write_solver_yaml(path: Path) -> None:
         """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 10
@@ -81,8 +86,9 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     assert bundle.default_rng is np.random.default_rng
     sim = bundle.NewSimulatorWithSeed("stub_solver", spec.seed)
     try:
-        results = sim.run_sequential(spec)
-        assert len(results) == 1
+        result = sim.run_sequential(spec)
+        assert len(result.rows) == 1
+        write_simulator_result(result, experiment_id="exp_engine_1", output_root=output_root)
         assert (output_root / "exp_engine_1" / "runs.csv").exists()
     finally:
         sim.close()

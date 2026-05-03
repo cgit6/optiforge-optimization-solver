@@ -11,7 +11,6 @@ import numpy as np
 from ..simulator import Simulator
 from ..solver.registry import SolverBuilder, SolverRegistry
 from ..solver.validator import Validator
-from ..tools.result_writer import ResultWriter
 from .models import ExperimentSpec
 from .configs import SolverConfigsSnapshot
 from .bank import (
@@ -72,7 +71,7 @@ class SimulationBundle:
     output_root: Path
 
     def NewSimulatorWithSeed(self, solver_id: str, base_seed: int) -> Simulator:
-        """以目前 bundle 的題庫與輸出設定建立 `Simulator`。
+        """以目前 bundle 的題庫設定建立 `Simulator`；輸出由 caller 透過 stat 模組處理。
 
         呼叫端應以 :meth:`Simulator.run_sequential` 或（僅 ``worker_curriculum`` 且 ``repeat>1``）:meth:`Simulator.run_batch` 執行；若需覆寫種子可 ``dataclasses.replace(self.spec, seed=seed)`` 與此處一致。
         """
@@ -89,10 +88,6 @@ class SimulationBundle:
             solver_registry=registry,
             solver_configs=self.solver_configs,
             validator=Validator(),
-            result_writer=ResultWriter(
-                experiment_id=self.spec.experiment_id,
-                output_root=self.output_root,
-            ),
         )
 
 class Engine:

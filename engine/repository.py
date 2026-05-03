@@ -4,41 +4,87 @@ import threading
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from .models import ProblemModel
+from .models import BaseProblem
+from .problem_registry import ProblemRegistry, default_problem_registry
 
 
-class  ProblemRepository:
-    """Load MKP problem YAML files and cache ProblemModel instances."""
+class ProblemRepository:
+    """Load problem YAML files through the problem-type registry."""
 
-    def __init__(self, config_root: Path | str = Path("configs/problems")) -> None:
+    def __init__(
+        self,
+        config_root: Path | str = Path("configs/problems"),
+        *,
+        problem_registry: ProblemRegistry | None = None,
+    ) -> None:
         self._config_root = Path(config_root)
+        self._registry = problem_registry or default_problem_registry()
         self._yaml = YAML(typ="safe")
-        self._cache: dict[tuple[str, str], ProblemModel] = {}
+        self._cache: dict[tuple[str, str, str], BaseProblem] = {}
         self._cache_lock = threading.Lock()
-        # ruamel YAML 解析器非執行緒安全；worker_curriculum 等多線同時 load 須序列化 parse
         self._yaml_parse_lock = threading.Lock()
 
-    def load(self, dataset: str, problem_id: str) -> ProblemModel:
-        key = (dataset, problem_id)
+    def resolve_path(self, problem_type: str, dataset: str, problem_id: str) -> Path:
+        canonical = self._config_root / problem_type / dataset / f"{problem_id}.yaml"
+        if canonical.exists():
+            return canonical
+        legacy = self._config_root / dataset / f"{problem_id}.yaml"
+        if problem_type == "mkp" and legacy.exists():
+            return legacy
+        return canonical
+
+    def load(self, dataset: str, problem_id: str, problem_type: str = "mkp") -> BaseProblem:
+        key = (problem_type, dataset, problem_id)
         with self._cache_lock:
             if key in self._cache:
                 return self._cache[key]
 
-        file_path = self._config_root / dataset / f"{problem_id}.yaml"
+        file_path = self.resolve_path(problem_type, dataset, problem_id)
         if not file_path.exists():
             raise FileNotFoundError(f"Problem YAML not found: {file_path}")
 
         data = self._read_yaml(file_path)
-        model = self._build_problem_model(data, dataset=dataset, problem_id=problem_id, file_path=file_path)
+        yaml_problem_type = str(data.get("problem_type", problem_type))
+        if yaml_problem_type != problem_type:
+            raise ValueError(
+                f"problem_type mismatch in {file_path}: expected {problem_type}, got {yaml_problem_type}"
+            )
+        spec = self._registry.get(problem_type)
+        model = spec.loader(data, dataset, problem_id, file_path)
         with self._cache_lock:
             if key in self._cache:
                 return self._cache[key]
             self._cache[key] = model
             return model
+
+    def read_metadata(self, dataset: str, problem_id: str, problem_type: str = "mkp") -> dict[str, Any]:
+        file_path = self.resolve_path(problem_type, dataset, problem_id)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Problem YAML not found: {file_path}")
+        data = self._read_yaml(file_path)
+        spec = self._registry.get(problem_type)
+        yaml_problem_type = str(data.get("problem_type", problem_type))
+        if yaml_problem_type != problem_type:
+            raise ValueError(
+                f"problem_type mismatch in {file_path}: expected {problem_type}, got {yaml_problem_type}"
+            )
+        if str(data.get("problem_id", problem_id)) != problem_id:
+            raise ValueError(
+                f"problem_id mismatch in {file_path}: expected {problem_id}, got {data.get('problem_id')}"
+            )
+        if str(data.get("dataset", dataset)) != dataset:
+            raise ValueError(f"dataset mismatch in {file_path}: expected {dataset}, got {data.get('dataset')}")
+        return {
+            "problem_type": problem_type,
+            "dataset": str(data.get("dataset", dataset)),
+            "problem_id": str(data.get("problem_id", problem_id)),
+            "encoding": str(data.get("encoding", spec.encoding)),
+            "direction": str(data.get("direction", spec.direction)),
+            "path": file_path,
+        }
 
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         try:
@@ -51,61 +97,3 @@ class  ProblemRepository:
         if not isinstance(loaded, dict):
             raise ValueError(f"Problem YAML must be a mapping: {path}")
         return loaded
-
-    def _build_problem_model(
-        self,
-        data: dict[str, Any],
-        *,
-        dataset: str,
-        problem_id: str,
-        file_path: Path,
-    ) -> ProblemModel:
-        required_fields = ("problem_id", "dataset", "items", "dim", "best_known", "values", "weights", "capacities")
-        missing = [field for field in required_fields if field not in data]
-        if missing:
-            raise ValueError(f"Missing required field(s) {missing} in {file_path}")
-
-        yaml_problem_id = str(data["problem_id"])
-        yaml_dataset = str(data["dataset"])
-        if yaml_problem_id != problem_id:
-            raise ValueError(f"problem_id mismatch in {file_path}: expected {problem_id}, got {yaml_problem_id}")
-        if yaml_dataset != dataset:
-            raise ValueError(f"dataset mismatch in {file_path}: expected {dataset}, got {yaml_dataset}")
-
-        try:
-            items = int(data["items"])
-            dim = int(data["dim"])
-            values = np.asarray(data["values"], dtype=int)
-            weights = np.asarray(data["weights"], dtype=int)
-            capacities = np.asarray(data["capacities"], dtype=int)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"Invalid data type in {file_path}: {exc}") from exc
-        raw_best_known = data["best_known"]
-        if isinstance(raw_best_known, bool) or (
-            isinstance(raw_best_known, float) and not raw_best_known.is_integer()
-        ):
-            raise ValueError(f"best_known must be a positive integer in {file_path}")
-        try:
-            best_known = int(raw_best_known)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"best_known must be a positive integer in {file_path}") from exc
-        if best_known <= 0:
-            raise ValueError(f"best_known must be a positive integer in {file_path}")
-
-        if values.shape != (items,):
-            raise ValueError(f"len(values) must equal items in {file_path}")
-        if weights.shape != (items, dim):
-            raise ValueError(f"weights shape must be (items, dim) in {file_path}")
-        if capacities.shape != (dim,):
-            raise ValueError(f"len(capacities) must equal dim in {file_path}")
-
-        return ProblemModel(
-            problem_id=yaml_problem_id,
-            dataset=yaml_dataset,
-            items=items,
-            dim=dim,
-            values=values,
-            weights=weights,
-            capacities=capacities,
-            best_known=best_known,
-        )

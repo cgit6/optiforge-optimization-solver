@@ -5,14 +5,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.engine.models import ExperimentSpec, RunResult, RunTask
+from mkp.engine.models import ExperimentSpec, SolveResult, RunTask
 from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.simulator import Simulator
 from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
-from mkp.tools.result_writer import ResultWriter
+from mkp.tools.stat import write_simulator_result
 
 
 class CountingSolver:
@@ -20,7 +20,7 @@ class CountingSolver:
 
     def solve(self, problem, config, rng):
         CountingSolver.calls += 1
-        return RunResult(
+        return SolveResult(
             problem_id=problem.problem_id,
             solver_id=config["solver_id"],
             seed=int(rng.integers(0, np.iinfo(np.int32).max)),
@@ -63,6 +63,10 @@ def _write_solver_yaml(path: Path, solver_id: str = "stub_solver") -> None:
         f"""
 solver_id: {solver_id}
 solver_class: CountingSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 10
@@ -85,7 +89,8 @@ def _build_spec() -> ExperimentSpec:
     )
 
 
-def _build_simulator(tmp_path: Path) -> Simulator:
+def _build_simulator(tmp_path: Path) -> tuple[Simulator, Path]:
+    """回傳 (Simulator, output_root)；輸出檔案由呼叫端透過 write_simulator_result 觸發。"""
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
@@ -98,18 +103,19 @@ def _build_simulator(tmp_path: Path) -> Simulator:
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(_build_spec(), solver_root)
     validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_batch", output_root=output_root)
-    return Simulator(
-        problem_bank=bank,
-        solver_registry=registry,
-        solver_configs=solver_configs,
-        validator=validator,
-        result_writer=result_writer,
+    return (
+        Simulator(
+            problem_bank=bank,
+            solver_registry=registry,
+            solver_configs=solver_configs,
+            validator=validator,
+        ),
+        output_root,
     )
 
 
 def test_expand_tasks_count_and_fields():
-    simulator = _build_simulator(Path("/tmp/sim_expand_1"))
+    simulator, _ = _build_simulator(Path("/tmp/sim_expand_1"))
     try:
         spec = _build_spec()
         tasks = simulator.expand_tasks(spec)
@@ -125,7 +131,7 @@ def test_expand_tasks_count_and_fields():
 
 
 def test_rng_seed_reproducibility_and_independence():
-    simulator = _build_simulator(Path("/tmp/sim_expand_2"))
+    simulator, _ = _build_simulator(Path("/tmp/sim_expand_2"))
     try:
         spec = _build_spec()
         tasks_a = simulator.expand_tasks(spec)
@@ -165,13 +171,11 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
     registry.register("s_b", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_w", output_root=tmp_path / "output")
     simulator = Simulator(
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
         validator=validator,
-        result_writer=result_writer,
     )
     try:
         spec_grid = ExperimentSpec(
@@ -220,6 +224,7 @@ def test_run_batch_worker_curriculum_uses_process_pool(tmp_path: Path):
     n = 4
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
+    output_root = tmp_path / "output"
     _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml", problem_id="weish01")
     _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
@@ -239,19 +244,19 @@ def test_run_batch_worker_curriculum_uses_process_pool(tmp_path: Path):
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_par", output_root=tmp_path / "output")
     simulator = Simulator(
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
         validator=validator,
-        result_writer=result_writer,
     )
 
     try:
-        results = simulator.run_batch(bank_spec)
-        assert len(results) == n
-        summary_json = tmp_path / "output" / "exp_par" / "summary.json"
+        result = simulator.run_batch(bank_spec)
+        assert len(result.rows) == n
+
+        write_simulator_result(result, experiment_id="exp_par", output_root=output_root)
+        summary_json = output_root / "exp_par" / "summary.json"
         assert summary_json.exists()
     finally:
         simulator.close()
@@ -316,13 +321,11 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
     validator = Validator()
-    result_writer = ResultWriter(experiment_id="exp_mismatch", output_root=tmp_path / "output")
     simulator = Simulator(
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
         validator=validator,
-        result_writer=result_writer,
     )
     try:
         task = RunTask(
@@ -339,15 +342,16 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
 
 
 def test_run_batch_writes_summary_files(tmp_path: Path):
-    simulator = _build_simulator(tmp_path)
+    simulator, output_root = _build_simulator(tmp_path)
     spec = _build_spec()
 
     try:
-        results = simulator.run_sequential(spec)
+        result = simulator.run_sequential(spec)
 
-        assert len(results) == 3
-        summary_json = tmp_path / "output" / "exp_batch" / "summary.json"
-        summary_csv = tmp_path / "output" / "exp_batch" / "summary.csv"
+        assert len(result.rows) == 3
+        write_simulator_result(result, experiment_id="exp_batch", output_root=output_root)
+        summary_json = output_root / "exp_batch" / "summary.json"
+        summary_csv = output_root / "exp_batch" / "summary.csv"
         assert summary_json.exists()
         assert summary_csv.exists()
     finally:

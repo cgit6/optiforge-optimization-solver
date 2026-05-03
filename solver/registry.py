@@ -5,12 +5,12 @@ from typing import Any, Callable, Protocol
 
 import numpy as np
 
-from ..engine.models import ProblemModel, RunResult
+from ..engine.models import BaseProblem, MKPProblem, SolveResult
 
 
 class Solver(Protocol):
-    def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> RunResult:
-        """Solve one problem instance and return standardized RunResult."""
+    def solve(self, problem: BaseProblem, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
+        """Solve one problem instance and return standardized SolveResult."""
 
 
 SolverBuilder = Callable[[], Solver]
@@ -44,7 +44,9 @@ class SolverRegistry:
 class StubMaxIterationsSolver:
     """Simple solver for contract tests."""
 
-    def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> RunResult:
+    def solve(self, problem: BaseProblem, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
+        if not isinstance(problem, MKPProblem):
+            raise TypeError("StubMaxIterationsSolver only supports MKPProblem")
         stop_condition = config.get("stop_condition", {})
         if stop_condition.get("type") != "max_iterations":
             raise ValueError("StubMaxIterationsSolver only supports stop_condition.type=max_iterations")
@@ -55,7 +57,7 @@ class StubMaxIterationsSolver:
 
         best_solution = np.zeros(problem.items, dtype=int)
         best_objective = 0
-        return RunResult(
+        return SolveResult(
             problem_id=problem.problem_id,
             solver_id=str(config.get("solver_id", "stub_solver")),
             seed=int(rng.integers(0, np.iinfo(np.int32).max)),

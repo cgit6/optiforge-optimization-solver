@@ -40,7 +40,7 @@ class SolverConfigLoader:
         return loaded
 
     def _validate_schema(self, data: dict[str, Any], *, solver_id: str, file_path: Path) -> None:
-        required_fields = ("solver_id", "solver_class", "stop_condition", "params")
+        required_fields = ("solver_id", "solver_class", "stop_condition", "params", "capabilities")
         missing = [field for field in required_fields if field not in data]
         if missing:
             raise ValueError(f"Missing required field(s) {missing} in {file_path}")
@@ -75,3 +75,14 @@ class SolverConfigLoader:
 
         if not isinstance(data["params"], dict):
             raise ValueError(f"params must be a mapping in {file_path}")
+
+        capabilities = data["capabilities"]
+        if not isinstance(capabilities, dict):
+            raise ValueError(f"capabilities must be a mapping in {file_path}")
+        for field in ("problem_types", "encodings", "directions"):
+            values = capabilities.get(field)
+            if not isinstance(values, list) or not values or any(not str(v).strip() for v in values):
+                raise ValueError(f"capabilities.{field} must be a non-empty list in {file_path}")
+        directions = {str(v) for v in capabilities["directions"]}
+        if not directions.issubset({"max", "min"}):
+            raise ValueError(f"capabilities.directions must contain only 'max' or 'min' in {file_path}")

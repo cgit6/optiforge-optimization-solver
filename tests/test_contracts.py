@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.engine.models import ExperimentSpec, ProblemModel, RunResult, RunTask
+from mkp.engine.models import ExperimentSpec, ProblemModel, SolveResult, RunTask
 
 
 def test_experiment_spec_valid():
@@ -126,7 +126,7 @@ def test_run_task_invalid(kwargs):
 
 
 def test_run_result_valid_and_readonly_solution():
-    result = RunResult(
+    result = SolveResult(
         problem_id="weish01",
         solver_id="solver_a",
         seed=7,
@@ -172,4 +172,4 @@ def test_run_result_invalid(kwargs):
     )
     base.update(kwargs)
     with pytest.raises(ValueError):
-        RunResult(**base)
+        SolveResult(**base)

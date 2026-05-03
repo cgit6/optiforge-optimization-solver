@@ -20,6 +20,10 @@ def test_load_valid_solver_config(tmp_path: Path):
         """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 10
@@ -41,6 +45,10 @@ def test_solver_id_must_match_file_name(tmp_path: Path):
         """
 solver_id: other_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 10
@@ -60,6 +68,10 @@ def test_stop_condition_type_validation(tmp_path: Path):
         """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: unsupported
   max_iterations: 10
@@ -72,6 +84,25 @@ params: {}
         loader.load("stub_solver")
 
 
+def test_missing_capabilities_rejected(tmp_path: Path) -> None:
+    root = tmp_path / "solvers"
+    _write_solver_yaml(
+        root / "stub_solver.yaml",
+        """
+solver_id: stub_solver
+solver_class: StubMaxIterationsSolver
+stop_condition:
+  type: max_iterations
+  max_iterations: 10
+params: {}
+""".strip(),
+    )
+    loader = SolverConfigLoader(config_root=root)
+
+    with pytest.raises(ValueError, match="Missing required field"):
+        loader.load("stub_solver")
+
+
 @pytest.mark.parametrize(
     "content, error_match",
     [
@@ -79,6 +110,10 @@ params: {}
             """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 0
@@ -90,6 +125,10 @@ params: {}
             """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_seconds
   max_seconds: 0
@@ -115,6 +154,10 @@ def test_concurrent_solver_config_loads(tmp_path: Path) -> None:
         """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 10

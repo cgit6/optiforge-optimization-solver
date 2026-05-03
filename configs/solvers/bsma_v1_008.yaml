@@ -1,5 +1,9 @@
 solver_id: bsma_v1_008
 solver_class: BSMAV1008Solver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 1000 # 最大迭代次數

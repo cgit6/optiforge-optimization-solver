@@ -4,14 +4,20 @@ from .cli.convert import getConverter, listConverters, register
 from .cli.run import executeSimulator
 from .converter import transformToMomery, transformToYaml
 from .engine import Engine, SimulationBundle, SolverConfigsSnapshot, build
-from .engine.models import ExecutionMode, ExperimentSpec, ProblemModel, RunResult, RunTask
+from .engine.models import BaseProblem, ExecutionMode, ExperimentSpec, MKPProblem, ProblemModel, SolveResult, TSPProblem, RunTask
+from .engine.problem_registry import ProblemRegistry, ProblemTypeSpec
 from .engine.repository import ProblemRepository
-from .simulator import Simulator
+from .simulator import Simulator, SimulatorResult, SimulatorRunRow
+from .solver.BSCA2 import BSCA2V120Core, BSCA2V120Solver
+from .solver.BSCASMA import BRLSMASCA2V100320050TestCore, BRLSMASCA2V100320050TestSolver
 from .solver.BSMA import BSMAV1008Core, BSMAV1008Solver
+from .solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
 from .solver.registry import SolverRegistry, StubMaxIterationsSolver
+from .solver.sma_mkp_modular import SMAMKPModularV1Solver
+from .solver.sma_tsp_modular import SMATSPModularV1Solver
 from .solver.validator import ValidationReport, Validator
-from .tools.result_writer import ResultEntry, ResultWriter
 from .tools.solver_config_loader import SolverConfigLoader
+from .tools.stat import ResultEntry, write_simulator_result
 
 
 def __getattr__(name: str):
@@ -28,14 +34,28 @@ __all__ = [
     "ExecutionMode",
     "ExperimentSpec",
     "SimulationBundle",
+    "SimulatorResult",
+    "SimulatorRunRow",
     "SolverConfigsSnapshot",
     "build",
     "executeSimulator",
+    "BSCA2V120Core",
+    "BSCA2V120Solver",
+    "BRLSMASCA2V100320050TestCore",
+    "BRLSMASCA2V100320050TestSolver",
     "BSMAV1008Core",
     "BSMAV1008Solver",
+    "SMAMKPModularV1Solver",
+    "SMATSPModularV1Solver",
+    "NearestNeighborTSPSolver",
     "main",
     "ProblemModel",
-    "RunResult",
+    "BaseProblem",
+    "MKPProblem",
+    "TSPProblem",
+    "ProblemRegistry",
+    "ProblemTypeSpec",
+    "SolveResult",
     "RunTask",
     "getConverter",
     "listConverters",
@@ -44,11 +64,11 @@ __all__ = [
     "transformToYaml",
     "ProblemRepository",
     "ResultEntry",
-    "ResultWriter",
     "Simulator",
     "SolverConfigLoader",
     "SolverRegistry",
     "StubMaxIterationsSolver",
     "ValidationReport",
     "Validator",
+    "write_simulator_result",
 ]

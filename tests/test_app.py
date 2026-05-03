@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mkp.cli.run import build_parser, create_experiment_spec, main
-from mkp.cli.run import validate_execute_args
+from mkp.cli.run import createExperimentSpec, main, parser, validate_execute_args
 from mkp.engine.models import ExperimentSpec
 
 
@@ -35,6 +34,10 @@ def _write_solver_yaml(path: Path) -> None:
         """
 solver_id: stub_solver
 solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
 stop_condition:
   type: max_iterations
   max_iterations: 10
@@ -45,9 +48,9 @@ params: {}
 
 
 def test_create_experiment_spec_execution_mode_worker_curriculum(tmp_path: Path):
-    parser = build_parser()
+    arg_parser = parser()
     out = str(tmp_path / "out")
-    args = parser.parse_args(
+    args = arg_parser.parse_args(
         [
             "--experiment-id",
             "exp_mode",
@@ -67,7 +70,7 @@ def test_create_experiment_spec_execution_mode_worker_curriculum(tmp_path: Path)
             "worker_curriculum",
         ]
     )
-    spec = create_experiment_spec(args)
+    spec = createExperimentSpec(args)
     assert spec.execution_mode == "worker_curriculum"
     assert spec.solver_ids == ("stub_solver",)
 
@@ -96,8 +99,8 @@ def test_app_cli_success_runs_batch(tmp_path: Path):
         str(output_root),
     ]
 
-    results = main(argv, problem_root=problem_root, solver_root=solver_root)
-    assert len(results) == 1
+    result = main(argv, problem_root=problem_root, solver_root=solver_root)
+    assert len(result.rows) == 1
     assert (output_root / "exp_cli_1" / "runs.csv").exists()
     assert (output_root / "exp_cli_1" / "runs.jsonl").exists()
 
@@ -128,8 +131,8 @@ def test_app_cli_worker_curriculum_runs_batch(tmp_path: Path):
         "worker_curriculum",
     ]
 
-    results = main(argv, problem_root=problem_root, solver_root=solver_root)
-    assert len(results) == 1
+    result = main(argv, problem_root=problem_root, solver_root=solver_root)
+    assert len(result.rows) == 1
     assert (output_root / "exp_cli_worker" / "runs.csv").exists()
 
 
@@ -156,7 +159,7 @@ def test_app_cli_fail_fast_when_problem_yaml_missing(tmp_path: Path):
         str(output_root),
     ]
 
-    with pytest.raises(FileNotFoundError, match="Missing problem YAML file"):
+    with pytest.raises(FileNotFoundError, match="Problem YAML not found"):
         main(argv, problem_root=problem_root, solver_root=solver_root)
 
 
@@ -183,7 +186,7 @@ def test_app_cli_fail_fast_when_solver_yaml_missing(tmp_path: Path):
         str(output_root),
     ]
 
-    with pytest.raises(FileNotFoundError, match="Missing solver YAML file"):
+    with pytest.raises(FileNotFoundError, match="Solver config YAML not found"):
         main(argv, problem_root=problem_root, solver_root=solver_root)
 
 

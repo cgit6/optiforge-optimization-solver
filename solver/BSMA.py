@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from scipy.optimize import linprog
 
-from ..engine.models import ProblemModel, RunResult
+from ..engine.models import ProblemModel, SolveResult
 
 # 這邊要改成 可以提交狀態、對外暴露過程、
 
@@ -205,7 +205,7 @@ class BSMAV1008Core:
 class BSMAV1008Solver:
     """BSMA V1.008：內建與 old/BSMA2 相同演算法本體（BSMAV1008Core），不使用 import old。"""
 
-    def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> RunResult:
+    def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
         stop_condition = config.get("stop_condition", {})
         if stop_condition.get("type") != "max_iterations":
             raise ValueError("bsma_v1_008 only supports stop_condition.type=max_iterations")
@@ -253,7 +253,7 @@ class BSMAV1008Solver:
             else "max_iterations_reached"
         )
 
-        return RunResult(
+        return SolveResult(
             problem_id=problem.problem_id,
             solver_id=str(config.get("solver_id", "bsma_v1_008")),
             seed=run_seed,
@@ -265,4 +265,5 @@ class BSMAV1008Solver:
             runtime=algorithm_runtime,
             linprog_runtime=float(core.linprog_runtime),
             error=None,
+            metadata={"linprog_runtime": float(core.linprog_runtime)},
         )

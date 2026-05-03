@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mkp.engine.models import ProblemModel, RunResult
+from mkp.engine.models import ProblemModel, SolveResult
 from mkp.solver.validator import Validator
 
 
@@ -19,8 +19,8 @@ def _build_problem(*, best_known: int = 50) -> ProblemModel:
     )
 
 
-def _build_run_result(best_solution: np.ndarray, best_objective: int) -> RunResult:
-    return RunResult(
+def _build_run_result(best_solution: np.ndarray, best_objective: int) -> SolveResult:
+    return SolveResult(
         problem_id="weish01",
         solver_id="stub_solver",
         seed=42,

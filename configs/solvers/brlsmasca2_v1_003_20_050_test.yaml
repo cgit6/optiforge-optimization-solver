@@ -1,0 +1,15 @@
+solver_id: brlsmasca2_v1_003_20_050_test
+solver_class: BRLSMASCA2V100320050TestSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 1000 # 最大迭代次數
+  max_seconds: null
+params:
+  pop_size: 20 # 種群大小
+  a: 2 # SCA r1 振幅起點（隨迭代線性遞減至 0）
+  z: 0.03 # SMA 全局轉換機率（test 版實際未呼叫，保留以對齊 SMA 慣例）
+  prob_arr: [0.04, 0.46, 0.25, 0.25] # 動作機率分布：sma_global / sma_local / sca_sin / sca_cos

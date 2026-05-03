@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from .assembly import DefaultRngFactory, Engine, SimulationBundle, build
 from .configs import SolverConfigsSnapshot
+from .problem_registry import ProblemRegistry, ProblemTypeSpec, default_problem_registry
 
 __all__ = [
     "DefaultRngFactory",
     "Engine",
     "SimulationBundle",
     "SolverConfigsSnapshot",
+    "ProblemRegistry",
+    "ProblemTypeSpec",
     "build",
+    "default_problem_registry",
 ]

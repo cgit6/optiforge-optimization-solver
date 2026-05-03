@@ -1,0 +1,11 @@
+problem_id: tsp5
+dataset: SMALL
+problem_type: tsp
+n_cities: 5
+best_known: 26
+distance_matrix:
+  - [0, 2, 9, 10, 7]
+  - [2, 0, 6, 4, 3]
+  - [9, 6, 0, 8, 5]
+  - [10, 4, 8, 0, 6]
+  - [7, 3, 5, 6, 0]

@@ -6,9 +6,11 @@ from pathlib import Path
 
 import numpy as np
 
-from mkp.engine.models import ProblemModel, RunResult
+from mkp.engine.models import ProblemModel, SolveResult, RunTask
+from mkp.simulator import SimulatorResult, SimulatorRunRow
 from mkp.solver.validator import Validator
-from mkp.tools.result_writer import ResultWriter
+from mkp.tools.stat import build_summary, write_simulator_result
+from mkp.tools.stat import _build_entry  # 內部函式：保留覆蓋率
 
 
 def _build_problem(*, best_known: int = 50) -> ProblemModel:
@@ -24,8 +26,8 @@ def _build_problem(*, best_known: int = 50) -> ProblemModel:
     )
 
 
-def _build_run_result(solution: np.ndarray, objective: int, *, feasible: bool = True, error: str | None = None):
-    return RunResult(
+def _build_solve_result(solution: np.ndarray, objective: int, *, feasible: bool = True, error: str | None = None):
+    return SolveResult(
         problem_id="weish01",
         solver_id="stub_solver",
         seed=42,
@@ -40,14 +42,25 @@ def _build_run_result(solution: np.ndarray, objective: int, *, feasible: bool = 
     )
 
 
-def test_result_writer_writes_single_run_with_standard_fields(tmp_path: Path):
-    writer = ResultWriter(experiment_id="exp_001", output_root=tmp_path)
+def _make_row(solve_result: SolveResult, validation_report, *, repeat_index: int) -> SimulatorRunRow:
+    task = RunTask(
+        problem_id=solve_result.problem_id,
+        dataset="WEISH",
+        solver_id=solve_result.solver_id,
+        repeat_index=repeat_index,
+        seed=solve_result.seed,
+    )
+    return SimulatorRunRow(task=task, solve_result=solve_result, validation_report=validation_report)
+
+
+def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path: Path):
     validator = Validator()
     problem = _build_problem()
-    run = _build_run_result(np.array([1, 1, 1]), 60)
+    run = _build_solve_result(np.array([1, 1, 1]), 60)
     report = validator.validate(problem, run)
+    row = _make_row(run, report, repeat_index=0)
 
-    writer.write_run(run, report, repeat_index=0)
+    write_simulator_result(SimulatorResult(rows=(row,)), experiment_id="exp_001", output_root=tmp_path)
 
     runs_csv = tmp_path / "exp_001" / "runs.csv"
     runs_jsonl = tmp_path / "exp_001" / "runs.jsonl"
@@ -76,23 +89,27 @@ def test_result_writer_writes_single_run_with_standard_fields(tmp_path: Path):
     assert payload["best_known_gap"] == -10
 
 
-def test_result_writer_summary_aggregation_exclusion_rules(tmp_path: Path):
-    writer = ResultWriter(experiment_id="exp_002", output_root=tmp_path)
+def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
     validator = Validator()
     problem = _build_problem()
 
-    valid_run = _build_run_result(np.array([1, 1, 1]), 60)
-    infeasible_run = _build_run_result(np.array([0, 0, 3]), 90, feasible=False)
-    mismatch_run = _build_run_result(np.array([1, 0, 1]), 41)
+    valid_run = _build_solve_result(np.array([1, 1, 1]), 60)
+    infeasible_run = _build_solve_result(np.array([0, 0, 3]), 90, feasible=False)
+    mismatch_run = _build_solve_result(np.array([1, 0, 1]), 41)
+
+    rows = (
+        _make_row(valid_run, validator.validate(problem, valid_run), repeat_index=0),
+        _make_row(infeasible_run, validator.validate(problem, infeasible_run), repeat_index=1),
+        _make_row(mismatch_run, validator.validate(problem, mismatch_run), repeat_index=2),
+    )
+
+    write_simulator_result(SimulatorResult(rows=rows), experiment_id="exp_002", output_root=tmp_path)
 
     entries = [
-        writer.write_run(valid_run, validator.validate(problem, valid_run), repeat_index=0),
-        writer.write_run(infeasible_run, validator.validate(problem, infeasible_run), repeat_index=1),
-        writer.write_run(mismatch_run, validator.validate(problem, mismatch_run), repeat_index=2),
+        _build_entry(row.solve_result, row.validation_report, repeat_index=row.task.repeat_index)
+        for row in rows
     ]
-
-    summary = writer.build_summary(entries)
-    writer.write_summary(summary)
+    summary = build_summary(entries)
 
     overall = summary["overall"]
     groups = summary["by_problem_solver"]
@@ -123,15 +140,17 @@ def test_result_writer_summary_aggregation_exclusion_rules(tmp_path: Path):
     assert summary_csv.exists()
 
 
-def test_result_writer_keeps_invalid_runs_in_outputs(tmp_path: Path):
-    writer = ResultWriter(experiment_id="exp_003", output_root=tmp_path)
+def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
     validator = Validator()
     problem = _build_problem()
 
-    invalid_run = _build_run_result(np.array([0, 0, 3]), 91, feasible=False, error="solver_warning")
+    invalid_run = _build_solve_result(np.array([0, 0, 3]), 91, feasible=False, error="solver_warning")
     report = validator.validate(problem, invalid_run)
-    entry = writer.write_run(invalid_run, report, repeat_index=0)
+    row = _make_row(invalid_run, report, repeat_index=0)
 
+    write_simulator_result(SimulatorResult(rows=(row,)), experiment_id="exp_003", output_root=tmp_path)
+
+    entry = _build_entry(invalid_run, report, repeat_index=0)
     assert entry.excluded_reason in {"infeasible", "objective_mismatch"}
     assert entry.error == "solver_warning"
 
@@ -141,16 +160,15 @@ def test_result_writer_keeps_invalid_runs_in_outputs(tmp_path: Path):
     assert payload["excluded_reason"] is not None
 
 
-def test_result_writer_runtime_error_is_excluded_separately(tmp_path: Path):
-    writer = ResultWriter(experiment_id="exp_004", output_root=tmp_path)
+def test_runtime_error_is_excluded_separately():
     validator = Validator()
     problem = _build_problem()
 
     # objective 正確且可行，但 solver 帶 error，應歸類 runtime_error
-    error_run = _build_run_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
+    error_run = _build_solve_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
     report = validator.validate(problem, error_run)
-    entry = writer.write_run(error_run, report, repeat_index=0)
-    summary = writer.build_summary([entry])
+    entry = _build_entry(error_run, report, repeat_index=0)
+    summary = build_summary([entry])
 
     assert entry.excluded_reason == "runtime_error"
     assert summary["overall"]["excluded_counts"]["runtime_error"] == 1

@@ -1,24 +1,27 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
-from ...engine.models import ExperimentSpec
-from .support import executeSimulator, preflight_validate, parser, create_experiment_spec
+from ...simulator import SimulatorResult
+from .support import parser, createExperimentSpec, executeSimulator
+
 
 def main(
     argv: list[str] | None = None,
     *,
     problem_root: Path | str = Path("configs/problems"),
     solver_root: Path | str = Path("configs/solvers"),
-) -> list[tuple]:
-    parser = parser()
-    args = parser.parse_args(argv)
-    spec = create_experiment_spec(args)
-    output_root_path = Path(args.output_dir)
+) -> SimulatorResult:
+    """CLI 入口；可由程式呼叫並注入 `argv` / `problem_root` / `solver_root`（測試用）。"""
+    arg_parser = parser() # 獲取命令行參數，並解析&驗證
+    args = arg_parser.parse_args(argv) # 獲取命令行參數
+    spec = createExperimentSpec(args) # 實驗規格物件
+    outputRootPath = Path(args.output_dir) # 輸出目錄
+
+    # 執行模擬
     return executeSimulator(
         spec=spec,
+        output_root=outputRootPath,
         problem_root=Path(problem_root),
         solver_root=Path(solver_root),
-        output_root=output_root_path,
     )
