@@ -12,7 +12,7 @@ import numpy as np
 from ruamel.yaml import YAML
 
 from ..engine.models import ProblemModel
-from ..solver.BSMA import BSMAV1008Core, BSMAV1008Solver
+from ..solver.BSMA import BSMACore, BSMASolver
 
 
 BSMA_DEFAULT_POP_SIZE = 20
@@ -75,9 +75,9 @@ def _trace_digest_from_line(line: str) -> TraceDigest:
 
 
 def _capture_new_loop_meta(problem: ProblemModel, seed: int, max_iterations: int) -> list[dict[str, Any]]:
-    """與 BSMAV1008Solver 相同前置 seed + Core 建立方式，蒐集 _loop_trace。"""
+    """與 BSMASolver 相同前置 seed + Core 建立方式，蒐集 _loop_trace。"""
     np.random.seed(seed)
-    core = BSMAV1008Core(
+    core = BSMACore(
         problem.items,
         problem.dim,
         problem.best_known,
@@ -114,8 +114,8 @@ def _run_old_with_trace(problem: ProblemModel, seed: int, max_iterations: int, r
     old_dir = repo_root / "old"
     if str(old_dir) not in sys.path:
         sys.path.insert(0, str(old_dir))
-    bsma2 = importlib.import_module("BSMA2")
-    cls = getattr(bsma2, "BSMA_V1_008")
+    legacy_bsma = importlib.import_module("BSMA")
+    cls = getattr(legacy_bsma, "BSMA")
     # Make legacy initialization deterministic for strict same-seed comparison.
     np.random.seed(seed)
     old_solver = cls(
@@ -167,12 +167,12 @@ def _run_old_with_trace(problem: ProblemModel, seed: int, max_iterations: int, r
 
 
 def _run_new_with_trace(problem: ProblemModel, seed: int, max_iterations: int) -> tuple[int, np.ndarray, list[TraceDigest]]:
-    """與 BSMAV1008Solver 走同一套 BSMAV1008Core，僅對 Core 掛 trace（不動 old/BSMA2）。"""
+    """與 BSMASolver 走同一套 BSMACore，僅對 Core 掛 trace（不動 old/BSMA）。"""
     trace: list[TraceDigest] = []
     step = {"repair": 0, "sort": 0}
 
-    original_repair = BSMAV1008Core.repair
-    original_sort = BSMAV1008Core.sort_pop
+    original_repair = BSMACore.repair
+    original_sort = BSMACore.sort_pop
 
     def wrapped_repair(self: Any, trial_sol: np.ndarray, trial_fit: int) -> tuple[np.ndarray, int]:
         repaired_sol, repaired_fit = original_repair(self, trial_sol, trial_fit)
@@ -200,19 +200,19 @@ def _run_new_with_trace(problem: ProblemModel, seed: int, max_iterations: int) -
         )
         return sorted_sol, sorted_fit
 
-    BSMAV1008Core.repair = wrapped_repair  # type: ignore[method-assign]
-    BSMAV1008Core.sort_pop = wrapped_sort  # type: ignore[method-assign]
-    solver = BSMAV1008Solver()
+    BSMACore.repair = wrapped_repair  # type: ignore[method-assign]
+    BSMACore.sort_pop = wrapped_sort  # type: ignore[method-assign]
+    solver = BSMASolver()
     config: dict[str, Any] = {
-        "solver_id": "bsma_v1_008",
+        "solver_id": "bsma",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "run_seed": seed,
     }
     try:
         run_result = solver.solve(problem=problem, config=config, rng=np.random.default_rng(seed))
     finally:
-        BSMAV1008Core.repair = original_repair
-        BSMAV1008Core.sort_pop = original_sort
+        BSMACore.repair = original_repair
+        BSMACore.sort_pop = original_sort
     return int(run_result.best_objective), np.asarray(run_result.best_solution, dtype=int), trace
 
 
@@ -227,8 +227,8 @@ def _run_old_with_trace_stream_to_file(
     old_dir = repo_root / "old"
     if str(old_dir) not in sys.path:
         sys.path.insert(0, str(old_dir))
-    bsma2 = importlib.import_module("BSMA2")
-    cls = getattr(bsma2, "BSMA_V1_008")
+    legacy_bsma = importlib.import_module("BSMA")
+    cls = getattr(legacy_bsma, "BSMA")
     np.random.seed(seed)
     old_solver = cls(
         problem.items,
@@ -298,8 +298,8 @@ def _run_new_with_trace_stream_compare_file(
     repair_step = [0]
     sort_step = [0]
 
-    original_repair = BSMAV1008Core.repair
-    original_sort = BSMAV1008Core.sort_pop
+    original_repair = BSMACore.repair
+    original_sort = BSMACore.sort_pop
 
     def _read_expected_digest() -> TraceDigest | None:
         line = expected_handle.readline()
@@ -359,19 +359,19 @@ def _run_new_with_trace_stream_compare_file(
             compare_idx += 1
         return sorted_sol, sorted_fit
 
-    BSMAV1008Core.repair = wrapped_repair  # type: ignore[method-assign]
-    BSMAV1008Core.sort_pop = wrapped_sort  # type: ignore[method-assign]
-    solver = BSMAV1008Solver()
+    BSMACore.repair = wrapped_repair  # type: ignore[method-assign]
+    BSMACore.sort_pop = wrapped_sort  # type: ignore[method-assign]
+    solver = BSMASolver()
     config: dict[str, Any] = {
-        "solver_id": "bsma_v1_008",
+        "solver_id": "bsma",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "run_seed": seed,
     }
     try:
         run_result = solver.solve(problem=problem, config=config, rng=np.random.default_rng(seed))
     finally:
-        BSMAV1008Core.repair = original_repair
-        BSMAV1008Core.sort_pop = original_sort
+        BSMACore.repair = original_repair
+        BSMACore.sort_pop = original_sort
 
     new_stop_reason = str(run_result.stop_reason)
     new_reported_eval_count = int(run_result.evaluation_count)

@@ -5,11 +5,10 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, cast
+from typing import TYPE_CHECKING, Callable, cast
 
 import numpy as np
 
-from ..simulator import Simulator
 from ..solver.registry import SolverBuilder, SolverRegistry
 from ..solver.validator import Validator
 from .models import ExperimentSpec
@@ -24,6 +23,9 @@ from .bank import (
 )
 from .repository import ProblemRepository
 from .builders import default_solver_builders
+
+if TYPE_CHECKING:
+    from ..simulator.core import Simulator
 
 DefaultRngFactory = Callable[..., np.random.Generator]
 
@@ -86,6 +88,8 @@ class SimulationBundle:
 
         呼叫端應以 :meth:`Simulator.run_sequential` 或（僅 ``worker_curriculum`` 且 ``repeat>1``）:meth:`Simulator.run_batch` 執行；若需覆寫種子可 ``dataclasses.replace(self.spec, seed=seed)`` 與此處一致。
         """
+        from ..simulator.core import Simulator
+
         if solver_id not in self.solver_builders:
             raise KeyError(
                 f"Unknown solver (not in solver_builders): {solver_id!r} "

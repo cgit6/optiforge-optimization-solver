@@ -131,7 +131,7 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
             output_root=output_root,
         )
         assert (output_root / "exp_sim" / "runs.csv").exists()
-        assert (output_root / "exp_sim" / "runs.jsonl").exists()
+        assert (output_root / "exp_sim" / "runs.json").exists()
     finally:
         simulator.close()
 

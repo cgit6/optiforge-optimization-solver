@@ -4,7 +4,7 @@ import copy as copy
 from scipy.optimize import linprog
 from scipy.special import erf
 
-class BSMA_V1_008:
+class BSMA:
     def __init__(self,items,dim,glbal_best,values,weights,capacities,seed=None):
         # 問題參數
         self.items = items # 物品+數量

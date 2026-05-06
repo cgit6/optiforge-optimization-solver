@@ -59,7 +59,10 @@ def write_simulator_result(
     ]
 
     _write_runs_csv(output_dir / "runs.csv", entries)
-    _write_runs_jsonl(output_dir / "runs.jsonl", entries)
+    _write_runs_json(output_dir / "runs.json", entries)
+    legacy_runs_jsonl = output_dir / "runs.jsonl"
+    if legacy_runs_jsonl.exists():
+        legacy_runs_jsonl.unlink()
     summary = build_summary(entries)
     _write_summary(output_dir, summary)
     return output_dir
@@ -207,10 +210,10 @@ def _write_runs_csv(path: Path, entries: list[ResultEntry]) -> None:
         writer.writerows(rows)
 
 
-def _write_runs_jsonl(path: Path, entries: list[ResultEntry]) -> None:
+def _write_runs_json(path: Path, entries: list[ResultEntry]) -> None:
     with path.open("w", encoding="utf-8") as fh:
-        for entry in entries:
-            fh.write(json.dumps(_entry_to_dict(entry), ensure_ascii=False) + "\n")
+        json.dump([_entry_to_dict(entry) for entry in entries], fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
 
 
 def _write_summary(output_dir: Path, summary: dict[str, Any]) -> None:

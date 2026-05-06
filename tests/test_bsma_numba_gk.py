@@ -11,7 +11,7 @@ pytest.importorskip("numba")
 
 from mkp.engine.repository import ProblemRepository
 from mkp.solver.BSMA import BSMACore
-from mkp.solver.BSMA_numby import BSMANumbaCore
+from mkp.solver.BSMA_numba import BSMANumbaCore
 
 
 def _load_gk(repo_root: Path, problem_id: str):

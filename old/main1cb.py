@@ -6,7 +6,7 @@ import numpy as np
 import re 
 import inspect
 import BSMA
-import BSCASMA2 # 混合SCA+SMA
+import BSCASMA # 混合SCA+SMA
 
 
 
@@ -17,7 +17,7 @@ class main:
         self.batch_files = [os.listdir(f"data/{file_list}") for file_list in self.batch_directory] # 使用 os.listdir 获取目录中的所有文件名
         # print(self.batch_files)
 
-        self.algo_file = BSCASMA2
+        self.algo_file = BSCASMA
         self.global_best = {"OR5x100-0.25_1.dat":24381, "OR5x100-0.25_2.dat":24274, "OR5x100-0.25_3.dat":23551, "OR5x100-0.25_4.dat":23534, "OR5x100-0.25_5.dat":23991, "OR5x250-0.25_1.dat":59312, "OR5x250-0.25_2.dat":61472, "OR5x250-0.25_3.dat":62130, "OR5x250-0.25_4.dat":59463, "OR5x250-0.25_5.dat":58951, "OR5x500-0.25_1.dat":120148, "OR5x500-0.25_2.dat":117879, "OR5x500-0.25_3.dat":121131, "OR5x500-0.25_4.dat":120804, "OR5x500-0.25_5.dat":122319, "OR10x100-0.25_1.dat":23064, "OR10x100-0.25_2.dat":22801, "OR10x100-0.25_3.dat":22131, "OR10x100-0.25_4.dat":22772,"OR10x100-0.25_5.dat":22751,"OR10x250-0.25_1.dat":59187,"OR10x250-0.25_2.dat":58781,"OR10x250-0.25_3.dat":58097,"OR10x250-0.25_4.dat":61000,"OR10x250-0.25_5.dat":58092,"OR10x500-0.25_1.dat":117821,"OR10x500-0.25_2.dat":119249,"OR10x500-0.25_3.dat":119215,"OR10x500-0.25_4.dat":118829,"OR10x500-0.25_5.dat":116530} # 最佳解
         # 使用 inspect 模块获取模块中的自定义物件名称
         self.module_members = inspect.getmembers(self.algo_file, inspect.isclass)

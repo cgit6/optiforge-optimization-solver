@@ -8,8 +8,8 @@ from .engine.models import BaseProblem, ExecutionMode, ExperimentSpec, MKPProble
 from .engine.problem_registry import ProblemRegistry, ProblemTypeSpec
 from .engine.repository import ProblemRepository
 from .simulator import Simulator, SimulatorResult, SimulatorRunRow
-from .solver.BSCA2 import BSCA2V120Core, BSCA2V120Solver
-from .solver.BSCASMA import BRLSMASCA2V100320050TestCore, BRLSMASCA2V100320050TestSolver
+from .solver.BSCA import BSCACore, BSCASolver
+from .solver.BSCASMA import BRLSMASCATestCore, BRLSMASCATestSolver
 from .solver.BSMA import BSMACore, BSMASolver
 from .solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
 from .solver.registry import SolverRegistry, StubMaxIterationsSolver
@@ -39,10 +39,10 @@ __all__ = [
     "SolverConfigsSnapshot",
     "build",
     "executeSimulator",
-    "BSCA2V120Core",
-    "BSCA2V120Solver",
-    "BRLSMASCA2V100320050TestCore",
-    "BRLSMASCA2V100320050TestSolver",
+    "BSCACore",
+    "BSCASolver",
+    "BRLSMASCATestCore",
+    "BRLSMASCATestSolver",
     "BSMACore",
     "BSMASolver",
     "SMAMKPModularV1Solver",

@@ -10,7 +10,7 @@ import inspect # 找匯入檔中物件名稱
 # import BABC4
 # import BABC5
 # import BABC6
-# import BSMA2
+# import BSMA
 # import BSMA3
 # import BSMA4
 # import BSMA5

@@ -106,8 +106,8 @@ def test_compatibility_check_rejects_mkp_solver_for_tsp(tmp_path: Path) -> None:
     solver_root = tmp_path / "solvers"
     _write_tsp(problem_root / "tsp" / "SMALL" / "tsp5.yaml")
     _write_solver(
-        solver_root / "bsma_v1_008.yaml",
-        solver_id="bsma_v1_008",
+        solver_root / "bsma.yaml",
+        solver_id="bsma",
         problem_type="mkp",
         encoding="binary",
         direction="max",
@@ -117,7 +117,7 @@ def test_compatibility_check_rejects_mkp_solver_for_tsp(tmp_path: Path) -> None:
         problem_type="tsp",
         dataset="SMALL",
         problem_ids=("tsp5",),
-        solver_ids=("bsma_v1_008",),
+        solver_ids=("bsma",),
         repeat=1,
         seed=1,
         output_dir=tmp_path / "out",

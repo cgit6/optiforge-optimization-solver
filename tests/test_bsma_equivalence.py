@@ -6,7 +6,7 @@ from mkp.valid.bsma_equivalence import verify_equivalence
 
 
 def test_verify_equivalence_new_uses_same_core_as_solver():
-    """new 路徑只掛 BSMAV1008Core；與 old/BSMA2 在相同 seed 下應逐步一致（回歸錨點）。"""
+    """new 路徑只掛 BSMACore；與 old/BSMA 在相同 seed 下應逐步一致（回歸錨點）。"""
     repo_root = Path(__file__).resolve().parents[1]
     report = verify_equivalence(
         repo_root=repo_root,

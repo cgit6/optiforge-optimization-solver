@@ -136,7 +136,7 @@ class BSCA_V1_25:
         return self.Gbest_sol,self.Gbest_fit
 
 # 鬆弛 + SCA 演算法
-class BSCA2_V1_20:
+class BSCA:
     def __init__(self,items,dim,glbal_best,values,weights,capacities):
         # 問題參數
         self.items = items # 物品+數量

@@ -1,21 +1,41 @@
-problem_id,solver_id,repeat_index,seed,best_objective,feasible,objective_valid,objective_mismatch,best_known,best_known_reached,best_known_gap,stop_reason,runtime,evaluation_count,error,excluded_reason
-weish30,bsma_v1_008,0,84423235,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,1,1552476262,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,2,1752238328,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,3,1015094847,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,4,1550472258,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,5,991279141,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,6,62644833,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,7,799104359,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,8,2048971704,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,9,1507673818,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,10,1443189428,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,11,1904967065,11187,True,True,False,11191,False,4,max_iterations_reached,0.0,20020,,
-weish30,bsma_v1_008,12,46428277,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,13,274262074,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,14,200562899,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,15,1340374119,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,16,882521541,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,17,290639672,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,18,121373002,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
-weish30,bsma_v1_008,19,221726947,11191,True,True,False,11191,True,0,best_known_reached,0.0,20020,,
+problem_type,encoding,direction,problem_id,solver_id,repeat_index,seed,best_objective,feasible,objective_valid,objective_mismatch,best_known,best_known_reached,best_known_gap,stop_reason,runtime,linprog_runtime,evaluation_count,error,excluded_reason,metadata_json
+mkp,binary,max,weish30,bsma_numba,0,84423235,11191,True,True,False,11191,True,0,best_known_reached,6.690737525932491,0.19358924007974565,20020,,,"{""solve"": {""linprog_runtime"": 0.19358924007974565, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,0,655708457,9410,True,True,False,9410,True,0,best_known_reached,0.22975277691148221,0.030535832047462463,20020,,,"{""solve"": {""linprog_runtime"": 0.030535832047462463, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,1,1552476262,11187,True,True,False,11191,False,4,max_iterations_reached,9.542992246104404,0.22426357096992433,20020,,,"{""solve"": {""linprog_runtime"": 0.22426357096992433, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,1,1427978743,9410,True,True,False,9410,True,0,best_known_reached,0.13037946703843772,0.011950804153457284,20020,,,"{""solve"": {""linprog_runtime"": 0.011950804153457284, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,2,1752238328,11191,True,True,False,11191,True,0,best_known_reached,6.080890079028904,0.17507432191632688,20020,,,"{""solve"": {""linprog_runtime"": 0.17507432191632688, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,2,1351852846,9410,True,True,False,9410,True,0,best_known_reached,0.45131777809001505,0.07998627214692533,20020,,,"{""solve"": {""linprog_runtime"": 0.07998627214692533, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,3,1015094847,11191,True,True,False,11191,True,0,best_known_reached,6.48557137302123,0.20402267994359136,20020,,,"{""solve"": {""linprog_runtime"": 0.20402267994359136, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,3,1429714095,9410,True,True,False,9410,True,0,best_known_reached,0.3965885180514306,0.03002464002929628,20020,,,"{""solve"": {""linprog_runtime"": 0.03002464002929628, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,4,1550472258,11191,True,True,False,11191,True,0,best_known_reached,6.57584018795751,0.22611974296160042,20020,,,"{""solve"": {""linprog_runtime"": 0.22611974296160042, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,4,968657842,9410,True,True,False,9410,True,0,best_known_reached,0.3237443349789828,0.029141653096303344,20020,,,"{""solve"": {""linprog_runtime"": 0.029141653096303344, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,5,991279141,11191,True,True,False,11191,True,0,best_known_reached,6.56997787905857,0.198123870883137,20020,,,"{""solve"": {""linprog_runtime"": 0.198123870883137, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,5,1452595594,9410,True,True,False,9410,True,0,best_known_reached,0.35138451191596687,0.029002955881878734,20020,,,"{""solve"": {""linprog_runtime"": 0.029002955881878734, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,6,62644833,11191,True,True,False,11191,True,0,best_known_reached,7.353218368021771,0.16099903802387416,20020,,,"{""solve"": {""linprog_runtime"": 0.16099903802387416, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,6,2079055134,9410,True,True,False,9410,True,0,best_known_reached,0.18896340392529964,0.01996129401959479,20020,,,"{""solve"": {""linprog_runtime"": 0.01996129401959479, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,7,799104359,11191,True,True,False,11191,True,0,best_known_reached,7.229684362187982,0.19087478099390864,20020,,,"{""solve"": {""linprog_runtime"": 0.19087478099390864, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,7,1866566605,9410,True,True,False,9410,True,0,best_known_reached,0.23838634602725506,0.02910145395435393,20020,,,"{""solve"": {""linprog_runtime"": 0.02910145395435393, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,8,2048971704,11191,True,True,False,11191,True,0,best_known_reached,6.088111769175157,0.23454831284470856,20020,,,"{""solve"": {""linprog_runtime"": 0.23454831284470856, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,8,449412271,9410,True,True,False,9410,True,0,best_known_reached,0.48258249810896814,0.04046267899684608,20020,,,"{""solve"": {""linprog_runtime"": 0.04046267899684608, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,9,1507673818,11191,True,True,False,11191,True,0,best_known_reached,6.95967470202595,0.2179756669793278,20020,,,"{""solve"": {""linprog_runtime"": 0.2179756669793278, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,9,1750465156,9410,True,True,False,9410,True,0,best_known_reached,0.25221543200314045,0.05379567504860461,20020,,,"{""solve"": {""linprog_runtime"": 0.05379567504860461, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,10,1443189428,11187,True,True,False,11191,False,4,max_iterations_reached,9.577051881933585,0.17116158199496567,20020,,,"{""solve"": {""linprog_runtime"": 0.17116158199496567, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,10,2058844428,9410,True,True,False,9410,True,0,best_known_reached,0.09582083206623793,0.0076321749947965145,20020,,,"{""solve"": {""linprog_runtime"": 0.0076321749947965145, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,11,1904967065,11191,True,True,False,11191,True,0,best_known_reached,7.659075781004503,0.19140267302282155,20020,,,"{""solve"": {""linprog_runtime"": 0.19140267302282155, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,11,1826435419,9410,True,True,False,9410,True,0,best_known_reached,0.07668272498995066,0.015693760011345148,20020,,,"{""solve"": {""linprog_runtime"": 0.015693760011345148, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,12,46428277,11191,True,True,False,11191,True,0,best_known_reached,5.483459044946358,0.2157404008321464,20020,,,"{""solve"": {""linprog_runtime"": 0.2157404008321464, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,12,428982779,9410,True,True,False,9410,True,0,best_known_reached,0.7361926040612161,0.040577076841145754,20020,,,"{""solve"": {""linprog_runtime"": 0.040577076841145754, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,13,274262074,11187,True,True,False,11191,False,4,max_iterations_reached,9.58989016385749,0.1777154819574207,20020,,,"{""solve"": {""linprog_runtime"": 0.1777154819574207, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,13,251419756,9410,True,True,False,9410,True,0,best_known_reached,0.07849431596696377,0.009698741137981415,20020,,,"{""solve"": {""linprog_runtime"": 0.009698741137981415, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,14,200562899,11191,True,True,False,11191,True,0,best_known_reached,6.602571978000924,0.13641181401908398,20020,,,"{""solve"": {""linprog_runtime"": 0.13641181401908398, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,14,1523178528,9410,True,True,False,9410,True,0,best_known_reached,0.3879858509171754,0.037738621002063155,20020,,,"{""solve"": {""linprog_runtime"": 0.037738621002063155, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,15,1340374119,11191,True,True,False,11191,True,0,best_known_reached,7.423028899123892,0.18621105304919183,20020,,,"{""solve"": {""linprog_runtime"": 0.18621105304919183, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,15,1053509569,9410,True,True,False,9410,True,0,best_known_reached,0.18699013395234942,0.028681360185146332,20020,,,"{""solve"": {""linprog_runtime"": 0.028681360185146332, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,16,882521541,11191,True,True,False,11191,True,0,best_known_reached,7.045426387107,0.1816243219655007,20020,,,"{""solve"": {""linprog_runtime"": 0.1816243219655007, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,16,90222747,9410,True,True,False,9410,True,0,best_known_reached,0.3226055549457669,0.06585189001634717,20020,,,"{""solve"": {""linprog_runtime"": 0.06585189001634717, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,17,290639672,11187,True,True,False,11191,False,4,max_iterations_reached,9.540369848022237,0.24813280603848398,20020,,,"{""solve"": {""linprog_runtime"": 0.24813280603848398, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,17,1498334939,9410,True,True,False,9410,True,0,best_known_reached,0.0895616349298507,0.006711091147735715,20020,,,"{""solve"": {""linprog_runtime"": 0.006711091147735715, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,18,121373002,11191,True,True,False,11191,True,0,best_known_reached,6.37925469991751,0.13957556593231857,20020,,,"{""solve"": {""linprog_runtime"": 0.13957556593231857, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,18,742203381,9410,True,True,False,9410,True,0,best_known_reached,0.5014690100215375,0.026861688122153282,20020,,,"{""solve"": {""linprog_runtime"": 0.026861688122153282, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish30,bsma_numba,19,221726947,11191,True,True,False,11191,True,0,best_known_reached,6.709301340160891,0.154410638846457,20020,,,"{""solve"": {""linprog_runtime"": 0.154410638846457, ""numba"": true}, ""validation"": {}}"
+mkp,binary,max,weish29,bsma_numba,19,67575478,9410,True,True,False,9410,True,0,best_known_reached,0.4611020290758461,0.058923495933413506,20020,,,"{""solve"": {""linprog_runtime"": 0.058923495933413506, ""numba"": true}, ""validation"": {}}"

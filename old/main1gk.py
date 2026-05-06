@@ -5,9 +5,9 @@ import os
 import inspect # 找匯入檔中物件名稱
 # 设置 NumPy 打印选项以显示整个数组
 np.set_printoptions(threshold=np.inf)
-import BSMA2
-import BSCASMA2
-import BSCA1
+import BSMA
+import BSCASMA
+import BSCA
 
 class main:
     def __init__(self):
@@ -15,7 +15,7 @@ class main:
         self.batch_directory = "data/GK2"
         self.batch_files = os.listdir(self.batch_directory) # 使用 os.listdir 获取目录中的所有文件名
         # print(batch_files)
-        self.algo_file = BSCASMA2
+        self.algo_file = BSCASMA
         self.global_best = {"01":3766,"02":3958,"03":5656,"04":5767,"05":7560,"06":7677,"07":19221,"08":18806,"09":58089} # 最佳解
         # 使用 inspect 模块获取模块中的自定义物件名称
         self.module_members = inspect.getmembers(self.algo_file, inspect.isclass)

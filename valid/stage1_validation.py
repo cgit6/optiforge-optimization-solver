@@ -41,7 +41,7 @@ class ComparableResult:
 
 def build_smoke_scenarios() -> list[ValidationScenario]:
     return [
-        ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma_v1_008", seeds=(101, 202, 303)),
+        ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma", seeds=(101, 202, 303)),
     ]
 
 
@@ -134,16 +134,6 @@ def run_old_script(script_path: Path, *, working_directory: Path, timeout_second
 
         if str(old_dir) not in sys.path:
             sys.path.insert(0, str(old_dir))
-
-        # old/main1weish.py imports legacy module names.
-        try:
-            importlib.import_module("BSMA")
-        except ModuleNotFoundError:
-            sys.modules["BSMA"] = importlib.import_module("BSMA2")
-        try:
-            importlib.import_module("BSCASMA2")
-        except ModuleNotFoundError:
-            sys.modules["BSCASMA2"] = importlib.import_module("BSCASMA")
 
         spec = importlib.util.spec_from_file_location("legacy_main_entry", str(script_path))
         module = importlib.util.module_from_spec(spec)

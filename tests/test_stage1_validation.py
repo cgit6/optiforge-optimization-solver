@@ -21,7 +21,7 @@ def test_build_smoke_scenarios_has_expected_minimum_shape():
 
 
 def test_check_refactor_reproducible_true_for_stable_app_stub(tmp_path: Path):
-    scenario = ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma_v1_008", seeds=(101, 202, 303))
+    scenario = ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma", seeds=(101, 202, 303))
 
     def stable_app(_argv, **_kwargs):
         class _Run:
@@ -52,7 +52,7 @@ def test_classify_diff_behaviors():
 
 
 def test_ensure_problem_yaml_creates_yaml_when_missing(tmp_path: Path):
-    scenario = ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma_v1_008", seeds=(1, 2, 3))
+    scenario = ValidationScenario(dataset="WEISH", problem_id="weish01", solver_id="bsma", seeds=(1, 2, 3))
     dat_dir = tmp_path / "data/WEISH"
     dat_dir.mkdir(parents=True, exist_ok=True)
     (dat_dir / "weish01.dat").write_text(

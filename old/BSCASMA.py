@@ -9,7 +9,7 @@ from scipy.stats import norm
 
 """ 目前的改進是基於SMAFA 混合算法的背景下進行的。嘗試加入強化學習的機制去優化選擇策略。"""
 
-class BRLSMASCA2_V1_003_20_050:
+class BRLSMASCA:
     def __init__(self,items,dim,glbal_best,values,weights,capacities,seed=None):
         # 問題參數
         self.items = items # 物品+數量
@@ -452,7 +452,7 @@ class BRLSMASCA2_V1_003_20_050:
 
 
 
-class BRLSMASCA2_V1_003_20_050_test:
+class BRLSMASCATest:
     def __init__(self,items,dim,glbal_best,values,weights,capacities,seed=None):
         # 問題參數
         self.items = items # 物品+數量

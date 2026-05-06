@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from mkp.engine.models import ProblemModel
-from mkp.solver.BSCA2 import BSCA2V120Solver
+from mkp.solver.BSCA import BSCASolver
 from mkp.solver.registry import SolverRegistry
 
 
@@ -32,8 +32,8 @@ def _build_problem(*, best_known: int = 34) -> ProblemModel:
 
 def _build_config(max_iterations: int = 60) -> dict:
     return {
-        "solver_id": "bsca2_v1_20",
-        "solver_class": "BSCA2V120Solver",
+        "solver_id": "bsca",
+        "solver_class": "BSCASolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "params": {},
     }
@@ -41,26 +41,26 @@ def _build_config(max_iterations: int = 60) -> dict:
 
 def test_bsca2_solver_can_be_created_by_registry():
     registry = SolverRegistry()
-    registry.register("bsca2_v1_20", lambda: BSCA2V120Solver())
-    solver = registry.create("bsca2_v1_20")
-    assert isinstance(solver, BSCA2V120Solver)
+    registry.register("bsca", lambda: BSCASolver())
+    solver = registry.create("bsca")
+    assert isinstance(solver, BSCASolver)
 
 
 def test_bsca2_solver_returns_valid_solve_result():
-    solver = BSCA2V120Solver()
+    solver = BSCASolver()
     problem = _build_problem()
     rng = np.random.default_rng(123)
     result = solver.solve(problem, _build_config(), rng)
 
     assert result.problem_id == "weish01"
-    assert result.solver_id == "bsca2_v1_20"
+    assert result.solver_id == "bsca"
     assert result.stop_reason in {"max_iterations_reached", "best_known_reached"}
     assert result.evaluation_count >= 20
     assert result.best_solution.shape == (problem.items,)
 
 
 def test_bsca2_reproducibility_same_seed_same_result():
-    solver = BSCA2V120Solver()
+    solver = BSCASolver()
     problem = _build_problem()
     config = _build_config()
 
@@ -73,7 +73,7 @@ def test_bsca2_reproducibility_same_seed_same_result():
 
 
 def test_bsca2_reproducibility_different_seed_can_differ():
-    solver = BSCA2V120Solver()
+    solver = BSCASolver()
     problem = _build_problem()
     config = _build_config()
 
@@ -84,7 +84,7 @@ def test_bsca2_reproducibility_different_seed_can_differ():
 
 
 def test_bsca2_stop_condition_max_iterations_reached_or_best_known():
-    solver = BSCA2V120Solver()
+    solver = BSCASolver()
     problem = _build_problem(best_known=10**9)  # 不可達 → 一定 max_iterations_reached
     config = _build_config(max_iterations=10)
     result = solver.solve(problem, config, np.random.default_rng(1234))
@@ -94,13 +94,13 @@ def test_bsca2_stop_condition_max_iterations_reached_or_best_known():
 
 
 def test_bsca2_params_pop_size_from_config_affects_evaluation_count():
-    solver = BSCA2V120Solver()
+    solver = BSCASolver()
     problem = _build_problem(best_known=10**9)
     pop_size = 7
     max_iter = 5
     config = {
-        "solver_id": "bsca2_v1_20",
-        "solver_class": "BSCA2V120Solver",
+        "solver_id": "bsca",
+        "solver_class": "BSCASolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iter},
         "params": {"pop_size": pop_size, "a": 2.0},
     }
@@ -109,7 +109,7 @@ def test_bsca2_params_pop_size_from_config_affects_evaluation_count():
 
 
 def test_bsca2_rejects_invalid_params():
-    solver = BSCA2V120Solver()
+    solver = BSCASolver()
     problem = _build_problem()
     rng = np.random.default_rng(1)
 
@@ -117,8 +117,8 @@ def test_bsca2_rejects_invalid_params():
         solver.solve(
             problem,
             {
-                "solver_id": "bsca2_v1_20",
-                "solver_class": "BSCA2V120Solver",
+                "solver_id": "bsca",
+                "solver_class": "BSCASolver",
                 "stop_condition": {"type": "max_iterations", "max_iterations": 5},
                 "params": {"pop_size": 0, "a": 2.0},
             },
@@ -129,8 +129,8 @@ def test_bsca2_rejects_invalid_params():
         solver.solve(
             problem,
             {
-                "solver_id": "bsca2_v1_20",
-                "solver_class": "BSCA2V120Solver",
+                "solver_id": "bsca",
+                "solver_class": "BSCASolver",
                 "stop_condition": {"type": "max_iterations", "max_iterations": 5},
                 "params": {"pop_size": 20, "a": 0},
             },

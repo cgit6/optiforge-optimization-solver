@@ -8,8 +8,8 @@ import pytest
 pytest.importorskip("numba")
 
 from mkp.engine.repository import ProblemRepository
-from mkp.solver.BSCASMA import BRLSMASCA2V100320050TestCore
-from mkp.solver.BSCASMA_numby import BRLSMASCA2V100320050TestNumbaCore
+from mkp.solver.BSCASMA import BRLSMASCATestCore
+from mkp.solver.BSCASMA_numba import BRLSMASCATestNumbaCore
 
 
 def _load_weish01(repo_root: Path):
@@ -18,7 +18,7 @@ def _load_weish01(repo_root: Path):
     )
 
 
-def _assert_cores_match_after_init(ref: BRLSMASCA2V100320050TestCore, numba: BRLSMASCA2V100320050TestNumbaCore) -> None:
+def _assert_cores_match_after_init(ref: BRLSMASCATestCore, numba: BRLSMASCATestNumbaCore) -> None:
     assert np.array_equal(ref.pop_sol, numba.pop_sol)
     assert np.array_equal(ref.pop_fit, numba.pop_fit)
     assert np.array_equal(ref.cp_list, numba.cp_list)
@@ -36,9 +36,9 @@ def _build_cores(
     a: float,
     z: float,
     prob_arr: tuple[float, float, float, float],
-) -> tuple[BRLSMASCA2V100320050TestCore, BRLSMASCA2V100320050TestNumbaCore]:
+) -> tuple[BRLSMASCATestCore, BRLSMASCATestNumbaCore]:
     np.random.seed(seed)
-    ref = BRLSMASCA2V100320050TestCore(
+    ref = BRLSMASCATestCore(
         problem.items,
         problem.dim,
         problem.best_known,
@@ -53,7 +53,7 @@ def _build_cores(
         prob_arr=prob_arr,
     )
     np.random.seed(seed)
-    numba_c = BRLSMASCA2V100320050TestNumbaCore(
+    numba_c = BRLSMASCATestNumbaCore(
         problem.items,
         problem.dim,
         problem.best_known,

@@ -1,4 +1,4 @@
-"""WEISH 全題庫批次：舊版 BSMA_V1_008 vs BSMAV1008Core 串流等價驗證。"""
+"""WEISH 全題庫批次：舊版 BSMA vs BSMACore 串流等價驗證。"""
 
 from __future__ import annotations
 

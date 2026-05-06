@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from mkp.engine.models import ProblemModel
-from mkp.solver.BSCASMA import BRLSMASCA2V100320050TestSolver
+from mkp.solver.BSCASMA import BRLSMASCATestSolver
 from mkp.solver.registry import SolverRegistry
 
 
@@ -39,8 +39,8 @@ def _build_problem(*, best_known: int = 4554) -> ProblemModel:
 
 def _build_config(max_iterations: int = 60) -> dict:
     return {
-        "solver_id": "brlsmasca2_v1_003_20_050_test",
-        "solver_class": "BRLSMASCA2V100320050TestSolver",
+        "solver_id": "brlsmasca",
+        "solver_class": "BRLSMASCATestSolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "params": {},
     }
@@ -49,28 +49,28 @@ def _build_config(max_iterations: int = 60) -> dict:
 def test_bscasma_solver_can_be_created_by_registry():
     registry = SolverRegistry()
     registry.register(
-        "brlsmasca2_v1_003_20_050_test",
-        lambda: BRLSMASCA2V100320050TestSolver(),
+        "brlsmasca",
+        lambda: BRLSMASCATestSolver(),
     )
-    solver = registry.create("brlsmasca2_v1_003_20_050_test")
-    assert isinstance(solver, BRLSMASCA2V100320050TestSolver)
+    solver = registry.create("brlsmasca")
+    assert isinstance(solver, BRLSMASCATestSolver)
 
 
 def test_bscasma_solver_returns_valid_solve_result():
-    solver = BRLSMASCA2V100320050TestSolver()
+    solver = BRLSMASCATestSolver()
     problem = _build_problem(best_known=10**9)  # 確保不會早停，全程跑滿 max_iter
     rng = np.random.default_rng(123)
     result = solver.solve(problem, _build_config(max_iterations=20), rng)
 
     assert result.problem_id == "weish01"
-    assert result.solver_id == "brlsmasca2_v1_003_20_050_test"
+    assert result.solver_id == "brlsmasca"
     assert result.stop_reason in {"max_iterations_reached", "best_known_reached"}
     assert result.evaluation_count >= 20
     assert result.best_solution.shape == (problem.items,)
 
 
 def test_bscasma_reproducibility_same_seed_same_result():
-    solver = BRLSMASCA2V100320050TestSolver()
+    solver = BRLSMASCATestSolver()
     problem = _build_problem(best_known=10**9)
     config = _build_config(max_iterations=20)
 
@@ -83,7 +83,7 @@ def test_bscasma_reproducibility_same_seed_same_result():
 
 
 def test_bscasma_reproducibility_different_seed_can_differ():
-    solver = BRLSMASCA2V100320050TestSolver()
+    solver = BRLSMASCATestSolver()
     problem = _build_problem(best_known=10**9)
     config = _build_config(max_iterations=20)
 
@@ -94,7 +94,7 @@ def test_bscasma_reproducibility_different_seed_can_differ():
 
 
 def test_bscasma_stop_condition_max_iterations_reached():
-    solver = BRLSMASCA2V100320050TestSolver()
+    solver = BRLSMASCATestSolver()
     problem = _build_problem(best_known=10**9)
     config = _build_config(max_iterations=15)
     result = solver.solve(problem, config, np.random.default_rng(1234))
@@ -104,14 +104,14 @@ def test_bscasma_stop_condition_max_iterations_reached():
 
 
 def test_bscasma_params_pop_size_from_config_affects_evaluation_count():
-    solver = BRLSMASCA2V100320050TestSolver()
+    solver = BRLSMASCATestSolver()
     problem = _build_problem(best_known=10**9)
     # 用較大 pop_size 降低 S=0 機率（avoid old NaN bug）
     pop_size = 20
     max_iter = 5
     config = {
-        "solver_id": "brlsmasca2_v1_003_20_050_test",
-        "solver_class": "BRLSMASCA2V100320050TestSolver",
+        "solver_id": "brlsmasca",
+        "solver_class": "BRLSMASCATestSolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iter},
         "params": {
             "pop_size": pop_size,
@@ -125,12 +125,12 @@ def test_bscasma_params_pop_size_from_config_affects_evaluation_count():
 
 
 def test_bscasma_rejects_invalid_params():
-    solver = BRLSMASCA2V100320050TestSolver()
+    solver = BRLSMASCATestSolver()
     problem = _build_problem()
     rng = np.random.default_rng(1)
     base = {
-        "solver_id": "brlsmasca2_v1_003_20_050_test",
-        "solver_class": "BRLSMASCA2V100320050TestSolver",
+        "solver_id": "brlsmasca",
+        "solver_class": "BRLSMASCATestSolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": 5},
     }
 

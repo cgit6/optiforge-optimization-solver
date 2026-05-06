@@ -4,8 +4,8 @@ import copy as copy
 import os
 import inspect # 找匯入檔中物件名稱
 import BSMA
-import BSCA1
-import BSCASMA2
+import BSCA
+import BSCASMA
  
 
 class main:
@@ -14,7 +14,7 @@ class main:
         self.batch_directory = "data\HP"
         self.batch_files = os.listdir(self.batch_directory) # 使用 os.listdir 获取目录中的所有文件名
         # print(batch_files)
-        self.algo_file = BSCASMA2
+        self.algo_file = BSCASMA
         # 使用 inspect 模块获取模块中的自定义物件名称
         self.module_members = inspect.getmembers(self.algo_file, inspect.isclass)
         self.algorithm_list = np.array(self.module_members).T[0] # 列出所有算法["SMA1","SMA2"...]

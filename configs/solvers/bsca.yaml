@@ -1,0 +1,15 @@
+solver_id: bsca
+solver_class: BSCASolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 1000 # 最大迭代次數
+  max_seconds: null
+params:
+  pop_size: 20 # 種群大小
+  a: 2.0 # SCA 振幅起點（隨迭代線性遞減至 0）
+  # 選填：見 mkp.tools.continuous_to_binary.CTF_KINDS；省略時 tanh_abs
+  # ctf: tanh_abs

@@ -60,12 +60,17 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     report = validator.validate(problem, run)
     row = _make_row(run, report, repeat_index=0)
 
+    stale_runs_jsonl = tmp_path / "exp_001" / "runs.jsonl"
+    stale_runs_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    stale_runs_jsonl.write_text('{"stale": true}\n', encoding="utf-8")
+
     write_simulator_result(SimulatorResult(rows=(row,)), experiment_id="exp_001", output_root=tmp_path)
 
     runs_csv = tmp_path / "exp_001" / "runs.csv"
-    runs_jsonl = tmp_path / "exp_001" / "runs.jsonl"
+    runs_json = tmp_path / "exp_001" / "runs.json"
     assert runs_csv.exists()
-    assert runs_jsonl.exists()
+    assert runs_json.exists()
+    assert not stale_runs_jsonl.exists()
 
     with runs_csv.open("r", encoding="utf-8", newline="") as fh:
         rows = list(csv.DictReader(fh))
@@ -76,9 +81,10 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert rows[0]["best_objective"] == "60"
     assert rows[0]["linprog_runtime"] == "0.0"
 
-    with runs_jsonl.open("r", encoding="utf-8") as fh:
-        line = fh.readline().strip()
-    payload = json.loads(line)
+    with runs_json.open("r", encoding="utf-8") as fh:
+        payloads = json.load(fh)
+    assert len(payloads) == 1
+    payload = payloads[0]
     assert payload["problem_id"] == "weish01"
     assert payload["repeat_index"] == 0
     assert payload["linprog_runtime"] == 0.0
@@ -154,8 +160,8 @@ def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
     assert entry.excluded_reason in {"infeasible", "objective_mismatch"}
     assert entry.error == "solver_warning"
 
-    with (tmp_path / "exp_003" / "runs.jsonl").open("r", encoding="utf-8") as fh:
-        payload = json.loads(fh.readline())
+    with (tmp_path / "exp_003" / "runs.json").open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)[0]
     assert payload["error"] == "solver_warning"
     assert payload["excluded_reason"] is not None
 

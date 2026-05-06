@@ -8,8 +8,8 @@ import pytest
 pytest.importorskip("numba")
 
 from mkp.engine.repository import ProblemRepository
-from mkp.solver.BSCA2 import BSCA2V120Core
-from mkp.solver.BSCA2_numby import BSCA2V120NumbaCore
+from mkp.solver.BSCA import BSCACore
+from mkp.solver.BSCA_numba import BSCANumbaCore
 
 
 def _load_weish01(repo_root: Path):
@@ -18,7 +18,7 @@ def _load_weish01(repo_root: Path):
     )
 
 
-def _assert_cores_match_after_init(ref: BSCA2V120Core, numba: BSCA2V120NumbaCore) -> None:
+def _assert_cores_match_after_init(ref: BSCACore, numba: BSCANumbaCore) -> None:
     assert np.array_equal(ref.pop_sol, numba.pop_sol)
     assert np.array_equal(ref.pop_fit, numba.pop_fit)
     assert np.array_equal(ref.cp_list, numba.cp_list)
@@ -26,9 +26,9 @@ def _assert_cores_match_after_init(ref: BSCA2V120Core, numba: BSCA2V120NumbaCore
 
 def _build_cores(
     problem, *, seed: int, max_iterations: int, pop_size: int, a: float
-) -> tuple[BSCA2V120Core, BSCA2V120NumbaCore]:
+) -> tuple[BSCACore, BSCANumbaCore]:
     np.random.seed(seed)
-    ref = BSCA2V120Core(
+    ref = BSCACore(
         problem.items,
         problem.dim,
         problem.best_known,
@@ -41,7 +41,7 @@ def _build_cores(
         max_iter=max_iterations,
     )
     np.random.seed(seed)
-    numba_c = BSCA2V120NumbaCore(
+    numba_c = BSCANumbaCore(
         problem.items,
         problem.dim,
         problem.best_known,
@@ -57,7 +57,7 @@ def _build_cores(
 
 
 def test_bsca2_python_numba_weish01_seed_101_bit_identical():
-    """WEISH/weish01 + seed 101 + max_iter 30：參考 ``BSCA2V120Core`` 與 ``BSCA2V120NumbaCore`` 應完全一致。"""
+    """WEISH/weish01 + seed 101 + max_iter 30：參考 ``BSCACore`` 與 ``BSCANumbaCore`` 應完全一致。"""
     repo_root = Path(__file__).resolve().parents[1]
     problem = _load_weish01(repo_root)
     seed = 101

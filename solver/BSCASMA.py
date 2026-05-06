@@ -14,8 +14,8 @@ from ..tools.continuous_to_binary import flip_probability, parse_ctf_kind
 from .BSMA import _argsort_pop_fit_desc_deterministic
 
 
-class BRLSMASCA2V100320050TestCore:
-    """與 old/BSCASMA.py::BRLSMASCA2_V1_003_20_050_test 相同邏輯（不 import old，供驗證與除錯對照）。
+class BRLSMASCATestCore:
+    """與 old/BSCASMA.py::BRLSMASCATest 相同邏輯（不 import old，供驗證與除錯對照）。
 
     Notes:
         - bit-identical 對齊：完整保留原版的 dead code 與「未使用屬性」（cp_list_old、prob_arr 80 長度、exe_time、update_prob、update_sma_weight 中對 S=0 未保護等），這些路徑不影響 RNG 流動但對照舊版。
@@ -333,13 +333,13 @@ class BRLSMASCA2V100320050TestCore:
 
 
 @dataclass
-class BRLSMASCA2V100320050TestSolver:
-    """BRLSMASCA2 v1.003 (test policy)：內建與 old/BSCASMA::BRLSMASCA2_V1_003_20_050_test 相同演算法本體。"""
+class BRLSMASCATestSolver:
+    """BRLSMASCA test policy：內建與 old/BSCASMA::BRLSMASCATest 相同演算法本體。"""
 
     def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
         stop_condition = config.get("stop_condition", {})
         if stop_condition.get("type") != "max_iterations":
-            raise ValueError("brlsmasca2_v1_003_20_050_test only supports stop_condition.type=max_iterations")
+            raise ValueError("brlsmasca only supports stop_condition.type=max_iterations")
 
         max_iterations = int(stop_condition.get("max_iterations", 0))
         if max_iterations <= 0:
@@ -372,7 +372,7 @@ class BRLSMASCA2V100320050TestSolver:
         np.random.seed(run_seed)
 
         t_alg0 = time.perf_counter()
-        core = BRLSMASCA2V100320050TestCore(
+        core = BRLSMASCATestCore(
             problem.items,
             problem.dim,
             problem.best_known,
@@ -400,7 +400,7 @@ class BRLSMASCA2V100320050TestSolver:
 
         return SolveResult(
             problem_id=problem.problem_id,
-            solver_id=str(config.get("solver_id", "brlsmasca2_v1_003_20_050_test")),
+            solver_id=str(config.get("solver_id", "brlsmasca")),
             seed=run_seed,
             best_solution=np.asarray(best_sol, dtype=int),
             best_objective=int(best_fit),

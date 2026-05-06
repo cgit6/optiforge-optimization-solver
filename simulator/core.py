@@ -20,11 +20,11 @@ from ..engine.bank import (
     get_worker_problem_bank,
 )
 from ..solver.BSMA import BSMASolver
-from ..solver.BSMA_numby import BSMANumbaSolver
-from ..solver.BSCA2 import BSCA2V120Solver
-from ..solver.BSCA2_numby import BSCA2V120NumbaSolver
-from ..solver.BSCASMA import BRLSMASCA2V100320050TestSolver
-from ..solver.BSCASMA_numby import BRLSMASCA2V100320050TestNumbaSolver
+from ..solver.BSMA_numba import BSMANumbaSolver
+from ..solver.BSCA import BSCASolver
+from ..solver.BSCA_numba import BSCANumbaSolver
+from ..solver.BSCASMA import BRLSMASCATestSolver
+from ..solver.BSCASMA_numba import BRLSMASCATestNumbaSolver
 from ..solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
 from ..solver.registry import SolverRegistry, StubMaxIterationsSolver
 from ..solver.sma_mkp_modular import SMAMKPModularV1Solver
@@ -36,10 +36,10 @@ from ..solver.validator import ValidationReport, Validator
 _PROCESS_SAFE_SOLVERS = {
     "bsma",
     "bsma_numba",
-    "bsca2_v1_20",
-    "bsca2_numba",
-    "brlsmasca2_v1_003_20_050_test",
-    "brlsmasca2_numba",
+    "bsca",
+    "bsca_numba",
+    "brlsmasca",
+    "brlsmasca_numba",
     "sma_mkp_modular_v1",
     "sma_tsp_modular_v1",
     "nn_tsp_v1",
@@ -111,10 +111,10 @@ def _build_process_local_registry() -> SolverRegistry:
     registry.register("stub_solver", lambda: StubMaxIterationsSolver())
     registry.register("bsma", lambda: BSMASolver())
     registry.register("bsma_numba", lambda: BSMANumbaSolver())
-    registry.register("bsca2_v1_20", lambda: BSCA2V120Solver())
-    registry.register("bsca2_numba", lambda: BSCA2V120NumbaSolver())
-    registry.register("brlsmasca2_v1_003_20_050_test", lambda: BRLSMASCA2V100320050TestSolver())
-    registry.register("brlsmasca2_numba", lambda: BRLSMASCA2V100320050TestNumbaSolver())
+    registry.register("bsca", lambda: BSCASolver())
+    registry.register("bsca_numba", lambda: BSCANumbaSolver())
+    registry.register("brlsmasca", lambda: BRLSMASCATestSolver())
+    registry.register("brlsmasca_numba", lambda: BRLSMASCATestNumbaSolver())
     registry.register("sma_mkp_modular_v1", lambda: SMAMKPModularV1Solver())
     registry.register("sma_tsp_modular_v1", lambda: SMATSPModularV1Solver())
     registry.register("nn_tsp_v1", lambda: NearestNeighborTSPSolver())

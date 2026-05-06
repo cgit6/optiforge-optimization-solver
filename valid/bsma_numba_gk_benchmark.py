@@ -25,7 +25,7 @@ except ImportError as exc:
 
 from mkp.engine.repository import ProblemRepository
 from mkp.solver.BSMA import BSMASolver
-from mkp.solver.BSMA_numby import BSMANumbaSolver
+from mkp.solver.BSMA_numba import BSMANumbaSolver
 
 
 def _repo_root() -> Path:

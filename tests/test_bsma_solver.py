@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from mkp.engine.models import ProblemModel
-from mkp.solver.BSMA import BSMAV1008Solver
+from mkp.solver.BSMA import BSMASolver
 from mkp.solver.registry import SolverRegistry
 
 
@@ -32,8 +32,8 @@ def _build_problem(*, best_known: int = 34) -> ProblemModel:
 
 def _build_config(max_iterations: int = 60) -> dict:
     return {
-        "solver_id": "bsma_v1_008",
-        "solver_class": "BSMAV1008Solver",
+        "solver_id": "bsma",
+        "solver_class": "BSMASolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "params": {},
     }
@@ -41,26 +41,26 @@ def _build_config(max_iterations: int = 60) -> dict:
 
 def test_bsma_solver_can_be_created_by_registry():
     registry = SolverRegistry()
-    registry.register("bsma_v1_008", lambda: BSMAV1008Solver())
-    solver = registry.create("bsma_v1_008")
-    assert isinstance(solver, BSMAV1008Solver)
+    registry.register("bsma", lambda: BSMASolver())
+    solver = registry.create("bsma")
+    assert isinstance(solver, BSMASolver)
 
 
 def test_bsma_solver_returns_valid_run_result():
-    solver = BSMAV1008Solver()
+    solver = BSMASolver()
     problem = _build_problem()
     rng = np.random.default_rng(123)
     result = solver.solve(problem, _build_config(), rng)
 
     assert result.problem_id == "weish01"
-    assert result.solver_id == "bsma_v1_008"
+    assert result.solver_id == "bsma"
     assert result.stop_reason == "max_iterations_reached"
     assert result.evaluation_count >= 20
     assert result.best_solution.shape == (problem.items,)
 
 
 def test_bsma_reproducibility_same_seed_same_result():
-    solver = BSMAV1008Solver()
+    solver = BSMASolver()
     problem = _build_problem()
     config = _build_config()
 
@@ -73,7 +73,7 @@ def test_bsma_reproducibility_same_seed_same_result():
 
 
 def test_bsma_reproducibility_different_seed_can_differ():
-    solver = BSMAV1008Solver()
+    solver = BSMASolver()
     problem = _build_problem()
     config = _build_config()
 
@@ -84,7 +84,7 @@ def test_bsma_reproducibility_different_seed_can_differ():
 
 
 def test_bsma_stop_condition_max_iterations_reached():
-    solver = BSMAV1008Solver()
+    solver = BSMASolver()
     problem = _build_problem()
     config = _build_config(max_iterations=10)
     result = solver.solve(problem, config, np.random.default_rng(1234))
@@ -95,13 +95,13 @@ def test_bsma_stop_condition_max_iterations_reached():
 
 def test_bsma_params_pop_size_from_config_affects_evaluation_count():
     """params.pop_size 與 stop_condition.max_iterations 一併決定 evaluation_count 上界公式。"""
-    solver = BSMAV1008Solver()
+    solver = BSMASolver()
     problem = _build_problem()
     pop_size = 7
     max_iter = 5
     config = {
-        "solver_id": "bsma_v1_008",
-        "solver_class": "BSMAV1008Solver",
+        "solver_id": "bsma",
+        "solver_class": "BSMASolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iter},
         "params": {"pop_size": pop_size, "z": 0.08},
     }

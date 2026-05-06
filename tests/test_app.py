@@ -102,7 +102,7 @@ def test_app_cli_success_runs_batch(tmp_path: Path):
     result = main(argv, problem_root=problem_root, solver_root=solver_root)
     assert len(result.rows) == 1
     assert (output_root / "exp_cli_1" / "runs.csv").exists()
-    assert (output_root / "exp_cli_1" / "runs.jsonl").exists()
+    assert (output_root / "exp_cli_1" / "runs.json").exists()
 
 
 def test_app_cli_worker_curriculum_runs_batch(tmp_path: Path):
@@ -134,6 +134,7 @@ def test_app_cli_worker_curriculum_runs_batch(tmp_path: Path):
     result = main(argv, problem_root=problem_root, solver_root=solver_root)
     assert len(result.rows) == 1
     assert (output_root / "exp_cli_worker" / "runs.csv").exists()
+    assert (output_root / "exp_cli_worker" / "runs.json").exists()
 
 
 def test_app_cli_fail_fast_when_problem_yaml_missing(tmp_path: Path):

@@ -18,10 +18,10 @@ from ruamel.yaml import YAML
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1].parent))
     from mkp.engine.models import ProblemModel
-    from mkp.solver.BSMA import BSMAV1008Core
+    from mkp.solver.BSMA import BSMACore
 else:
     from ..engine.models import ProblemModel
-    from ..solver.BSMA import BSMAV1008Core
+    from ..solver.BSMA import BSMACore
 
 
 DEFAULT_PROBLEMS: tuple[tuple[str, str], ...] = (
@@ -185,8 +185,8 @@ def _load_old_bsma_class(repo_root: Path) -> type[Any]:
         raise FileNotFoundError(f"old BSMA directory not found: {old_dir}")
     if str(old_dir) not in sys.path:
         sys.path.insert(0, str(old_dir))
-    module = importlib.import_module("BSMA2")
-    return getattr(module, "BSMA_V1_008")
+    module = importlib.import_module("BSMA")
+    return getattr(module, "BSMA")
 
 
 def _make_old_trace_class(old_base: type[Any]) -> type[Any]:
@@ -302,9 +302,9 @@ def _make_old_trace_class(old_base: type[Any]) -> type[Any]:
     return OldTraceBSMA
 
 
-class NewTraceBSMA(PopulationTraceMixin, BSMAV1008Core):
+class NewTraceBSMA(PopulationTraceMixin, BSMACore):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        BSMAV1008Core.__init__(self, *args, **kwargs)
+        BSMACore.__init__(self, *args, **kwargs)
         self.trace_rows: list[PopulationTraceRow] = []
 
     def run_with_population_trace(self) -> TraceRunResult:

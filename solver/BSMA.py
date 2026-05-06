@@ -25,7 +25,7 @@ def _argsort_pop_fit_desc_deterministic(pop_fit: np.ndarray, pop_size: int) -> n
     """回傳長度 ``pop_size`` 的列索引：依 ``pop_fit`` **非遞增**；同適配值時**列索引較小者在前**。
 
     用於取代 ``np.argsort(pop_fit)[::-1]``：NumPy 預設 ``argsort`` 在同值時的相對順序未定義，
-    且與 Numba 內建 ``argsort`` 可能不一致。``BSMA_numby`` 主迴圈排序須與此函式邏輯相同（njit 複製）。"""
+    且與 Numba 內建 ``argsort`` 可能不一致。``BSMA_numba`` 主迴圈排序須與此函式邏輯相同（njit 複製）。"""
     idx = np.arange(pop_size, dtype=np.int64)
     for i in range(pop_size):
         bi = i
@@ -41,7 +41,7 @@ def _argsort_pop_fit_desc_deterministic(pop_fit: np.ndarray, pop_size: int) -> n
 
 
 class BSMACore:
-    """與 old/BSMA2.py::BSMA 相同邏輯（不 import old，供驗證與除錯對照）。"""
+    """與 old/BSMA.py::BSMA 相同邏輯（不 import old，供驗證與除錯對照）。"""
 
     def __init__(
         self,
@@ -103,7 +103,7 @@ class BSMACore:
         self.linprog_runtime = time.perf_counter() - t_lp0
         shadow_price = result.x[: len(self.capacities)]
         denom = np.matmul(shadow_price.T, self.weights.T)
-        # linprog 退化時分母可能為 0（舊 BSMA2 同一公式）；除法仍產生 inf/nan，僅抑制已知 RuntimeWarning
+        # linprog 退化時分母可能為 0（舊 BSMA 同一公式）；除法仍產生 inf/nan，僅抑制已知 RuntimeWarning
         with np.errstate(divide="ignore", invalid="ignore"):
             pseudo_utilities = (-i_profit).T / denom
         return np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
@@ -240,7 +240,7 @@ class BSMACore:
 
 @dataclass
 class BSMASolver:
-    """BSMA：內建與 old/BSMA2 相同演算法本體（BSMACore），不使用 import old。"""
+    """BSMA：內建與 old/BSMA 相同演算法本體（BSMACore），不使用 import old。"""
 
     def solve(self, problem: ProblemModel, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
         stop_condition = config.get("stop_condition", {})

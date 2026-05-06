@@ -1,4 +1,4 @@
 row_type,problem_type,encoding,direction,problem_id,solver_id,run_count,valid_run_count,feasible_rate,avg_runtime,avg_evaluation_count,avg_objective,best_objective,best_known,best_known_reached_count,best_known_gap_min,best_known_gap_avg,excluded_infeasible,excluded_objective_mismatch,excluded_runtime_error
-overall,,,max,,,40,40,1.0,3.789208706864156,20020.0,10300.1,11191,,,,,0,0,0
-group,mkp,binary,max,weish29,bsma_numba,20,20,1.0,0.2991109878988937,20020.0,9410.0,9410,9410,20,0,0.0,0,0,0
-group,mkp,binary,max,weish30,bsma_numba,20,20,1.0,7.279306425829418,20020.0,11190.2,11191,11191,16,0,0.8,0,0,0
+overall,,,max,,,40,40,1.0,6.079939606087282,20020.0,10300.1,11191,,,,,0,0,0
+group,mkp,binary,max,weish29,bsma_numba,20,20,1.0,0.4476233947323635,20020.0,9410.0,9410,9410,20,0,0.0,0,0,0
+group,mkp,binary,max,weish30,bsma_numba,20,20,1.0,11.712255817442202,20020.0,11190.2,11191,11191,16,0,0.8,0,0,0

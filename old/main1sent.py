@@ -4,8 +4,8 @@ import copy as copy
 import os
 import inspect # 找匯入檔中物件名稱
 import BSMA
-import BSCA1
-import BSCASMA2
+import BSCA
+import BSCASMA
 
 class main:
     def __init__(self):
@@ -16,7 +16,7 @@ class main:
 
         self.run_time = 20 # 執行次數
         self.problem_set = ["01","02"] # 題目尾數
-        self.algo_file = BSCASMA2 # 執行的檔案
+        self.algo_file = BSCASMA # 執行的檔案
 
         self.module_members = inspect.getmembers(self.algo_file, inspect.isclass) # 使用 inspect 模块获取模块中的自定义物件名称
         self.algorithm_list = np.array(self.module_members).T[0] # 列出所有算法["SMA1","SMA2"...]
