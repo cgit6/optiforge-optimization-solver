@@ -12,7 +12,8 @@ from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.simulator import Simulator
 from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
-from mkp.tools.stat import write_simulator_result
+from mkp.tools.show import write_simulator_result
+from mkp.tools.stat import result_entries, summarize
 
 
 class CountingSolver:
@@ -255,7 +256,9 @@ def test_run_batch_worker_curriculum_uses_process_pool(tmp_path: Path):
         result = simulator.run_batch(bank_spec)
         assert len(result.rows) == n
 
-        write_simulator_result(result, experiment_id="exp_par", output_root=output_root)
+        entries = result_entries(result)
+        summary = summarize(entries)
+        write_simulator_result(result, entries, summary, experiment_id="exp_par", output_root=output_root)
         summary_json = output_root / "exp_par" / "summary.json"
         assert summary_json.exists()
     finally:
@@ -349,7 +352,9 @@ def test_run_batch_writes_summary_files(tmp_path: Path):
         result = simulator.run_sequential(spec)
 
         assert len(result.rows) == 3
-        write_simulator_result(result, experiment_id="exp_batch", output_root=output_root)
+        entries = result_entries(result)
+        summary = summarize(entries)
+        write_simulator_result(result, entries, summary, experiment_id="exp_batch", output_root=output_root)
         summary_json = output_root / "exp_batch" / "summary.json"
         summary_csv = output_root / "exp_batch" / "summary.csv"
         assert summary_json.exists()

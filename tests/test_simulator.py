@@ -12,7 +12,8 @@ from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.simulator import Simulator, SimulatorResult
 from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
-from mkp.tools.stat import write_simulator_result
+from mkp.tools.show import write_simulator_result
+from mkp.tools.stat import result_entries, summarize
 
 
 class RecordingSolver:
@@ -124,9 +125,14 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
         assert row.solve_result.problem_id == "weish01"
         assert row.validation_report.is_feasible is True
 
-        # 透過 stat 模組寫出（保留檔案存在性的覆蓋率）
+        # 透過 show 模組寫出（保留檔案存在性的覆蓋率）
+        simulator_result = SimulatorResult(rows=(row,))
+        entries = result_entries(simulator_result)
+        summary = summarize(entries)
         write_simulator_result(
-            SimulatorResult(rows=(row,)),
+            simulator_result,
+            entries,
+            summary,
             experiment_id="exp_sim",
             output_root=output_root,
         )

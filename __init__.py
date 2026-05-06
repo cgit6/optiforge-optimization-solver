@@ -16,8 +16,9 @@ from .solver.registry import SolverRegistry, StubMaxIterationsSolver
 from .solver.sma_mkp_modular import SMAMKPModularV1Solver
 from .solver.sma_tsp_modular import SMATSPModularV1Solver
 from .solver.validator import ValidationReport, Validator
+from .tools.show import write_simulator_result
 from .tools.solver_config_loader import SolverConfigLoader
-from .tools.stat import ResultEntry, write_simulator_result
+from .tools.stat import ResultEntry
 
 
 def __getattr__(name: str):

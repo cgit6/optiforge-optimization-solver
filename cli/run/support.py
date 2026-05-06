@@ -1,4 +1,4 @@
-"""CLI 之後的編排：驗證參數、呼叫 `engine.build`、建立 `Simulator` 與執行批次、由 stat 模組輸出、釋放 SHM。"""
+"""CLI 之後的編排：驗證參數、呼叫 `engine.build`、建立 `Simulator` 與執行批次、由 show 模組輸出、釋放 SHM。"""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ from ... import engine
 from ...engine.models import ExperimentSpec
 from ...engine.repository import ProblemRepository
 from ...simulator import SimulatorResult
+from ...tools.show import write_simulator_result
 from ...tools.solver_config_loader import SolverConfigLoader
-from ...tools.stat import write_simulator_result
+from ...tools.stat import result_entries, summarize
 
 def _splitProblemIds(raw: str) -> tuple[str, ...]:
     """將命令參數 problems 中逗號分隔的題目清單轉換為 tuple 格式"""
@@ -116,7 +117,7 @@ def executeSimulator(
     problem_root: Path | str = Path("configs/problems"),
     solver_root: Path | str = Path("configs/solvers"),
 ) -> SimulatorResult:
-    """驗證參數、`engine.build`、建立 `Simulator`，依 repeat / execution_mode 選串行或併發路徑；批次跑完後交給 stat 模組輸出檔案。"""
+    """驗證參數、`engine.build`、建立 `Simulator`，依 repeat / execution_mode 選串行或併發路徑；批次跑完後交給 show 模組輸出檔案。"""
     problem_root_p = Path(problem_root)
     solver_root_p = Path(solver_root)
     output_root_p = Path(output_root) # 由命令參數決定的輸出目錄
@@ -135,14 +136,20 @@ def executeSimulator(
         solver_id = spec.solver_ids[0]
         sim = bundle.NewSimulatorWithSeed(solver_id, spec.seed)
         # 這邊判斷是否觸發的邏輯要再注意一下
-        if spec.execution_mode == "worker_curriculum" and spec.repeat > 1:
+        if spec.execution_mode == "worker_curriculum":
             simulator_result = sim.run_batch(spec) # 執行併發
         else:
             simulator_result = sim.run_sequential(spec) # 單一
 
-        # 將整批模擬結果交給 stat 模組整理並寫入文件
+        # 結果與統計
+        entries = result_entries(simulator_result)
+        summary = summarize(entries)
+
+        # 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
         write_simulator_result(
             simulator_result,
+            entries,
+            summary,
             experiment_id=spec.experiment_id,
             output_root=output_root_p,
         )

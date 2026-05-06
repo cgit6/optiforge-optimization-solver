@@ -8,7 +8,8 @@ import pytest
 from mkp.engine import Engine, SimulationBundle
 from mkp.engine.models import ExperimentSpec
 from mkp.engine.repository import ProblemRepository
-from mkp.tools.stat import write_simulator_result
+from mkp.tools.show import write_simulator_result
+from mkp.tools.stat import result_entries, summarize
 
 
 def _write_problem_yaml(path: Path) -> None:
@@ -88,7 +89,9 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     try:
         result = sim.run_sequential(spec)
         assert len(result.rows) == 1
-        write_simulator_result(result, experiment_id="exp_engine_1", output_root=output_root)
+        entries = result_entries(result)
+        summary = summarize(entries)
+        write_simulator_result(result, entries, summary, experiment_id="exp_engine_1", output_root=output_root)
         assert (output_root / "exp_engine_1" / "runs.csv").exists()
     finally:
         sim.close()

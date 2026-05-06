@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import asdict
 import json
 from pathlib import Path
 
@@ -9,7 +10,8 @@ import numpy as np
 from mkp.engine.models import ProblemModel, SolveResult, RunTask
 from mkp.simulator import SimulatorResult, SimulatorRunRow
 from mkp.solver.validator import Validator
-from mkp.tools.stat import build_summary, write_simulator_result
+from mkp.tools.show import write_simulator_result
+from mkp.tools.stat import SummaryReport, result_entries, summarize
 from mkp.tools.stat import _build_entry  # 內部函式：保留覆蓋率
 
 
@@ -64,7 +66,10 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     stale_runs_jsonl.parent.mkdir(parents=True, exist_ok=True)
     stale_runs_jsonl.write_text('{"stale": true}\n', encoding="utf-8")
 
-    write_simulator_result(SimulatorResult(rows=(row,)), experiment_id="exp_001", output_root=tmp_path)
+    simulator_result = SimulatorResult(rows=(row,))
+    entries = result_entries(simulator_result)
+    summary = summarize(entries)
+    write_simulator_result(simulator_result, entries, summary, experiment_id="exp_001", output_root=tmp_path)
 
     runs_csv = tmp_path / "exp_001" / "runs.csv"
     runs_json = tmp_path / "exp_001" / "runs.json"
@@ -80,6 +85,7 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert rows[0]["repeat_index"] == "0"
     assert rows[0]["best_objective"] == "60"
     assert rows[0]["linprog_runtime"] == "0.0"
+    assert json.loads(rows[0]["metadata_json"]) == {"solve": {}, "validation": {}}
 
     with runs_json.open("r", encoding="utf-8") as fh:
         payloads = json.load(fh)
@@ -93,6 +99,8 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert payload["best_known"] == 50
     assert payload["best_known_reached"] is True
     assert payload["best_known_gap"] == -10
+    assert payload["metadata"] == {"solve": {}, "validation": {}}
+    assert "metadata_json" not in payload
 
 
 def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
@@ -109,36 +117,38 @@ def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
         _make_row(mismatch_run, validator.validate(problem, mismatch_run), repeat_index=2),
     )
 
-    write_simulator_result(SimulatorResult(rows=rows), experiment_id="exp_002", output_root=tmp_path)
+    simulator_result = SimulatorResult(rows=rows)
+    entries = result_entries(simulator_result)
+    summary = summarize(entries)
+    write_simulator_result(simulator_result, entries, summary, experiment_id="exp_002", output_root=tmp_path)
+    assert isinstance(summary, SummaryReport)
 
-    entries = [
-        _build_entry(row.solve_result, row.validation_report, repeat_index=row.task.repeat_index)
-        for row in rows
-    ]
-    summary = build_summary(entries)
-
-    overall = summary["overall"]
-    groups = summary["by_problem_solver"]
+    overall = summary.overall
+    groups = summary.by_problem_solver
     assert len(groups) == 1
     group = groups[0]
 
-    assert overall["total_runs"] == 3
-    assert overall["valid_run_count"] == 1
-    assert overall["feasible_rate"] == 2 / 3
-    assert overall["avg_objective"] == 60
-    assert overall["best_objective"] == 60
-    assert overall["excluded_counts"]["infeasible"] == 1
-    assert overall["excluded_counts"]["objective_mismatch"] == 1
-    assert overall["excluded_counts"]["runtime_error"] == 0
+    assert overall.total_runs == 3
+    assert overall.valid_run_count == 1
+    assert overall.feasible_rate == 2 / 3
+    assert overall.avg_objective == 60
+    assert overall.best_objective == 60
+    assert overall.excluded_counts.infeasible == 1
+    assert overall.excluded_counts.objective_mismatch == 1
+    assert overall.excluded_counts.runtime_error == 0
 
-    assert group["problem_id"] == "weish01"
-    assert group["solver_id"] == "stub_solver"
-    assert group["run_count"] == 3
-    assert group["valid_run_count"] == 1
-    assert group["best_known"] == 50
-    assert group["best_known_reached_count"] == 1
-    assert group["best_known_gap_min"] == -10
-    assert group["best_known_gap_avg"] == -10
+    assert group.problem_id == "weish01"
+    assert group.solver_id == "stub_solver"
+    assert group.run_count == 3
+    assert group.valid_run_count == 1
+    assert group.best_known == 50
+    assert group.best_known_reached_count == 1
+    assert group.best_known_gap_min == -10
+    assert group.best_known_gap_avg == -10
+
+    summary_payload = asdict(summary)
+    assert summary_payload["overall"]["total_runs"] == 3
+    assert summary_payload["by_problem_solver"][0]["problem_id"] == "weish01"
 
     summary_json = tmp_path / "exp_002" / "summary.json"
     summary_csv = tmp_path / "exp_002" / "summary.csv"
@@ -154,16 +164,21 @@ def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
     report = validator.validate(problem, invalid_run)
     row = _make_row(invalid_run, report, repeat_index=0)
 
-    write_simulator_result(SimulatorResult(rows=(row,)), experiment_id="exp_003", output_root=tmp_path)
+    simulator_result = SimulatorResult(rows=(row,))
+    entries = result_entries(simulator_result)
+    summary = summarize(entries)
+    write_simulator_result(simulator_result, entries, summary, experiment_id="exp_003", output_root=tmp_path)
 
     entry = _build_entry(invalid_run, report, repeat_index=0)
     assert entry.excluded_reason in {"infeasible", "objective_mismatch"}
     assert entry.error == "solver_warning"
+    assert asdict(entry.metadata)["validation"] == {}
 
     with (tmp_path / "exp_003" / "runs.json").open("r", encoding="utf-8") as fh:
         payload = json.load(fh)[0]
     assert payload["error"] == "solver_warning"
     assert payload["excluded_reason"] is not None
+    assert payload["metadata"] == {"solve": {}, "validation": {}}
 
 
 def test_runtime_error_is_excluded_separately():
@@ -174,8 +189,8 @@ def test_runtime_error_is_excluded_separately():
     error_run = _build_solve_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
     report = validator.validate(problem, error_run)
     entry = _build_entry(error_run, report, repeat_index=0)
-    summary = build_summary([entry])
+    summary = summarize([entry])
 
     assert entry.excluded_reason == "runtime_error"
-    assert summary["overall"]["excluded_counts"]["runtime_error"] == 1
-    assert summary["overall"]["valid_run_count"] == 1
+    assert summary.overall.excluded_counts.runtime_error == 1
+    assert summary.overall.valid_run_count == 1

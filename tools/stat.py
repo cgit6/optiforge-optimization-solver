@@ -1,12 +1,9 @@
-"""統計與輸出模組：將 SimulatorResult 整理後一次性寫入 runs / summary 檔。"""
+"""統計彙整模組：將模擬結果整理為標準化資料與摘要統計。"""
 
 from __future__ import annotations
 
-import csv
-import json
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ..engine.models import SolveResult
@@ -38,96 +35,129 @@ class ResultEntry:
     evaluation_count: int
     error: str | None
     excluded_reason: str | None
-    metadata_json: str
+    metadata: "ResultMetadata"
 
 
-def write_simulator_result(
-    simulator_result: "SimulatorResult",
-    *,
-    experiment_id: str,
-    output_root: Path | str,
-) -> Path:
-    if not experiment_id.strip():
-        raise ValueError("experiment_id cannot be empty")
+@dataclass(frozen=True)
+class ResultMetadata:
+    solve: dict[str, Any]
+    validation: dict[str, Any]
 
-    output_dir = Path(output_root) / experiment_id
-    output_dir.mkdir(parents=True, exist_ok=True)
 
-    entries = [
+@dataclass(frozen=True)
+class ExcludedCounts:
+    infeasible: int
+    objective_mismatch: int
+    runtime_error: int
+
+
+@dataclass(frozen=True)
+class OverallSummary:
+    total_runs: int
+    valid_run_count: int
+    feasible_rate: float
+    avg_runtime: float
+    avg_evaluation_count: float
+    avg_objective: int | float | None
+    best_objective: int | float | None
+    direction: str | None
+    excluded_counts: ExcludedCounts
+
+
+@dataclass(frozen=True)
+class ProblemSolverSummary:
+    problem_type: str
+    encoding: str
+    direction: str
+    problem_id: str
+    solver_id: str
+    run_count: int
+    valid_run_count: int
+    feasible_rate: float
+    avg_runtime: float
+    avg_evaluation_count: float
+    avg_objective: int | float | None
+    best_objective: int | float | None
+    excluded_counts: ExcludedCounts
+    best_known: int | float | None
+    best_known_reached_count: int
+    best_known_gap_min: int | float | None
+    best_known_gap_avg: int | float | None
+
+
+@dataclass(frozen=True)
+class SummaryReport:
+    overall: OverallSummary
+    by_problem_solver: list[ProblemSolverSummary]
+
+
+def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
+    return [
         _build_entry(row.solve_result, row.validation_report, repeat_index=row.task.repeat_index)
         for row in simulator_result.rows
     ]
 
-    _write_runs_csv(output_dir / "runs.csv", entries)
-    _write_runs_json(output_dir / "runs.json", entries)
-    legacy_runs_jsonl = output_dir / "runs.jsonl"
-    if legacy_runs_jsonl.exists():
-        legacy_runs_jsonl.unlink()
-    summary = build_summary(entries)
-    _write_summary(output_dir, summary)
-    return output_dir
 
-
-def build_summary(entries: list[ResultEntry]) -> dict[str, Any]:
+def summarize(entries: list[ResultEntry]) -> SummaryReport:
     valid_entries = [e for e in entries if _is_valid_for_objective_stats(e)]
     overall_direction = _single_value({e.direction for e in entries})
-    overall = {
-        "total_runs": len(entries),
-        "valid_run_count": len(valid_entries),
-        "feasible_rate": (sum(1 for e in entries if e.feasible) / len(entries)) if entries else 0.0,
-        "avg_runtime": (sum(e.runtime for e in entries) / len(entries)) if entries else 0.0,
-        "avg_evaluation_count": (sum(e.evaluation_count for e in entries) / len(entries)) if entries else 0.0,
-        "avg_objective": (
+    overall = OverallSummary(
+        total_runs=len(entries),
+        valid_run_count=len(valid_entries),
+        feasible_rate=(sum(1 for e in entries if e.feasible) / len(entries)) if entries else 0.0,
+        avg_runtime=(sum(e.runtime for e in entries) / len(entries)) if entries else 0.0,
+        avg_evaluation_count=(sum(e.evaluation_count for e in entries) / len(entries)) if entries else 0.0,
+        avg_objective=(
             sum(float(e.best_objective) for e in valid_entries) / len(valid_entries) if valid_entries else None
         ),
-        "best_objective": _best_objective(valid_entries, overall_direction),
-        "direction": overall_direction,
-        "excluded_counts": _excluded_counts(entries),
-    }
+        best_objective=_best_objective(valid_entries, overall_direction),
+        direction=overall_direction,
+        excluded_counts=_excluded_counts(entries),
+    )
 
     grouped: dict[tuple[str, str, str], list[ResultEntry]] = defaultdict(list)
     for entry in entries:
         grouped[(entry.problem_type, entry.problem_id, entry.solver_id)].append(entry)
 
-    by_problem_solver: list[dict[str, Any]] = []
+    by_problem_solver: list[ProblemSolverSummary] = []
     for (problem_type, problem_id, solver_id), bucket in sorted(grouped.items()):
         valid_bucket = [e for e in bucket if _is_valid_for_objective_stats(e)]
-        direction = bucket[0].direction if bucket else None
-        best_known_value = bucket[0].best_known if bucket else None
+        direction = bucket[0].direction
+        best_known_value = bucket[0].best_known
         best_known_gaps = [e.best_known_gap for e in valid_bucket if e.best_known_gap is not None]
         by_problem_solver.append(
-            {
-                "problem_type": problem_type,
-                "encoding": bucket[0].encoding if bucket else "",
-                "direction": direction,
-                "problem_id": problem_id,
-                "solver_id": solver_id,
-                "run_count": len(bucket),
-                "valid_run_count": len(valid_bucket),
-                "feasible_rate": (sum(1 for e in bucket if e.feasible) / len(bucket)) if bucket else 0.0,
-                "avg_runtime": (sum(e.runtime for e in bucket) / len(bucket)) if bucket else 0.0,
-                "avg_evaluation_count": (
+            ProblemSolverSummary(
+                problem_type=problem_type,
+                encoding=bucket[0].encoding,
+                direction=direction,
+                problem_id=problem_id,
+                solver_id=solver_id,
+                run_count=len(bucket),
+                valid_run_count=len(valid_bucket),
+                feasible_rate=(sum(1 for e in bucket if e.feasible) / len(bucket)) if bucket else 0.0,
+                avg_runtime=(sum(e.runtime for e in bucket) / len(bucket)) if bucket else 0.0,
+                avg_evaluation_count=(
                     sum(e.evaluation_count for e in bucket) / len(bucket) if bucket else 0.0
                 ),
-                "avg_objective": (
+                avg_objective=(
                     sum(float(e.best_objective) for e in valid_bucket) / len(valid_bucket)
                     if valid_bucket
                     else None
                 ),
-                "best_objective": _best_objective(valid_bucket, direction),
-                "excluded_counts": _excluded_counts(bucket),
-                "best_known": best_known_value,
-                "best_known_reached_count": sum(1 for e in valid_bucket if e.best_known_reached is True),
-                "best_known_gap_min": min(best_known_gaps) if best_known_gaps else None,
-                "best_known_gap_avg": (
+                best_objective=_best_objective(valid_bucket, direction),
+                excluded_counts=_excluded_counts(bucket),
+                best_known=best_known_value,
+                best_known_reached_count=sum(1 for e in valid_bucket if e.best_known_reached is True),
+                best_known_gap_min=min(best_known_gaps) if best_known_gaps else None,
+                best_known_gap_avg=(
                     sum(float(gap) for gap in best_known_gaps) / len(best_known_gaps)
                     if best_known_gaps
                     else None
                 ),
-            }
+            )
         )
 
-    return {"overall": overall, "by_problem_solver": by_problem_solver}
+    return SummaryReport(overall=overall, by_problem_solver=by_problem_solver)
 
 
 def _build_entry(
@@ -145,10 +175,10 @@ def _build_entry(
         excluded_reason = "runtime_error"
 
     linprog_runtime = float(solve_result.metadata.get("linprog_runtime", solve_result.linprog_runtime))
-    metadata = {
-        "solve": dict(solve_result.metadata),
-        "validation": dict(validation_report.metadata),
-    }
+    metadata = ResultMetadata(
+        solve=dict(solve_result.metadata),
+        validation=dict(validation_report.metadata),
+    )
 
     return ResultEntry(
         problem_type=validation_report.problem_type,
@@ -171,114 +201,8 @@ def _build_entry(
         evaluation_count=solve_result.evaluation_count,
         error=solve_result.error,
         excluded_reason=excluded_reason,
-        metadata_json=json.dumps(metadata, ensure_ascii=False, sort_keys=True),
+        metadata=metadata,
     )
-
-
-def _entry_to_dict(entry: ResultEntry) -> dict[str, Any]:
-    return {
-        "problem_type": entry.problem_type,
-        "encoding": entry.encoding,
-        "direction": entry.direction,
-        "problem_id": entry.problem_id,
-        "solver_id": entry.solver_id,
-        "repeat_index": entry.repeat_index,
-        "seed": entry.seed,
-        "best_objective": entry.best_objective,
-        "feasible": entry.feasible,
-        "objective_valid": entry.objective_valid,
-        "objective_mismatch": entry.objective_mismatch,
-        "best_known": entry.best_known,
-        "best_known_reached": entry.best_known_reached,
-        "best_known_gap": entry.best_known_gap,
-        "stop_reason": entry.stop_reason,
-        "runtime": entry.runtime,
-        "linprog_runtime": entry.linprog_runtime,
-        "evaluation_count": entry.evaluation_count,
-        "error": entry.error,
-        "excluded_reason": entry.excluded_reason,
-        "metadata_json": entry.metadata_json,
-    }
-
-
-def _write_runs_csv(path: Path, entries: list[ResultEntry]) -> None:
-    rows = [_entry_to_dict(entry) for entry in entries]
-    fieldnames = list(_entry_to_dict(entries[0]).keys()) if entries else list(_entry_to_dict(_empty_entry()).keys())
-    with path.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def _write_runs_json(path: Path, entries: list[ResultEntry]) -> None:
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump([_entry_to_dict(entry) for entry in entries], fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
-
-
-def _write_summary(output_dir: Path, summary: dict[str, Any]) -> None:
-    summary_json = output_dir / "summary.json"
-    summary_csv = output_dir / "summary.csv"
-
-    with summary_json.open("w", encoding="utf-8") as fh:
-        json.dump(summary, fh, ensure_ascii=False, indent=2)
-
-    overall = summary["overall"]
-    rows: list[dict[str, Any]] = [
-        {
-            "row_type": "overall",
-            "problem_type": "",
-            "encoding": "",
-            "direction": overall["direction"] or "",
-            "problem_id": "",
-            "solver_id": "",
-            "run_count": overall["total_runs"],
-            "valid_run_count": overall["valid_run_count"],
-            "feasible_rate": overall["feasible_rate"],
-            "avg_runtime": overall["avg_runtime"],
-            "avg_evaluation_count": overall["avg_evaluation_count"],
-            "avg_objective": overall["avg_objective"],
-            "best_objective": overall["best_objective"],
-            "best_known": "",
-            "best_known_reached_count": "",
-            "best_known_gap_min": "",
-            "best_known_gap_avg": "",
-            "excluded_infeasible": overall["excluded_counts"]["infeasible"],
-            "excluded_objective_mismatch": overall["excluded_counts"]["objective_mismatch"],
-            "excluded_runtime_error": overall["excluded_counts"]["runtime_error"],
-        }
-    ]
-
-    for group in summary["by_problem_solver"]:
-        rows.append(
-            {
-                "row_type": "group",
-                "problem_type": group["problem_type"],
-                "encoding": group["encoding"],
-                "direction": group["direction"],
-                "problem_id": group["problem_id"],
-                "solver_id": group["solver_id"],
-                "run_count": group["run_count"],
-                "valid_run_count": group["valid_run_count"],
-                "feasible_rate": group["feasible_rate"],
-                "avg_runtime": group["avg_runtime"],
-                "avg_evaluation_count": group["avg_evaluation_count"],
-                "avg_objective": group["avg_objective"],
-                "best_objective": group["best_objective"],
-                "best_known": group["best_known"],
-                "best_known_reached_count": group["best_known_reached_count"],
-                "best_known_gap_min": group["best_known_gap_min"],
-                "best_known_gap_avg": group["best_known_gap_avg"],
-                "excluded_infeasible": group["excluded_counts"]["infeasible"],
-                "excluded_objective_mismatch": group["excluded_counts"]["objective_mismatch"],
-                "excluded_runtime_error": group["excluded_counts"]["runtime_error"],
-            }
-        )
-
-    with summary_csv.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def _best_objective(entries: list[ResultEntry], direction: str | None) -> int | float | None:
@@ -300,35 +224,9 @@ def _is_valid_for_objective_stats(entry: ResultEntry) -> bool:
     return entry.feasible and entry.objective_valid
 
 
-def _excluded_counts(entries: list[ResultEntry]) -> dict[str, int]:
-    return {
-        "infeasible": sum(1 for e in entries if e.excluded_reason == "infeasible"),
-        "objective_mismatch": sum(1 for e in entries if e.excluded_reason == "objective_mismatch"),
-        "runtime_error": sum(1 for e in entries if e.excluded_reason == "runtime_error"),
-    }
-
-
-def _empty_entry() -> ResultEntry:
-    return ResultEntry(
-        problem_type="",
-        encoding="",
-        direction="",
-        problem_id="",
-        solver_id="",
-        repeat_index=0,
-        seed=0,
-        best_objective=0,
-        feasible=False,
-        objective_valid=False,
-        objective_mismatch=False,
-        best_known=None,
-        best_known_reached=False,
-        best_known_gap=None,
-        stop_reason="",
-        runtime=0.0,
-        linprog_runtime=0.0,
-        evaluation_count=0,
-        error=None,
-        excluded_reason=None,
-        metadata_json="{}",
+def _excluded_counts(entries: list[ResultEntry]) -> ExcludedCounts:
+    return ExcludedCounts(
+        infeasible=sum(1 for e in entries if e.excluded_reason == "infeasible"),
+        objective_mismatch=sum(1 for e in entries if e.excluded_reason == "objective_mismatch"),
+        runtime_error=sum(1 for e in entries if e.excluded_reason == "runtime_error"),
     )
