@@ -1,0 +1,30 @@
+
+
+
+seed: [1, 10000] # 隨機種子範圍
+solvers: [bsma_numba,bsca_numba] # 實驗的演算法
+repeat: 20 # 重複次數 
+output: [bsma_numba, bsca_numba] # 輸出位置
+
+# 題庫設定
+# 實驗會依序執行
+dataset_settings:
+  # WEISH 題庫
+  - experiment-id: weish-bsma-bsca
+    dataset: WEISH # 
+    problems: [weish01, weish02, weish03] # 題目清單
+  
+  # HP 題庫
+  - experiment-id: hp-bsma-bsca
+    dataset: HP # 
+    problems: [hp1, hp2, hp3] # 題目清單
+
+  # PET 題庫
+  - experiment-id: pet-bsma-bsca
+    dataset: PET # 
+    problems: [pet1, pet2, pet3] # 題目清單
+
+  # SENT 題庫
+  - experiment-id: sent-bsma-bsca
+    dataset: SENT # 
+    problems: [sent1, sent2, sent3] # 題目清單
