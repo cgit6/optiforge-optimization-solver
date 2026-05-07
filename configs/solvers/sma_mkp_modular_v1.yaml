@@ -9,5 +9,5 @@ stop_condition:
   max_iterations: 1000
   max_seconds: null
 params:
-  pop_size: 20
-  z: 0.08
+  - pop_size: 20
+    z: 0.08

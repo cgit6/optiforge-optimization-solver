@@ -52,6 +52,7 @@ class ExperimentSpec:
     solver_ids: tuple[str, ...]
     repeat: int
     seed: int
+    param_set_index: int
     output_dir: Path
     problem_type: str = "mkp"
     benchmark_enabled: bool = False
@@ -68,6 +69,8 @@ class ExperimentSpec:
             raise ValueError("repeat must be > 0.")
         if self.seed < 0:
             raise ValueError("seed must be >= 0.")
+        if self.param_set_index < 0:
+            raise ValueError("param_set_index must be >= 0.")
         if not self.problem_ids:
             raise ValueError("problem_ids cannot be empty.")
         if not self.solver_ids:
@@ -199,6 +202,7 @@ class RunTask:
     solver_id: str
     repeat_index: int
     seed: int
+    param_set_index: int
     problem_type: str = "mkp"
 
     def __post_init__(self) -> None:
@@ -214,6 +218,8 @@ class RunTask:
             raise ValueError("repeat_index must be >= 0.")
         if self.seed < 0:
             raise ValueError("seed must be >= 0.")
+        if self.param_set_index < 0:
+            raise ValueError("param_set_index must be >= 0.")
 
 
 @dataclass(frozen=True)

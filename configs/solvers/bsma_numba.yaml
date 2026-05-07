@@ -9,7 +9,7 @@ stop_condition:
   max_iterations: 1000
   max_seconds: null
 params:
-  # 選填：ctf 與 bsma 相同；省略時 tanh_abs
-  # ctf: tanh_abs
-  pop_size: 20
-  z: 0.08
+  - pop_size: 20
+    z: 0.08
+    # 選填：ctf 與 bsma 相同；省略時 tanh_abs
+    # ctf: tanh_abs

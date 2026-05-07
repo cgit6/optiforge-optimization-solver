@@ -71,7 +71,8 @@ capabilities:
 stop_condition:
   type: max_iterations
   max_iterations: 10
-params: {{}}
+params:
+  - {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -85,6 +86,7 @@ def _build_spec() -> ExperimentSpec:
         solver_ids=("stub_solver",),
         repeat=3,
         seed=1234,
+        param_set_index=0,
         output_dir=Path("output/exp_batch"),
         benchmark_enabled=False,
     )
@@ -125,6 +127,7 @@ def test_expand_tasks_count_and_fields():
         assert tasks[0].problem_id == "weish01"
         assert tasks[0].solver_id == "stub_solver"
         assert tasks[0].repeat_index == 0
+        assert tasks[0].param_set_index == 0
         assert tasks[1].repeat_index == 1
         assert tasks[2].repeat_index == 2
     finally:
@@ -142,6 +145,47 @@ def test_rng_seed_reproducibility_and_independence():
         assert len(set(t.seed for t in tasks_a)) == len(tasks_a)
     finally:
         simulator.close()
+
+
+def test_solver_snapshot_selects_requested_param_set(tmp_path: Path) -> None:
+    solver_root = tmp_path / "solvers"
+    _write_solver_yaml(
+        solver_root / "stub_solver.yaml",
+        solver_id="stub_solver",
+    )
+    (solver_root / "stub_solver.yaml").write_text(
+        """
+solver_id: stub_solver
+solver_class: CountingSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 10
+params:
+  - {pop_size: 20, z: 0.08}
+  - {pop_size: 30, z: 0.03}
+""".strip(),
+        encoding="utf-8",
+    )
+    spec = ExperimentSpec(
+        experiment_id="exp_param_set",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        seed=1,
+        param_set_index=1,
+        output_dir=Path("output/exp_param_set"),
+    )
+
+    snapshot = SolverConfigsSnapshot.build(spec, solver_root)
+    config = snapshot.get("stub_solver")
+
+    assert config["param_set_index"] == 1
+    assert config["params"] == {"pop_size": 30, "z": 0.03}
 
 
 def _seed_map(tasks: list[RunTask]) -> dict[tuple[str, str, int], int]:
@@ -164,6 +208,7 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
         solver_ids=("s_a", "s_b"),
         repeat=2,
         seed=999,
+        param_set_index=0,
         output_dir=Path("output/exp_w"),
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
@@ -186,6 +231,7 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
             solver_ids=("s_a", "s_b"),
             repeat=2,
             seed=999,
+            param_set_index=0,
             output_dir=Path("output/exp_w"),
             execution_mode="grid",
         )
@@ -196,6 +242,7 @@ def test_expand_tasks_worker_curriculum_order_and_seed_parity(tmp_path: Path):
             solver_ids=("s_a", "s_b"),
             repeat=2,
             seed=999,
+            param_set_index=0,
             output_dir=Path("output/exp_w"),
             execution_mode="worker_curriculum",
         )
@@ -237,6 +284,7 @@ def test_run_batch_worker_curriculum_uses_process_pool(tmp_path: Path):
         solver_ids=("stub_solver",),
         repeat=n,
         seed=100,
+        param_set_index=0,
         output_dir=Path("output/exp_par"),
         execution_mode="worker_curriculum",
     )
@@ -279,6 +327,7 @@ def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=Path("output/exp_batch_fail_problem"),
     )
 
@@ -297,6 +346,7 @@ def test_solver_snapshot_raises_when_solver_yaml_missing(tmp_path: Path) -> None
         solver_ids=("no_such_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=Path("output/exp_snap_missing"),
     )
     with pytest.raises(FileNotFoundError):
@@ -317,6 +367,7 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=Path("output/exp_mismatch"),
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
@@ -337,6 +388,7 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
             solver_id="other_solver",
             repeat_index=0,
             seed=1,
+            param_set_index=0,
         )
         with pytest.raises(KeyError):
             simulator.run_task(task)

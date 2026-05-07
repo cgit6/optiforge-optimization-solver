@@ -194,6 +194,7 @@ class Simulator:
                                 solver_id=solver_id,
                                 repeat_index=repeat_index,
                                 seed=seeds[(problem_id, solver_id, repeat_index)],
+                                param_set_index=spec.param_set_index,
                             )
                         )
         else:
@@ -208,6 +209,7 @@ class Simulator:
                                 solver_id=solver_id,
                                 repeat_index=repeat_index,
                                 seed=seeds[(problem_id, solver_id, repeat_index)],
+                                param_set_index=spec.param_set_index,
                             )
                         )
         return tasks

@@ -72,7 +72,8 @@ capabilities:
 stop_condition:
   type: max_iterations
   max_iterations: 10
-params: {}
+params:
+  - {}
 """.strip(),
         encoding="utf-8",
     )
@@ -95,6 +96,7 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_id: str = "exp_sim") 
         solver_ids=("stub_solver",),
         repeat=1,
         seed=0,
+        param_set_index=0,
         output_dir=output_root,
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
@@ -117,7 +119,14 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
     solver = RecordingSolver()
     simulator, output_root = _build_simulator(tmp_path, solver)
     try:
-        task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=123)
+        task = RunTask(
+            problem_id="weish01",
+            dataset="WEISH",
+            solver_id="stub_solver",
+            repeat_index=0,
+            seed=123,
+            param_set_index=0,
+        )
 
         row = simulator.run_task(task)
 
@@ -145,7 +154,14 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
 def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
     solver1 = RecordingSolver()
     simulator1, _ = _build_simulator(tmp_path / "a", solver1, experiment_id="exp_a")
-    task = RunTask(problem_id="weish01", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=777)
+    task = RunTask(
+        problem_id="weish01",
+        dataset="WEISH",
+        solver_id="stub_solver",
+        repeat_index=0,
+        seed=777,
+        param_set_index=0,
+    )
     try:
         simulator1.run_task(task)
     finally:
@@ -165,7 +181,14 @@ def test_run_task_fail_fast_when_problem_load_fails(tmp_path: Path):
     solver = RecordingSolver()
     simulator, _ = _build_simulator(tmp_path, solver)
     try:
-        task = RunTask(problem_id="missing_problem", dataset="WEISH", solver_id="stub_solver", repeat_index=0, seed=1)
+        task = RunTask(
+            problem_id="missing_problem",
+            dataset="WEISH",
+            solver_id="stub_solver",
+            repeat_index=0,
+            seed=1,
+            param_set_index=0,
+        )
 
         with pytest.raises(FileNotFoundError):
             simulator.run_task(task)
@@ -181,6 +204,7 @@ def test_solver_snapshot_build_fails_when_solver_dir_has_no_yaml(tmp_path: Path)
         solver_ids=("stub_solver",),
         repeat=1,
         seed=0,
+        param_set_index=0,
         output_dir=tmp_path / "output",
     )
     with pytest.raises(FileNotFoundError):

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mkp.engine.models import ProblemModel, SolveResult, RunTask
+from mkp.engine.models import ProblemModel, SolveResult, RunTask, TSPProblem
 from mkp.simulator import SimulatorResult, SimulatorRunRow
 from mkp.solver.validator import Validator
 from mkp.tools.show import write_simulator_result
@@ -25,6 +25,24 @@ def _build_problem(*, best_known: int = 50) -> ProblemModel:
         weights=np.array([[2, 1], [3, 2], [4, 3]]),
         capacities=np.array([10, 8]),
         best_known=best_known,
+    )
+
+
+def _build_tsp_problem(*, best_known: int = 26) -> TSPProblem:
+    return TSPProblem(
+        problem_id="tsp5",
+        dataset="SMALL",
+        n_cities=5,
+        best_known=best_known,
+        distance_matrix=np.array(
+            [
+                [0, 2, 9, 10, 7],
+                [2, 0, 6, 4, 3],
+                [9, 6, 0, 8, 5],
+                [10, 4, 8, 0, 6],
+                [7, 3, 5, 6, 0],
+            ]
+        ),
     )
 
 
@@ -51,6 +69,7 @@ def _make_row(solve_result: SolveResult, validation_report, *, repeat_index: int
         solver_id=solve_result.solver_id,
         repeat_index=repeat_index,
         seed=solve_result.seed,
+        param_set_index=0,
     )
     return SimulatorRunRow(task=task, solve_result=solve_result, validation_report=validation_report)
 
@@ -82,6 +101,7 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert len(rows) == 1
     assert rows[0]["problem_id"] == "weish01"
     assert rows[0]["solver_id"] == "stub_solver"
+    assert rows[0]["param_set_index"] == "0"
     assert rows[0]["repeat_index"] == "0"
     assert rows[0]["best_objective"] == "60"
     assert rows[0]["linprog_runtime"] == "0.0"
@@ -92,6 +112,7 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert len(payloads) == 1
     payload = payloads[0]
     assert payload["problem_id"] == "weish01"
+    assert payload["param_set_index"] == 0
     assert payload["repeat_index"] == 0
     assert payload["linprog_runtime"] == 0.0
     assert payload["feasible"] is True
@@ -131,29 +152,53 @@ def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
     assert overall.total_runs == 3
     assert overall.valid_run_count == 1
     assert overall.feasible_rate == 2 / 3
+    assert overall.param_set_index == 0
+    assert overall.best_known == 50
     assert overall.avg_objective == 60
+    assert overall.std_objective == 0.0
     assert overall.best_objective == 60
+    assert overall.worst_objective == 60
+    assert overall.pdev == -20.0
     assert overall.excluded_counts.infeasible == 1
     assert overall.excluded_counts.objective_mismatch == 1
     assert overall.excluded_counts.runtime_error == 0
 
     assert group.problem_id == "weish01"
     assert group.solver_id == "stub_solver"
+    assert group.param_set_index == 0
     assert group.run_count == 3
     assert group.valid_run_count == 1
     assert group.best_known == 50
+    assert group.std_objective == 0.0
+    assert group.worst_objective == 60
+    assert group.pdev == -20.0
     assert group.best_known_reached_count == 1
     assert group.best_known_gap_min == -10
     assert group.best_known_gap_avg == -10
 
     summary_payload = asdict(summary)
     assert summary_payload["overall"]["total_runs"] == 3
+    assert summary_payload["overall"]["param_set_index"] == 0
+    assert summary_payload["overall"]["pdev"] == -20.0
     assert summary_payload["by_problem_solver"][0]["problem_id"] == "weish01"
+    assert summary_payload["by_problem_solver"][0]["param_set_index"] == 0
+    assert summary_payload["by_problem_solver"][0]["worst_objective"] == 60
 
     summary_json = tmp_path / "exp_002" / "summary.json"
     summary_csv = tmp_path / "exp_002" / "summary.csv"
     assert summary_json.exists()
     assert summary_csv.exists()
+
+    with summary_csv.open("r", encoding="utf-8", newline="") as fh:
+        summary_rows = list(csv.DictReader(fh))
+    assert summary_rows[0]["std_objective"] == "0.0"
+    assert summary_rows[0]["worst_objective"] == "60"
+    assert summary_rows[0]["pdev"] == "-20.0"
+    assert summary_rows[0]["param_set_index"] == "0"
+    assert summary_rows[1]["std_objective"] == "0.0"
+    assert summary_rows[1]["worst_objective"] == "60"
+    assert summary_rows[1]["pdev"] == "-20.0"
+    assert summary_rows[1]["param_set_index"] == "0"
 
 
 def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
@@ -169,7 +214,7 @@ def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
     summary = summarize(entries)
     write_simulator_result(simulator_result, entries, summary, experiment_id="exp_003", output_root=tmp_path)
 
-    entry = _build_entry(invalid_run, report, repeat_index=0)
+    entry = _build_entry(invalid_run, report, repeat_index=0, param_set_index=0)
     assert entry.excluded_reason in {"infeasible", "objective_mismatch"}
     assert entry.error == "solver_warning"
     assert asdict(entry.metadata)["validation"] == {}
@@ -188,9 +233,78 @@ def test_runtime_error_is_excluded_separately():
     # objective 正確且可行，但 solver 帶 error，應歸類 runtime_error
     error_run = _build_solve_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
     report = validator.validate(problem, error_run)
-    entry = _build_entry(error_run, report, repeat_index=0)
+    entry = _build_entry(error_run, report, repeat_index=0, param_set_index=0)
     summary = summarize([entry])
 
     assert entry.excluded_reason == "runtime_error"
     assert summary.overall.excluded_counts.runtime_error == 1
     assert summary.overall.valid_run_count == 1
+
+
+def test_summary_adds_std_worst_and_pdev_for_multiple_valid_mkp_runs():
+    validator = Validator()
+    problem = _build_problem()
+
+    run_a = _build_solve_result(np.array([1, 1, 1]), 60)
+    run_b = _build_solve_result(np.array([1, 0, 1]), 40)
+    entries = [
+        _build_entry(run_a, validator.validate(problem, run_a), repeat_index=0, param_set_index=0),
+        _build_entry(run_b, validator.validate(problem, run_b), repeat_index=1, param_set_index=0),
+    ]
+
+    summary = summarize(entries)
+    overall = summary.overall
+    group = summary.by_problem_solver[0]
+
+    assert overall.avg_objective == 50.0
+    assert np.isclose(overall.std_objective, np.sqrt(200.0))
+    assert overall.best_objective == 60
+    assert overall.worst_objective == 40
+    assert overall.pdev == 0.0
+
+    assert group.avg_objective == 50.0
+    assert np.isclose(group.std_objective, np.sqrt(200.0))
+    assert group.best_objective == 60
+    assert group.worst_objective == 40
+    assert group.pdev == 0.0
+
+
+def test_summary_uses_min_direction_for_worst_and_pdev():
+    validator = Validator()
+    problem = _build_tsp_problem()
+    best_run = SolveResult(
+        problem_id="tsp5",
+        solver_id="nn_tsp_v1",
+        seed=0,
+        best_solution=np.array([0, 1, 3, 2, 4]),
+        best_objective=26,
+        feasible=True,
+        evaluation_count=5,
+        stop_reason="done",
+        runtime=0.0,
+    )
+    worse_run = SolveResult(
+        problem_id="tsp5",
+        solver_id="nn_tsp_v1",
+        seed=1,
+        best_solution=np.array([0, 1, 2, 3, 4]),
+        best_objective=29,
+        feasible=True,
+        evaluation_count=5,
+        stop_reason="done",
+        runtime=0.0,
+    )
+    entries = [
+        _build_entry(best_run, validator.validate(problem, best_run), repeat_index=0, param_set_index=0),
+        _build_entry(worse_run, validator.validate(problem, worse_run), repeat_index=1, param_set_index=0),
+    ]
+
+    summary = summarize(entries)
+    group = summary.by_problem_solver[0]
+
+    assert group.direction == "min"
+    assert group.best_objective == 26
+    assert group.worst_objective == 29
+    assert group.avg_objective == 27.5
+    assert np.isclose(group.std_objective, np.sqrt(4.5))
+    assert np.isclose(group.pdev, (27.5 - 26.0) / 26.0 * 100.0)

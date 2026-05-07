@@ -38,7 +38,10 @@ def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root:
         )
     problem_type, encoding, direction = next(iter(triples))
 
-    solver_config = SolverConfigLoader(config_root=solver_root).load(spec.solver_ids[0])
+    solver_config = SolverConfigLoader(config_root=solver_root).load(
+        spec.solver_ids[0],
+        param_set_index=spec.param_set_index,
+    )
     capabilities = solver_config["capabilities"]
     if problem_type not in {str(v) for v in capabilities["problem_types"]}:
         raise ValueError(
@@ -66,6 +69,12 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--problems", required=True, help="Comma-separated problem ids")
     parser.add_argument("--solver", required=True, help="Single solver id (one algorithm per run)")
+    parser.add_argument(
+        "--param-set-index",
+        required=True,
+        type=int,
+        help="0-based index of the solver params set to use from the solver YAML.",
+    )
     parser.add_argument("--repeat", required=True, type=int)
     parser.add_argument("--base-seed", required=True, type=int)
     parser.add_argument("--output-dir", required=True)
@@ -102,6 +111,7 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
         solver_ids=(solver,), # 求解器ID，為了保持可以支持多個求解器ID的tuple格式的擴容條件
         repeat=args.repeat, # 獨立實驗次數
         seed=args.base_seed, # 基礎種子，這邊應該可以彈性選擇要不要填如果填了就固定如果不填就隨機生成
+        param_set_index=args.param_set_index, # 演算法參數組 index
         output_dir=output_dir, # 輸出目錄
         benchmark_enabled=False, # 是否啟用 benchmark
         execution_mode=args.execution_mode, # 任務展開與執行順序
@@ -135,17 +145,17 @@ def executeSimulator(
     try:
         solver_id = spec.solver_ids[0]
         sim = bundle.NewSimulatorWithSeed(solver_id, spec.seed)
-        # 這邊判斷是否觸發的邏輯要再注意一下
+        # 1. 執行模擬
         if spec.execution_mode == "worker_curriculum":
-            simulator_result = sim.run_batch(spec) # 執行併發
+            simulator_result = sim.run_batch(spec) # 併發執行
         else:
-            simulator_result = sim.run_sequential(spec) # 單一
+            simulator_result = sim.run_sequential(spec) # 單一執行
 
-        # 結果與統計
+        # 2. 結果與統計
         entries = result_entries(simulator_result)
         summary = summarize(entries)
 
-        # 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
+        # 3. 輸出: 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
         write_simulator_result(
             simulator_result,
             entries,

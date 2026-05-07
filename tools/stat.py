@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+import math
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..engine.models import SolveResult
 from ..solver.validator import ValidationReport
 
 if TYPE_CHECKING:
     from ..simulator.core import SimulatorResult
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,7 @@ class ResultEntry:
     direction: str
     problem_id: str
     solver_id: str
+    param_set_index: int
     repeat_index: int
     seed: int
     best_objective: int | float
@@ -58,8 +62,13 @@ class OverallSummary:
     feasible_rate: float
     avg_runtime: float
     avg_evaluation_count: float
+    param_set_index: int | None
+    best_known: int | float | None
     avg_objective: int | float | None
+    std_objective: float | None
     best_objective: int | float | None
+    worst_objective: int | float | None
+    pdev: float | None
     direction: str | None
     excluded_counts: ExcludedCounts
 
@@ -71,15 +80,19 @@ class ProblemSolverSummary:
     direction: str
     problem_id: str
     solver_id: str
+    param_set_index: int | None
     run_count: int
     valid_run_count: int
     feasible_rate: float
     avg_runtime: float
     avg_evaluation_count: float
-    avg_objective: int | float | None
-    best_objective: int | float | None
-    excluded_counts: ExcludedCounts
     best_known: int | float | None
+    avg_objective: int | float | None
+    std_objective: float | None
+    best_objective: int | float | None
+    worst_objective: int | float | None
+    pdev: float | None
+    excluded_counts: ExcludedCounts
     best_known_reached_count: int
     best_known_gap_min: int | float | None
     best_known_gap_avg: int | float | None
@@ -93,7 +106,12 @@ class SummaryReport:
 
 def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
     return [
-        _build_entry(row.solve_result, row.validation_report, repeat_index=row.task.repeat_index)
+        _build_entry(
+            row.solve_result,
+            row.validation_report,
+            repeat_index=row.task.repeat_index,
+            param_set_index=row.task.param_set_index,
+        )
         for row in simulator_result.rows
     ]
 
@@ -101,16 +119,22 @@ def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
 def summarize(entries: list[ResultEntry]) -> SummaryReport:
     valid_entries = [e for e in entries if _is_valid_for_objective_stats(e)]
     overall_direction = _single_value({e.direction for e in entries})
+    overall_param_set_index = _single_value({e.param_set_index for e in entries})
+    overall_best_known = _single_value({e.best_known for e in entries})
+    overall_avg_objective = _avg_objective(valid_entries)
     overall = OverallSummary(
         total_runs=len(entries),
         valid_run_count=len(valid_entries),
         feasible_rate=(sum(1 for e in entries if e.feasible) / len(entries)) if entries else 0.0,
         avg_runtime=(sum(e.runtime for e in entries) / len(entries)) if entries else 0.0,
         avg_evaluation_count=(sum(e.evaluation_count for e in entries) / len(entries)) if entries else 0.0,
-        avg_objective=(
-            sum(float(e.best_objective) for e in valid_entries) / len(valid_entries) if valid_entries else None
-        ),
+        param_set_index=overall_param_set_index,
+        best_known=overall_best_known,
+        avg_objective=overall_avg_objective,
+        std_objective=_objective_std(valid_entries),
         best_objective=_best_objective(valid_entries, overall_direction),
+        worst_objective=_worst_objective(valid_entries, overall_direction),
+        pdev=_percent_deviation(overall_avg_objective, overall_best_known, overall_direction),
         direction=overall_direction,
         excluded_counts=_excluded_counts(entries),
     )
@@ -123,7 +147,9 @@ def summarize(entries: list[ResultEntry]) -> SummaryReport:
     for (problem_type, problem_id, solver_id), bucket in sorted(grouped.items()):
         valid_bucket = [e for e in bucket if _is_valid_for_objective_stats(e)]
         direction = bucket[0].direction
-        best_known_value = bucket[0].best_known
+        param_set_index = _single_value({e.param_set_index for e in bucket})
+        best_known_value = _single_value({e.best_known for e in bucket})
+        avg_objective = _avg_objective(valid_bucket)
         best_known_gaps = [e.best_known_gap for e in valid_bucket if e.best_known_gap is not None]
         by_problem_solver.append(
             ProblemSolverSummary(
@@ -132,6 +158,7 @@ def summarize(entries: list[ResultEntry]) -> SummaryReport:
                 direction=direction,
                 problem_id=problem_id,
                 solver_id=solver_id,
+                param_set_index=param_set_index,
                 run_count=len(bucket),
                 valid_run_count=len(valid_bucket),
                 feasible_rate=(sum(1 for e in bucket if e.feasible) / len(bucket)) if bucket else 0.0,
@@ -139,14 +166,13 @@ def summarize(entries: list[ResultEntry]) -> SummaryReport:
                 avg_evaluation_count=(
                     sum(e.evaluation_count for e in bucket) / len(bucket) if bucket else 0.0
                 ),
-                avg_objective=(
-                    sum(float(e.best_objective) for e in valid_bucket) / len(valid_bucket)
-                    if valid_bucket
-                    else None
-                ),
-                best_objective=_best_objective(valid_bucket, direction),
-                excluded_counts=_excluded_counts(bucket),
                 best_known=best_known_value,
+                avg_objective=avg_objective,
+                std_objective=_objective_std(valid_bucket),
+                best_objective=_best_objective(valid_bucket, direction),
+                worst_objective=_worst_objective(valid_bucket, direction),
+                pdev=_percent_deviation(avg_objective, best_known_value, direction),
+                excluded_counts=_excluded_counts(bucket),
                 best_known_reached_count=sum(1 for e in valid_bucket if e.best_known_reached is True),
                 best_known_gap_min=min(best_known_gaps) if best_known_gaps else None,
                 best_known_gap_avg=(
@@ -165,6 +191,7 @@ def _build_entry(
     validation_report: ValidationReport,
     *,
     repeat_index: int,
+    param_set_index: int,
 ) -> ResultEntry:
     excluded_reason: str | None = None
     if not validation_report.is_feasible:
@@ -186,6 +213,7 @@ def _build_entry(
         direction=validation_report.direction,
         problem_id=solve_result.problem_id,
         solver_id=solve_result.solver_id,
+        param_set_index=param_set_index,
         repeat_index=repeat_index,
         seed=solve_result.seed,
         best_objective=solve_result.best_objective,
@@ -214,7 +242,52 @@ def _best_objective(entries: list[ResultEntry], direction: str | None) -> int | 
     return max(values)
 
 
-def _single_value(values: set[str]) -> str | None:
+def _worst_objective(entries: list[ResultEntry], direction: str | None) -> int | float | None:
+    values = [e.best_objective for e in entries]
+    if not values:
+        return None
+    if direction == "min":
+        return max(values)
+    if direction == "max":
+        return min(values)
+    return None
+
+
+def _avg_objective(entries: list[ResultEntry]) -> float | None:
+    if not entries:
+        return None
+    return sum(float(e.best_objective) for e in entries) / len(entries)
+
+
+def _objective_std(entries: list[ResultEntry]) -> float | None:
+    if not entries:
+        return None
+    if len(entries) == 1:
+        return 0.0
+
+    mean = _avg_objective(entries)
+    if mean is None:
+        return None
+
+    variance = sum((float(e.best_objective) - mean) ** 2 for e in entries) / (len(entries) - 1)
+    return math.sqrt(variance)
+
+
+def _percent_deviation(
+    avg_objective: int | float | None,
+    best_known: int | float | None,
+    direction: str | None,
+) -> float | None:
+    if avg_objective is None or best_known is None or float(best_known) == 0.0:
+        return None
+    if direction == "max":
+        return (float(best_known) - float(avg_objective)) / float(best_known) * 100.0
+    if direction == "min":
+        return (float(avg_objective) - float(best_known)) / float(best_known) * 100.0
+    return None
+
+
+def _single_value(values: set[T]) -> T | None:
     if len(values) == 1:
         return next(iter(values))
     return None

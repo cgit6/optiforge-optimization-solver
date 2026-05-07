@@ -22,7 +22,7 @@ class SolverConfigsSnapshot:
         loader = SolverConfigLoader(config_root=solver_root)
         pairs: list[tuple[str, dict[str, Any]]] = []
         for solver_id in spec.solver_ids:
-            raw = loader.load(solver_id)
+            raw = loader.load(solver_id, param_set_index=spec.param_set_index)
             pairs.append((solver_id, copy.deepcopy(raw)))
         return cls(_by_id=tuple(pairs))
 

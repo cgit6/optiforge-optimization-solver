@@ -45,7 +45,8 @@ capabilities:
 stop_condition:
   type: max_iterations
   max_iterations: 10
-params: {}
+params:
+  - {}
 """.strip(),
         encoding="utf-8",
     )
@@ -65,6 +66,7 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
         solver_ids=("stub_solver",),
         repeat=1,
         seed=7,
+        param_set_index=0,
         output_dir=output_root / "exp_engine_1",
     )
 
@@ -113,6 +115,7 @@ def test_engine_build_fails_when_experiment_problem_yaml_is_invalid(tmp_path: Pa
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=output_root / "exp_bad_cat",
     )
 
@@ -141,6 +144,7 @@ def test_engine_build_succeeds_when_unused_catalog_yaml_is_invalid(tmp_path: Pat
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=output_root / "exp_ok_unused_bad",
     )
 
@@ -186,6 +190,7 @@ capacities: [10, 8]
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=output_root / "exp_unknown_best",
     )
 
@@ -212,6 +217,7 @@ def test_engine_build_fails_when_experiment_problem_not_in_catalog(tmp_path: Pat
         solver_ids=("stub_solver",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=output_root / "exp_missing_pid",
     )
 
@@ -240,6 +246,7 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
         solver_ids=("stub_solver",),
         repeat=2,
         seed=42,
+        param_set_index=0,
         output_dir=output_root / "exp_shm",
         execution_mode="worker_curriculum",
     )

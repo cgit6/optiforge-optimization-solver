@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import threading
 from pathlib import Path
 from typing import Any
@@ -18,14 +19,16 @@ class SolverConfigLoader:
         self._yaml = YAML(typ="safe")
         self._yaml_parse_lock = threading.Lock()
 
-    def load(self, solver_id: str) -> dict[str, Any]:
+    def load(self, solver_id: str, *, param_set_index: int) -> dict[str, Any]:
+        if param_set_index < 0:
+            raise ValueError("param_set_index must be >= 0")
         config_path = self._config_root / f"{solver_id}.yaml"
         if not config_path.exists():
             raise FileNotFoundError(f"Solver config YAML not found: {config_path}")
 
         data = self._read_yaml(config_path)
         self._validate_schema(data, solver_id=solver_id, file_path=config_path)
-        return data
+        return self._normalize_config(data, param_set_index=param_set_index, file_path=config_path)
 
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         try:
@@ -73,8 +76,12 @@ class SolverConfigLoader:
             if value is None or float(value) <= 0:
                 raise ValueError(f"max_seconds must be > 0 in {file_path}")
 
-        if not isinstance(data["params"], dict):
-            raise ValueError(f"params must be a mapping in {file_path}")
+        params = data["params"]
+        if not isinstance(params, list) or not params:
+            raise ValueError(f"params must be a non-empty list in {file_path}")
+        for index, param_set in enumerate(params):
+            if not isinstance(param_set, dict):
+                raise ValueError(f"params[{index}] must be a mapping in {file_path}")
 
         capabilities = data["capabilities"]
         if not isinstance(capabilities, dict):
@@ -86,3 +93,22 @@ class SolverConfigLoader:
         directions = {str(v) for v in capabilities["directions"]}
         if not directions.issubset({"max", "min"}):
             raise ValueError(f"capabilities.directions must contain only 'max' or 'min' in {file_path}")
+
+    def _normalize_config(
+        self,
+        data: dict[str, Any],
+        *,
+        param_set_index: int,
+        file_path: Path,
+    ) -> dict[str, Any]:
+        param_sets = data["params"]
+        if param_set_index >= len(param_sets):
+            raise ValueError(
+                f"param_set_index out of range in {file_path}: "
+                f"got {param_set_index}, available indices are 0..{len(param_sets) - 1}"
+            )
+
+        normalized = copy.deepcopy(data)
+        normalized["params"] = copy.deepcopy(param_sets[param_set_index])
+        normalized["param_set_index"] = param_set_index
+        return normalized

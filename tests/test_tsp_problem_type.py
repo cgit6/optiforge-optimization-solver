@@ -47,7 +47,8 @@ stop_condition:
   type: max_iterations
   max_iterations: 20
   max_seconds: null
-params: {{}}
+params:
+  - {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -120,6 +121,7 @@ def test_compatibility_check_rejects_mkp_solver_for_tsp(tmp_path: Path) -> None:
         solver_ids=("bsma",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=tmp_path / "out",
     )
 
@@ -146,7 +148,7 @@ stop_condition:
   max_iterations: 1
   max_seconds: null
 params:
-  start_city: 0
+  - start_city: 0
 """.strip(),
         encoding="utf-8",
     )
@@ -163,6 +165,8 @@ params:
             "tsp5",
             "--solver",
             "nn_tsp_v1",
+            "--param-set-index",
+            "0",
             "--repeat",
             "2",
             "--base-seed",

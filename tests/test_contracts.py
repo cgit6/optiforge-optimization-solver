@@ -14,6 +14,7 @@ def test_experiment_spec_valid():
         solver_ids=("solver_a",),
         repeat=3,
         seed=42,
+        param_set_index=0,
         output_dir=Path("output/exp_001"),
         benchmark_enabled=True,
     )
@@ -30,6 +31,7 @@ def test_experiment_spec_invalid_execution_mode():
             solver_ids=("solver_a",),
             repeat=1,
             seed=1,
+            param_set_index=0,
             output_dir=Path("output/exp_001"),
             execution_mode="invalid_mode",  # type: ignore[arg-type]
         )
@@ -43,6 +45,7 @@ def test_experiment_spec_invalid_execution_mode():
         {"problem_ids": tuple()},
         {"solver_ids": tuple()},
         {"repeat": 0},
+        {"param_set_index": -1},
     ],
 )
 def test_experiment_spec_invalid(kwargs):
@@ -53,6 +56,7 @@ def test_experiment_spec_invalid(kwargs):
         solver_ids=("solver_a",),
         repeat=1,
         seed=1,
+        param_set_index=0,
         output_dir=Path("output/exp_001"),
     )
     base.update(kwargs)
@@ -98,6 +102,7 @@ def test_run_task_valid():
         solver_id="solver_a",
         repeat_index=0,
         seed=999,
+        param_set_index=0,
     )
     assert task.seed == 999
 
@@ -110,6 +115,7 @@ def test_run_task_valid():
         {"solver_id": ""},
         {"repeat_index": -1},
         {"seed": -1},
+        {"param_set_index": -1},
     ],
 )
 def test_run_task_invalid(kwargs):
@@ -119,6 +125,7 @@ def test_run_task_invalid(kwargs):
         solver_id="solver_a",
         repeat_index=0,
         seed=1,
+        param_set_index=0,
     )
     base.update(kwargs)
     with pytest.raises(ValueError):

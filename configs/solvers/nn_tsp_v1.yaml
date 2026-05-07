@@ -9,4 +9,4 @@ stop_condition:
   max_iterations: 1
   max_seconds: null
 params:
-  start_city: 0
+  - start_city: 0
