@@ -1,6 +1,6 @@
 
 
-
+# 實驗設定
 seed: [1, 10000] # 隨機種子範圍
 solvers: [bsma_numba,bsca_numba] # 實驗的演算法
 repeat: 20 # 重複次數 
