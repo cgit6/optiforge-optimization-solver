@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import sys
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass
@@ -21,10 +22,13 @@ from ..engine.bank import (
 )
 from ..solver.BSMA import BSMASolver
 from ..solver.BSMA_numba import BSMANumbaSolver
+from ..solver.BSMA_numba_v2 import BSMANumbaSolver as BSMANumbaSolverV2
 from ..solver.BSCA import BSCASolver
 from ..solver.BSCA_numba import BSCANumbaSolver
+from ..solver.BSCA_numba_v2 import BSCANumbaSolver as BSCANumbaSolverV2
 from ..solver.BSCASMA import BRLSMASCATestSolver
 from ..solver.BSCASMA_numba import BRLSMASCATestNumbaSolver
+from ..solver.BSCASMA_numba_v2 import BRLSMASCATestNumbaSolver as BRLSMASCATestNumbaSolverV2
 from ..solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
 from ..solver.registry import SolverRegistry, StubMaxIterationsSolver
 from ..solver.sma_mkp_modular import SMAMKPModularV1Solver
@@ -36,10 +40,13 @@ from ..solver.validator import ValidationReport, Validator
 _PROCESS_SAFE_SOLVERS = {
     "bsma",
     "bsma_numba",
+    "bsma_numba_v2",
     "bsca",
     "bsca_numba",
+    "bsca_numba_v2",
     "brlsmasca",
     "brlsmasca_numba",
+    "brlsmasca_numba_v2",
     "sma_mkp_modular_v1",
     "sma_tsp_modular_v1",
     "nn_tsp_v1",
@@ -111,10 +118,13 @@ def _build_process_local_registry() -> SolverRegistry:
     registry.register("stub_solver", lambda: StubMaxIterationsSolver())
     registry.register("bsma", lambda: BSMASolver())
     registry.register("bsma_numba", lambda: BSMANumbaSolver())
+    registry.register("bsma_numba_v2", lambda: BSMANumbaSolverV2())
     registry.register("bsca", lambda: BSCASolver())
     registry.register("bsca_numba", lambda: BSCANumbaSolver())
+    registry.register("bsca_numba_v2", lambda: BSCANumbaSolverV2())
     registry.register("brlsmasca", lambda: BRLSMASCATestSolver())
     registry.register("brlsmasca_numba", lambda: BRLSMASCATestNumbaSolver())
+    registry.register("brlsmasca_numba_v2", lambda: BRLSMASCATestNumbaSolverV2())
     registry.register("sma_mkp_modular_v1", lambda: SMAMKPModularV1Solver())
     registry.register("sma_tsp_modular_v1", lambda: SMATSPModularV1Solver())
     registry.register("nn_tsp_v1", lambda: NearestNeighborTSPSolver())
@@ -290,12 +300,13 @@ class Simulator:
         else:
             mp_context = get_context("fork") # 其他平台使用 fork 模式
         
+        max_workers = min(spec.repeat, os.cpu_count() or 1)
         progress_queue = mp_context.Queue()
         try:
             with _progress_bar(total=len(tasks), desc=f"{spec.experiment_id} batch") as progress:
                 # 建立 ProcessPoolExecutor，並行執行 _run_curriculum_line_process
                 with ProcessPoolExecutor(
-                    max_workers=spec.repeat,
+                    max_workers=max_workers, # 併發數量
                     mp_context=mp_context,
                     initializer=_configure_curriculum_process_worker,
                     initargs=(packs, worker_cfgs, progress_queue),

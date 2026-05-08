@@ -2,9 +2,10 @@
 
 # 實驗設定
 seed: [1, 10000] # 隨機種子範圍
+collects: 20 # 收集幾組符合期望的結果
 solvers: [bsma_numba,bsca_numba] # 實驗的演算法
+output: [bsma_numba, bsca_numba] # 輸出位置 output/檔名
 repeat: 20 # 重複次數 
-output: [bsma_numba, bsca_numba] # 輸出位置
 
 # 題庫設定
 # 實驗會依序執行
