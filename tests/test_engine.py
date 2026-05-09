@@ -79,9 +79,9 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
 
     assert isinstance(bundle, SimulationBundle)
     assert bundle.spec is spec
-    assert bundle.game_setting is not None
+    assert bundle.catalog_summary is not None
     assert len(bundle.catalog) > 0
-    assert "WEISH" in bundle.game_setting.datasets
+    assert "WEISH" in bundle.catalog_summary.datasets
     assert bundle.problem_bank is not None
     assert bundle.solver_configs is not None
     assert bundle.solver_configs.solver_ids() == frozenset(spec.solver_ids)

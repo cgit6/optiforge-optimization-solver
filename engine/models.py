@@ -7,7 +7,7 @@ from typing import Any, Literal, Mapping, Optional
 import numpy as np
 
 ExecutionMode = Literal["grid", "worker_curriculum"]
-Direction = Literal["max", "min"]
+Direction = Literal["max", "min"] # 優化問題
 
 
 def _as_int_array(name: str, data: np.ndarray | list[int]) -> np.ndarray:
@@ -46,17 +46,20 @@ def _normalize_best_known(value: int | float | None, *, allow_none: bool) -> int
 
 @dataclass(frozen=True)
 class ExperimentSpec:
-    experiment_id: str
-    dataset: str
+    """實驗規格"""
+    experiment_id: str # 實驗 id
+    dataset: str # 題庫
     problem_ids: tuple[str, ...]
     solver_ids: tuple[str, ...]
     repeat: int
-    seed: int
+    seed: int # 隨機種子
     param_set_index: int
     output_dir: Path
-    problem_type: str = "mkp"
+    problem_type: str = "" 
     benchmark_enabled: bool = False
     execution_mode: ExecutionMode = "grid"
+
+    isbuild: bool = True # 是否創建(創建後就不能再改這個物件中的值了)
 
     def __post_init__(self) -> None:
         if not self.experiment_id.strip():

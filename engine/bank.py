@@ -1,4 +1,4 @@
-"""題庫掃描、Catalog、GameSetting，以及以 shared_memory 共用的 ProblemBank。"""
+"""題庫掃描、Catalog、CatalogSummary，以及以 shared_memory 共用的 ProblemBank。"""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class ProblemCatalogEntry:
 
 
 @dataclass(frozen=True)
-class GameSetting:
+class CatalogSummary:
     problem_types: tuple[str, ...]
     datasets: tuple[str, ...]
     problems_by_dataset: tuple[tuple[str, tuple[str, ...]], ...]
@@ -137,7 +137,7 @@ def get_worker_problem_bank() -> ProblemWorkerView:
     return _worker_problem_view
 
 
-def scan_problem_catalog(problem_root: Path) -> tuple[list[ProblemCatalogEntry], GameSetting]:
+def scan_problem_catalog(problem_root: Path) -> tuple[list[ProblemCatalogEntry], CatalogSummary]:
     if not problem_root.is_dir():
         raise FileNotFoundError(f"problem_root is not a directory: {problem_root}")
     entries: list[ProblemCatalogEntry] = []
@@ -182,12 +182,12 @@ def scan_problem_catalog(problem_root: Path) -> tuple[list[ProblemCatalogEntry],
                 by_dataset[dataset].append(problem_id)
 
     pbd = tuple((ds, tuple(sorted(set(pids)))) for ds, pids in sorted(by_dataset.items()))
-    gs = GameSetting(
+    summary = CatalogSummary(
         problem_types=tuple(sorted(problem_types)),
         datasets=tuple(sorted(by_dataset.keys())),
         problems_by_dataset=pbd,
     )
-    return entries, gs
+    return entries, summary
 
 
 def validate_catalog_entries(repository: ProblemRepository, entries: list[ProblemCatalogEntry]) -> None:

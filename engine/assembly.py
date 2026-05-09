@@ -14,7 +14,7 @@ from ..solver.validator import Validator
 from .models import ExperimentSpec
 from .configs import SolverConfigsSnapshot
 from .bank import (
-    GameSetting,
+    CatalogSummary,
     ProblemBank,
     ProblemCatalogEntry,
     assert_spec_problems_in_catalog,
@@ -32,37 +32,39 @@ DefaultRngFactory = Callable[..., np.random.Generator]
 
 def build(
     *,
-    spec: ExperimentSpec,
-    problem_root: Path,
-    solver_root: Path,
-    output_root: Path,
+    spec: ExperimentSpec, # 實驗規格
+    problem_root: Path, # 題庫資料夾的路徑
+    solver_root: Path, # 算法的參數設定
+    output_root: Path, # 輸出資料夾的論竟
     solver_builders: dict[str, SolverBuilder] | None = None,
 ) -> SimulationBundle:
     """掃描與驗證題庫、建 ProblemBank 與 bundle；不在此建立 `Simulator`。"""
+
+    type = spec.problem_type # 問題類型(這個需要經過合法性測試)
     problem_repository = ProblemRepository(config_root=problem_root)
-    print(f"[mkp] scanning problem catalog under {problem_root} ...", file=sys.stderr, flush=True)
-    raw_catalog, game_setting = scan_problem_catalog(problem_root)
+    print(f"[{type}] scanning problem catalog under {problem_root} ...", file=sys.stderr, flush=True)
+    raw_catalog, catalog_summary = scan_problem_catalog(problem_root)
     assert_spec_problems_in_catalog(spec, list(raw_catalog))
     n_problems = len(set(spec.problem_ids))
     print(
-        f"[mkp] loading {n_problems} experiment problem(s) ...",
+        f"[{type}] loading {n_problems} experiment problem(s) ...",
         file=sys.stderr,
         flush=True,
     )
     validate_spec_problems_in_repository(problem_repository, spec)
-    print("[mkp] loading solver configs ...", file=sys.stderr, flush=True)
+    print(f"[{type}] loading solver configs ...", file=sys.stderr, flush=True)
     solver_configs = SolverConfigsSnapshot.build(spec, Path(solver_root))
-    print("[mkp] building shared-memory problem bank ...", file=sys.stderr, flush=True)
+    print(f"[{type}] building shared-memory problem bank ...", file=sys.stderr, flush=True)
     problem_bank = ProblemBank.build_for_spec(repository=problem_repository, spec=spec)
-    print("[mkp] engine build done.", file=sys.stderr, flush=True)
+    print(f"[{type}] engine build done.", file=sys.stderr, flush=True)
     builders = dict(solver_builders) if solver_builders is not None else default_solver_builders()
     return SimulationBundle(
-        spec=spec,
-        game_setting=game_setting,
-        catalog=tuple(raw_catalog),
-        problem_bank=problem_bank,
-        solver_configs=solver_configs,
-        solver_builders=builders,
+        spec=spec, # 實驗設定
+        catalog_summary=catalog_summary, # 題庫索引摘要
+        catalog=tuple(raw_catalog), # 
+        problem_bank=problem_bank, # 題庫
+        solver_configs=solver_configs, # 算法設定
+        solver_builders=builders, 
         default_rng=cast(DefaultRngFactory, np.random.default_rng),
         solver_root=Path(solver_root),
         output_root=Path(output_root),
@@ -73,11 +75,11 @@ def build(
 class SimulationBundle:
     """Engine 組裝結果：catalog、ProblemBank、預載 solver 設定、求解器建構子與 RNG 工廠；`Simulator` 由 `NewSimulatorWithSeed` 建立。"""
 
-    spec: ExperimentSpec
-    game_setting: GameSetting
+    spec: ExperimentSpec # 實驗規格
+    catalog_summary: CatalogSummary # 題庫索引摘要
     catalog: tuple[ProblemCatalogEntry, ...]
-    problem_bank: ProblemBank
-    solver_configs: SolverConfigsSnapshot
+    problem_bank: ProblemBank # 題庫
+    solver_configs: SolverConfigsSnapshot # 算法的設定
     solver_builders: dict[str, SolverBuilder]
     default_rng: DefaultRngFactory
     solver_root: Path

@@ -9,7 +9,15 @@ stop_condition:
   max_iterations: 1000
   max_seconds: null
 params:
+  
+  - pop_size: 20 # 種群大小
+    z: 0.08 # 轉換機率
+    # 選填：連續基因 → 二元判斷之比較函數（見 mkp.tools.continuous_to_binary.CTF_KINDS）；省略時等同 tanh_abs
+    ctf: tanh_abs
   - pop_size: 20
-    z: 0.08
-    # 選填：ctf 與 bsma 相同；省略時 tanh_abs
-    # ctf: tanh_abs
+    z: 0.03
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.15
+    ctf: abs_pow_17
+

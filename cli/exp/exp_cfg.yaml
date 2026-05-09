@@ -13,7 +13,7 @@ dataset_settings:
   # WEISH 題庫
   - experiment-id: weish-bsma-bsca
     dataset: WEISH # 
-    problems: [weish01, weish02, weish03] # 題目清單
+    problems: [weish01, weish02, weish03, weish04] # 題目清單
   
   # HP 題庫
   - experiment-id: hp-bsma-bsca
