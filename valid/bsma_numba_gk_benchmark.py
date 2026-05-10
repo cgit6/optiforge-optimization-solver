@@ -116,16 +116,15 @@ def main() -> None:
             )
         print()
 
-    print("CLI 等價實驗（worker_curriculum，需 bsma_numba 已註冊）範例：\n")
+    print("CLI 等價實驗（process worker，需 bsma_numba 已註冊）範例：\n")
     print(
         "  .venv/bin/python -m mkp.cli.run \\\n"
-        "    --experiment-id bsma_numba_gk_worker \\\n"
-        "    --problem-type mkp --dataset GK \\\n"
+        "    --experiment-name bsma_numba_gk_worker \\\n"
+        "    --type mkp --dataset GK \\\n"
         "    --problems mk_gk01,mk_gk02 \\\n"
-        "    --solver bsma_numba --repeat 20 --base-seed 42 \\\n"
-        "    --output-dir output --execution-mode worker_curriculum\n"
+        "    --solver bsma_numba --repeat 20 --seed 42 --worker 4\n"
     )
-    print("參考（純 bsma）：將 --solver bsma 與 experiment-id 改名即可。\n")
+    print("參考（純 bsma）：將 --solver bsma 與 experiment-name 改名即可。\n")
 
 
 if __name__ == "__main__":

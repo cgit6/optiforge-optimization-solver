@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -8,56 +6,40 @@ from mkp.engine.models import ExperimentSpec, ProblemModel, SolveResult, RunTask
 
 def test_experiment_spec_valid():
     spec = ExperimentSpec(
-        experiment_id="exp_001",
+        experiment_name="exp_001",
         dataset="WEISH",
         problem_ids=("weish01", "weish02"),
         solver_ids=("solver_a",),
         repeat=3,
         seed=42,
-        param_set_index=0,
-        output_dir=Path("output/exp_001"),
-        benchmark_enabled=True,
+        worker_count=2,
     )
     assert spec.repeat == 3
     assert spec.problem_ids == ("weish01", "weish02")
-
-
-def test_experiment_spec_invalid_execution_mode():
-    with pytest.raises(ValueError, match="execution_mode"):
-        ExperimentSpec(
-            experiment_id="exp_001",
-            dataset="WEISH",
-            problem_ids=("weish01",),
-            solver_ids=("solver_a",),
-            repeat=1,
-            seed=1,
-            param_set_index=0,
-            output_dir=Path("output/exp_001"),
-            execution_mode="invalid_mode",  # type: ignore[arg-type]
-        )
+    assert spec.worker_count == 2
 
 
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"experiment_id": ""},
+        {"experiment_name": ""},
         {"dataset": ""},
         {"problem_ids": tuple()},
         {"solver_ids": tuple()},
+        {"problem_ids": ("weish01", "weish01")},
+        {"solver_ids": ("solver_a", "solver_a")},
         {"repeat": 0},
-        {"param_set_index": -1},
+        {"worker_count": 0},
     ],
 )
 def test_experiment_spec_invalid(kwargs):
     base = dict(
-        experiment_id="exp_001",
+        experiment_name="exp_001",
         dataset="WEISH",
         problem_ids=("weish01",),
         solver_ids=("solver_a",),
         repeat=1,
         seed=1,
-        param_set_index=0,
-        output_dir=Path("output/exp_001"),
     )
     base.update(kwargs)
     with pytest.raises(ValueError):

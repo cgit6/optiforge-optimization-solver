@@ -7,6 +7,12 @@ name = "mkp"
 version = "0.0.1"
 description = "MKP simulation system"
 requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.11",
+    "tqdm>=4.0",
+    "ruamel.yaml>=0.18",
+]
 
 [project.optional-dependencies]
 numba = ["numba>=0.59"]
@@ -21,9 +27,11 @@ packages = [
     "mkp",
     "mkp.cli",
     "mkp.cli.convert",
+    "mkp.cli.exp",
     "mkp.cli.run",
     "mkp.converter",
     "mkp.engine",
+    "mkp.experiment",
     "mkp.simulator",
     "mkp.solver",
     "mkp.tools",

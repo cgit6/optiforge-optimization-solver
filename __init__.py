@@ -4,7 +4,7 @@ from .cli.convert import getConverter, listConverters, register
 from .cli.run import executeSimulator
 from .converter import transformToMomery, transformToYaml
 from .engine import Engine, SimulationBundle, SolverConfigsSnapshot, build
-from .engine.models import BaseProblem, ExecutionMode, ExperimentSpec, MKPProblem, ProblemModel, SolveResult, TSPProblem, RunTask
+from .engine.models import BaseProblem, ExperimentSpec, MKPProblem, ProblemModel, SolveResult, TSPProblem, RunTask
 from .engine.problem_registry import ProblemRegistry, ProblemTypeSpec
 from .engine.repository import ProblemRepository
 from .simulator import Simulator, SimulatorResult, SimulatorRunRow
@@ -32,7 +32,6 @@ def __getattr__(name: str):
 
 __all__ = [
     "Engine",
-    "ExecutionMode",
     "ExperimentSpec",
     "SimulationBundle",
     "SimulatorResult",

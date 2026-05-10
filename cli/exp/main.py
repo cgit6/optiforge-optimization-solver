@@ -1,23 +1,36 @@
 
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from ...experiment import ExperimentReport, build
 
 
-"""
-命令行: python -m mkp.cli.exp 
+def parser() -> argparse.ArgumentParser:
+    arg_parser = argparse.ArgumentParser(description="Run an experiment config.")
+    arg_parser.add_argument("--config", default="cli/exp/exp_cfg.yaml")
+    arg_parser.add_argument("--problem-root", default="configs/problems")
+    arg_parser.add_argument("--solver-root", default="configs/solvers")
+    arg_parser.add_argument("--output-root", default="output")
+    arg_parser.add_argument("--eval", default="literature_mkp")
+    return arg_parser
 
 
-"""
-def main():
-    pass
-    # 1. 創建 Engine
+def main(argv: list[str] | None = None) -> ExperimentReport:
+    args = parser().parse_args(argv)
+    experiment = build(
+        Path(args.config),
+        problem_root=Path(args.problem_root),
+        solver_root=Path(args.solver_root),
+    )
+    return experiment.run(
+        eval_name=args.eval,
+        problem_root=Path(args.problem_root),
+        solver_root=Path(args.solver_root),
+        output_root=Path(args.output_root),
+    )
 
-    # 2. 創建實驗物件(Experiment.build())
-    # 如果成功進行第三步，如果失敗則停止運行
-    # 3. 執行實驗(experiment.Run())
-    # 如果失敗停止運行
 
-
-
-# Engine 模組應該支持多題庫&多算法的實驗環境
-
-# 流程上是利用一個題庫跑所有算法的參數設定後進行評估(eval)如果有通過才執行下一個題庫，直到最後一個題庫都跑完或是 seed 超過範圍了才終止流程。結果保存的時間點是每一個題庫通過後就寫到資料夾中，如果中間有評估沒過在停止流程之前把資料夾清空。
-# 輸出的文件結構要想一下，現在有多收集數量、多題庫、多算法、多參數。
+if __name__ == "__main__":
+    main()

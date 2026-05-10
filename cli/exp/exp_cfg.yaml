@@ -1,31 +1,118 @@
 
 
 # 實驗設定
-seed: [1, 10000] # 隨機種子範圍
+experiment_name: literature_mkp_seed_search
+seed: [1, 1000000] # 隨機種子範圍
 collects: 20 # 收集幾組符合期望的結果
-solvers: [bsma_numba,bsca_numba] # 實驗的演算法
-output: [bsma_numba, bsca_numba] # 輸出位置 output/檔名
+worker: 10 # 併發數
+solvers: [bsma_numba, bsca_numba, brlsmasca_numba] # 實驗的演算法
 repeat: 20 # 重複次數 
+
+evaluation:
+  pdev_tolerance: 0.005
+  alpha: 0.05
+  target_algorithm: HSMSCA
+
+stages:
+  transfer:
+    variants:
+      - combo_id: transfer_hsmsca_v
+        solver: brlsmasca_numba
+        param_set_index: 0
+        algorithm: HSMSCA
+        transfer_type: V
+        tags: [baseline_transfer]
+  param:
+    variants:
+      - combo_id: param_isma_z008
+        solver: bsma_numba
+        param_set_index: 0
+        algorithm: ISMA
+        tags: [target_z]
+      - combo_id: param_isca_a15
+        solver: bsca_numba
+        param_set_index: 1
+        algorithm: ISCA
+        tags: [target_a]
+      - combo_id: param_hsmsca_default
+        solver: brlsmasca_numba
+        param_set_index: 0
+        algorithm: HSMSCA
+        tags: [default_hybrid]
+  final:
+    variants:
+      - combo_id: final_hsmsca_default
+        solver: brlsmasca_numba
+        param_set_index: 0
+        algorithm: HSMSCA
+      - combo_id: final_isma_z008
+        solver: bsma_numba
+        param_set_index: 0
+        algorithm: ISMA
+      - combo_id: final_isca_a15
+        solver: bsca_numba
+        param_set_index: 1
+        algorithm: ISCA
+
+static_baselines: []
 
 # 題庫設定
 # 實驗會依序執行
 dataset_settings:
   # WEISH 題庫
-  - experiment-id: weish-bsma-bsca
+  - experiment-id: weish-expTest # 根據
     dataset: WEISH # 
-    problems: [weish01, weish02, weish03, weish04] # 題目清單
-  
+    problems: [weish01, weish02, weish03, weish04, weish05, weish06, weish07, weish08, weish09, weish10, weish11, weish12, weish13, weish14, weish15, weish16, weish17, weish18, weish19, weish20, weish21, weish22, weish23, weish24, weish25, weish26, weish27, weish28, weish29, weish30] # 題目清單
+    type: mkp
+    base_line: # 選填，可以設定靜態的基準值
+      - problem: weish01
+        avg: 5445
+        best: 5445
+        PDev: 0
+      - problem: weish02
+        avg: 3000
+        best: 4400
+        PDev: 1000 
+      # 其它待填充  
+
+  # WEING 題庫
+  - experiment-id: weing-expTest
+    dataset: WEING # 
+    problems: [weing1, weing2, weing3, weing4, weing5, weing6, weing7, weing8] # 題目清單
+    type: mkp
+
   # HP 題庫
-  - experiment-id: hp-bsma-bsca
+  - experiment-id: hp-expTest
     dataset: HP # 
-    problems: [hp1, hp2, hp3] # 題目清單
+    problems: [hp1, hp2] # 題目清單
+    type: mkp
 
   # PET 題庫
-  - experiment-id: pet-bsma-bsca
+  - experiment-id: pet-expTest
     dataset: PET # 
-    problems: [pet1, pet2, pet3] # 題目清單
+    problems: [pet2, pet3, pet4, pet5, pet6, pet7] # 題目清單
+    type: mkp
 
   # SENT 題庫
-  - experiment-id: sent-bsma-bsca
+  - experiment-id: sent-expTest
     dataset: SENT # 
-    problems: [sent1, sent2, sent3] # 題目清單
+    problems: [sent01, sent02] # 題目清單
+    type: mkp
+
+  # PB 題庫
+  - experiment-id: pb-expTest
+    dataset: PB # 
+    problems: [pb1, pb2, pb4, pb5, pb6, pb7] # 題目清單
+    type: mkp
+
+  # OR5x100 題庫
+  - experiment-id: OR5x100-expTest
+    dataset: OR5x100 # 
+    problems: [OR5x100-0.25_1, OR5x100-0.25_2, OR5x100-0.25_3, OR5x100-0.25_4, OR5x100-0.25_5] # 題目清單
+    type: mkp
+
+  # GK 題庫
+  - experiment-id: gk-expTest
+    dataset: GK # 
+    problems: [mk_gk01, mk_gk02, mk_gk03, mk_gk04, mk_gk05, mk_gk06, mk_gk07, mk_gk08, mk_gk09] # 題目清單
+    type: mkp 

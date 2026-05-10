@@ -69,6 +69,37 @@ params:
     assert config["param_set_index"] == 1
 
 
+def test_load_all_returns_each_param_set(tmp_path: Path) -> None:
+    root = tmp_path / "solvers"
+    _write_solver_yaml(
+        root / "stub_solver.yaml",
+        """
+solver_id: stub_solver
+solver_class: StubMaxIterationsSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 10
+  max_seconds: null
+params:
+  - {pop_size: 20, z: 0.08}
+  - {pop_size: 30, z: 0.03}
+""".strip(),
+    )
+    loader = SolverConfigLoader(config_root=root)
+
+    configs = loader.load_all("stub_solver")
+
+    assert [config["param_set_index"] for config in configs] == [0, 1]
+    assert [config["params"] for config in configs] == [
+        {"pop_size": 20, "z": 0.08},
+        {"pop_size": 30, "z": 0.03},
+    ]
+
+
 def test_solver_id_must_match_file_name(tmp_path: Path):
     root = tmp_path / "solvers"
     _write_solver_yaml(

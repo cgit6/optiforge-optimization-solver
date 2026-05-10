@@ -11,7 +11,8 @@ from ...engine.repository import ProblemRepository
 from ...simulator import SimulatorResult
 from ...tools.show import write_simulator_result
 from ...tools.solver_config_loader import SolverConfigLoader
-from ...tools.stat import result_entries, summarize
+
+DEFAULT_OUTPUT_ROOT = Path("output")
 
 def _splitProblemIds(raw: str) -> tuple[str, ...]:
     """將命令參數 problems 中逗號分隔的題目清單轉換為 tuple 格式"""
@@ -20,10 +21,18 @@ def _splitProblemIds(raw: str) -> tuple[str, ...]:
         raise ValueError("CSV argument cannot be empty.")
     return values
 
+
+def _splitSolverIds(raw: str) -> tuple[str, ...]:
+    """將命令參數 solver 轉換為 tuple；多 solver 由 CLI 驗證層拒絕。"""
+    values = tuple(part.strip() for part in raw.split(",") if part.strip())
+    if not values:
+        raise ValueError("--solver must contain at least one solver id.")
+    return values
+
 def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root: Path) -> None:
-    """執行模擬前驗證：單一 solver、題目 YAML、solver YAML capability 是否相容。"""
+    """執行模擬前驗證：題目 YAML、solver YAML capability 是否相容。"""
     if len(spec.solver_ids) != 1:
-        raise ValueError("Exactly one solver is required: pass a single id (see --solver).")
+        raise ValueError("cli.run accepts exactly one solver; use cli.exp for multi-solver experiments.")
 
     repository = ProblemRepository(config_root=problem_root)
     problem_metas = [
@@ -38,52 +47,39 @@ def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root:
         )
     problem_type, encoding, direction = next(iter(triples))
 
-    solver_config = SolverConfigLoader(config_root=solver_root).load(
-        spec.solver_ids[0],
-        param_set_index=spec.param_set_index,
-    )
-    capabilities = solver_config["capabilities"]
-    if problem_type not in {str(v) for v in capabilities["problem_types"]}:
-        raise ValueError(
-            f"solver={spec.solver_ids[0]} is incompatible: "
-            f"problem_type={problem_type!r} not in {capabilities['problem_types']!r}"
-        )
-    if encoding not in {str(v) for v in capabilities["encodings"]}:
-        raise ValueError(
-            f"solver={spec.solver_ids[0]} is incompatible: "
-            f"encoding={encoding!r} not in {capabilities['encodings']!r}"
-        )
-    if direction not in {str(v) for v in capabilities["directions"]}:
-        raise ValueError(
-            f"solver={spec.solver_ids[0]} is incompatible: "
-            f"direction={direction!r} not in {capabilities['directions']!r}"
-        )
+    loader = SolverConfigLoader(config_root=solver_root)
+    for solver_id in spec.solver_ids:
+        solver_configs = loader.load_all(solver_id)
+        capabilities = solver_configs[0]["capabilities"]
+        if problem_type not in {str(v) for v in capabilities["problem_types"]}:
+            raise ValueError(
+                f"solver={solver_id} is incompatible: "
+                f"problem_type={problem_type!r} not in {capabilities['problem_types']!r}"
+            )
+        if encoding not in {str(v) for v in capabilities["encodings"]}:
+            raise ValueError(
+                f"solver={solver_id} is incompatible: "
+                f"encoding={encoding!r} not in {capabilities['encodings']!r}"
+            )
+        if direction not in {str(v) for v in capabilities["directions"]}:
+            raise ValueError(
+                f"solver={solver_id} is incompatible: "
+                f"direction={direction!r} not in {capabilities['directions']!r}"
+            )
 
 def parser() -> argparse.ArgumentParser:
     """獲取命令行參數，並解析&驗證"""
 
     # 1. 解析命令行參數
-    parser = argparse.ArgumentParser(description="Run MKP simulation batch.")
-    parser.add_argument("--experiment-id", required=True)
-    parser.add_argument("--problem-type", default="mkp")
+    parser = argparse.ArgumentParser(description="Run simulation batch.")
+    parser.add_argument("--experiment-name", required=True)
+    parser.add_argument("--type", required=True, dest="problem_type")
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--problems", required=True, help="Comma-separated problem ids")
-    parser.add_argument("--solver", required=True, help="Single solver id (one algorithm per run)")
-    parser.add_argument(
-        "--param-set-index",
-        required=True,
-        type=int,
-        help="0-based index of the solver params set to use from the solver YAML.",
-    )
-    parser.add_argument("--repeat", required=True, type=int)
-    parser.add_argument("--base-seed", required=True, type=int)
-    parser.add_argument("--output-dir", required=True)
-    parser.add_argument(
-        "--execution-mode",
-        choices=("grid", "worker_curriculum"),
-        default="grid",
-        help="Task order: grid = problem×solver×repeat; worker_curriculum = solver×repeat×problem.",
-    )
+    parser.add_argument("--solver", required=True, help="Single solver id")
+    parser.add_argument("--repeat", default=20, type=int)
+    parser.add_argument("--seed", default=55688, type=int)
+    parser.add_argument("--worker", default=1, type=int, dest="worker_count")
     # 2. 返回 parser 物件
     return parser
 
@@ -96,38 +92,29 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
 
     # 這邊應該先驗證
     problem_ids = _splitProblemIds(args.problems) # 拆解題目清單為 tuple 格式
-    solver = str(args.solver).strip() # 移除求解器ID前後的空白字元
-    
-    if not solver:
-        raise ValueError("--solver must be a non-empty string.")
-    
-    output_base = Path(args.output_dir)
-    output_dir = output_base / args.experiment_id
+    solver_ids = _splitSolverIds(args.solver) # 拆解求解器清單為 tuple 格式
+
     return ExperimentSpec(
-        experiment_id=args.experiment_id, # 實驗ID
-        problem_type=str(args.problem_type).strip() or "mkp",
+        experiment_name=args.experiment_name, # 實驗名稱
+        problem_type=str(args.problem_type).strip(),
         dataset=args.dataset, # 資料集
         problem_ids=problem_ids, # 問題ID
-        solver_ids=(solver,), # 求解器ID，為了保持可以支持多個求解器ID的tuple格式的擴容條件
+        solver_ids=solver_ids, # 求解器ID
         repeat=args.repeat, # 獨立實驗次數
-        seed=args.base_seed, # 基礎種子，這邊應該可以彈性選擇要不要填如果填了就固定如果不填就隨機生成
-        param_set_index=args.param_set_index, # 演算法參數組 index
-        output_dir=output_dir, # 輸出目錄
-        benchmark_enabled=False, # 是否啟用 benchmark
-        execution_mode=args.execution_mode, # 任務展開與執行順序
-        # 這邊應該要添加一個這個物件的狀態是否被創建過了如果被創建過之後就都不能改了
+        seed=args.seed, # 基礎種子
+        worker_count=args.worker_count, # worker 數
     )
 
 
 
 def executeSimulator(
     spec: ExperimentSpec,
-    output_root: Path | str,
     *,
     problem_root: Path | str = Path("configs/problems"),
     solver_root: Path | str = Path("configs/solvers"),
+    output_root: Path | str = DEFAULT_OUTPUT_ROOT,
 ) -> SimulatorResult:
-    """驗證參數、`engine.build`、建立 `Simulator`，依 repeat / execution_mode 選串行或併發路徑；批次跑完後交給 show 模組輸出檔案。"""
+    """驗證參數、`engine.build`、建立 `Simulator`，依 worker_count 選串行或併發路徑後輸出結果。"""
     problem_root_p = Path(problem_root)
     solver_root_p = Path(solver_root)
     output_root_p = Path(output_root) # 由命令參數決定的輸出目錄
@@ -140,27 +127,19 @@ def executeSimulator(
         spec=spec,
         problem_root=problem_root_p,
         solver_root=solver_root_p,
-        output_root=output_root_p,
     )
     try:
-        solver_id = spec.solver_ids[0]
-        sim = bundle.NewSimulatorWithSeed(solver_id, spec.seed)
+        sim = bundle.new_simulator()
         # 1. 執行模擬
-        if spec.execution_mode == "worker_curriculum":
-            simulator_result = sim.run_batch(spec) # 併發執行
+        if spec.worker_count > 1:
+            simulator_result = sim.run_batch() # 併發執行
         else:
-            simulator_result = sim.run_sequential(spec) # 單一執行
-
-        # 2. 結果與統計
-        entries = result_entries(simulator_result)
-        summary = summarize(entries)
+            simulator_result = sim.run_sequential() # 單一執行
 
         # 3. 輸出: 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
         write_simulator_result(
             simulator_result,
-            entries,
-            summary,
-            experiment_id=spec.experiment_id,
+            experiment_name=spec.experiment_name,
             output_root=output_root_p,
         )
         return simulator_result

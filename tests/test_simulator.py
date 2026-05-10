@@ -13,7 +13,6 @@ from mkp.simulator import Simulator, SimulatorResult
 from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
 from mkp.tools.show import write_simulator_result
-from mkp.tools.stat import result_entries, summarize
 
 
 class RecordingSolver:
@@ -79,7 +78,7 @@ params:
     )
 
 
-def _build_simulator(tmp_path: Path, solver, *, experiment_id: str = "exp_sim") -> tuple[Simulator, Path]:
+def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim") -> tuple[Simulator, Path]:
     """回傳 (Simulator, output_root)；輸出檔由呼叫端透過 write_simulator_result 觸發。"""
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
@@ -90,14 +89,12 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_id: str = "exp_sim") 
 
     repository = ProblemRepository(config_root=problem_root)
     bank_spec = ExperimentSpec(
-        experiment_id=experiment_id,
+        experiment_name=experiment_name,
         dataset="WEISH",
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
         seed=0,
-        param_set_index=0,
-        output_dir=output_root,
     )
     bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
     registry = SolverRegistry()
@@ -106,6 +103,7 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_id: str = "exp_sim") 
     validator = Validator()
     return (
         Simulator(
+            spec=bank_spec,
             problem_bank=bank,
             solver_registry=registry,
             solver_configs=solver_configs,
@@ -135,25 +133,24 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
         assert row.validation_report.is_feasible is True
 
         # 透過 show 模組寫出（保留檔案存在性的覆蓋率）
-        simulator_result = SimulatorResult(rows=(row,))
-        entries = result_entries(simulator_result)
-        summary = summarize(entries)
+        simulator_result = SimulatorResult(
+            rows=(row,),
+            variant_params={("stub_solver", 0): {}},
+        )
         write_simulator_result(
             simulator_result,
-            entries,
-            summary,
-            experiment_id="exp_sim",
+            experiment_name="exp_sim",
             output_root=output_root,
         )
-        assert (output_root / "exp_sim" / "runs.csv").exists()
-        assert (output_root / "exp_sim" / "runs.json").exists()
+        assert (output_root / "exp_sim" / "stub_solver" / "param_0" / "runs.csv").exists()
+        assert (output_root / "exp_sim" / "stub_solver" / "param_0" / "runs.json").exists()
     finally:
         simulator.close()
 
 
 def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
     solver1 = RecordingSolver()
-    simulator1, _ = _build_simulator(tmp_path / "a", solver1, experiment_id="exp_a")
+    simulator1, _ = _build_simulator(tmp_path / "a", solver1, experiment_name="exp_a")
     task = RunTask(
         problem_id="weish01",
         dataset="WEISH",
@@ -168,7 +165,7 @@ def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
         simulator1.close()
 
     solver2 = RecordingSolver()
-    simulator2, _ = _build_simulator(tmp_path / "b", solver2, experiment_id="exp_b")
+    simulator2, _ = _build_simulator(tmp_path / "b", solver2, experiment_name="exp_b")
     try:
         simulator2.run_task(task)
     finally:
@@ -198,14 +195,12 @@ def test_run_task_fail_fast_when_problem_load_fails(tmp_path: Path):
 
 def test_solver_snapshot_build_fails_when_solver_dir_has_no_yaml(tmp_path: Path) -> None:
     bank_spec = ExperimentSpec(
-        experiment_id="exp_fail",
+        experiment_name="exp_fail",
         dataset="WEISH",
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
         seed=0,
-        param_set_index=0,
-        output_dir=tmp_path / "output",
     )
     with pytest.raises(FileNotFoundError):
         SolverConfigsSnapshot.build(bank_spec, tmp_path / "missing-solvers")

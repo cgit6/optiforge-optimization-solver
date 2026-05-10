@@ -30,6 +30,18 @@ class SolverConfigLoader:
         self._validate_schema(data, solver_id=solver_id, file_path=config_path)
         return self._normalize_config(data, param_set_index=param_set_index, file_path=config_path)
 
+    def load_all(self, solver_id: str) -> tuple[dict[str, Any], ...]:
+        config_path = self._config_root / f"{solver_id}.yaml"
+        if not config_path.exists():
+            raise FileNotFoundError(f"Solver config YAML not found: {config_path}")
+
+        data = self._read_yaml(config_path)
+        self._validate_schema(data, solver_id=solver_id, file_path=config_path)
+        return tuple(
+            self._normalize_config(data, param_set_index=index, file_path=config_path)
+            for index in range(len(data["params"]))
+        )
+
     def _read_yaml(self, path: Path) -> dict[str, Any]:
         try:
             with path.open("r", encoding="utf-8") as fh:

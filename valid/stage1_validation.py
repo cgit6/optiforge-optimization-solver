@@ -65,8 +65,10 @@ def run_refactor_once(
 ) -> ComparableResult:
     app_entry = _resolve_app_entry(app_entry)
     argv = [
-        "--experiment-id",
+        "--experiment-name",
         f"stage1_refactor_{scenario.dataset}_{scenario.problem_id}_{seed}",
+        "--type",
+        "mkp",
         "--dataset",
         scenario.dataset,
         "--problems",
@@ -75,13 +77,16 @@ def run_refactor_once(
         scenario.solver_id,
         "--repeat",
         "1",
-        "--base-seed",
+        "--seed",
         str(seed),
-        "--output-dir",
-        str(output_root),
     ]
-    results = app_entry(argv, problem_root=problem_root, solver_root=solver_root)
-    run_result, validation_report, _ = results[0]
+    results = app_entry(argv, problem_root=problem_root, solver_root=solver_root, output_root=output_root)
+    if hasattr(results, "rows"):
+        row = results.rows[0]
+        run_result = row.solve_result
+        validation_report = row.validation_report
+    else:
+        run_result, validation_report, _ = results[0]
     return ComparableResult(
         best_objective=int(run_result.best_objective),
         feasible=bool(validation_report.is_feasible),

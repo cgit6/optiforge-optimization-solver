@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -19,6 +19,7 @@ T = TypeVar("T")
 @dataclass(frozen=True)
 class ResultEntry:
     problem_type: str
+    dataset: str # 題庫
     encoding: str
     direction: str
     problem_id: str
@@ -56,13 +57,33 @@ class ExcludedCounts:
 
 
 @dataclass(frozen=True)
+class SummaryMeta:
+    solver_id: str
+    param_set_index: int
+    params: dict[str, Any]
+    experiment: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.solver_id.strip():
+            raise ValueError("solver_id cannot be empty.")
+        if self.param_set_index < 0:
+            raise ValueError("param_set_index must be >= 0.")
+        if not isinstance(self.params, dict):
+            raise ValueError("params must be a mapping.")
+        if not isinstance(self.experiment, dict):
+            raise ValueError("experiment must be a mapping.")
+        object.__setattr__(self, "params", dict(self.params))
+        object.__setattr__(self, "experiment", dict(self.experiment))
+
+
+@dataclass(frozen=True)
 class OverallSummary:
     total_runs: int
     valid_run_count: int
     feasible_rate: float
     avg_runtime: float
     avg_evaluation_count: float
-    param_set_index: int | None
+    meta: SummaryMeta
     best_known: int | float | None
     avg_objective: int | float | None
     std_objective: float | None
@@ -76,11 +97,10 @@ class OverallSummary:
 @dataclass(frozen=True)
 class ProblemSolverSummary:
     problem_type: str
+    dataset: str
     encoding: str
     direction: str
     problem_id: str
-    solver_id: str
-    param_set_index: int | None
     run_count: int
     valid_run_count: int
     feasible_rate: float
@@ -109,6 +129,7 @@ def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
         _build_entry(
             row.solve_result,
             row.validation_report,
+            dataset=row.task.dataset,
             repeat_index=row.task.repeat_index,
             param_set_index=row.task.param_set_index,
         )
@@ -116,10 +137,10 @@ def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
     ]
 
 
-def summarize(entries: list[ResultEntry]) -> SummaryReport:
+def summarize(entries: list[ResultEntry], *, meta: SummaryMeta) -> SummaryReport:
+    _validate_single_variant(entries, meta)
     valid_entries = [e for e in entries if _is_valid_for_objective_stats(e)]
     overall_direction = _single_value({e.direction for e in entries})
-    overall_param_set_index = _single_value({e.param_set_index for e in entries})
     overall_best_known = _single_value({e.best_known for e in entries})
     overall_avg_objective = _avg_objective(valid_entries)
     overall = OverallSummary(
@@ -128,7 +149,7 @@ def summarize(entries: list[ResultEntry]) -> SummaryReport:
         feasible_rate=(sum(1 for e in entries if e.feasible) / len(entries)) if entries else 0.0,
         avg_runtime=(sum(e.runtime for e in entries) / len(entries)) if entries else 0.0,
         avg_evaluation_count=(sum(e.evaluation_count for e in entries) / len(entries)) if entries else 0.0,
-        param_set_index=overall_param_set_index,
+        meta=meta,
         best_known=overall_best_known,
         avg_objective=overall_avg_objective,
         std_objective=_objective_std(valid_entries),
@@ -141,24 +162,28 @@ def summarize(entries: list[ResultEntry]) -> SummaryReport:
 
     grouped: dict[tuple[str, str, str], list[ResultEntry]] = defaultdict(list)
     for entry in entries:
-        grouped[(entry.problem_type, entry.problem_id, entry.solver_id)].append(entry)
+        grouped[
+            (
+                entry.problem_type,
+                entry.dataset,
+                entry.problem_id,
+            )
+        ].append(entry)
 
     by_problem_solver: list[ProblemSolverSummary] = []
-    for (problem_type, problem_id, solver_id), bucket in sorted(grouped.items()):
+    for (problem_type, dataset, problem_id), bucket in sorted(grouped.items()):
         valid_bucket = [e for e in bucket if _is_valid_for_objective_stats(e)]
         direction = bucket[0].direction
-        param_set_index = _single_value({e.param_set_index for e in bucket})
         best_known_value = _single_value({e.best_known for e in bucket})
         avg_objective = _avg_objective(valid_bucket)
         best_known_gaps = [e.best_known_gap for e in valid_bucket if e.best_known_gap is not None]
         by_problem_solver.append(
             ProblemSolverSummary(
                 problem_type=problem_type,
+                dataset=dataset,
                 encoding=bucket[0].encoding,
                 direction=direction,
                 problem_id=problem_id,
-                solver_id=solver_id,
-                param_set_index=param_set_index,
                 run_count=len(bucket),
                 valid_run_count=len(valid_bucket),
                 feasible_rate=(sum(1 for e in bucket if e.feasible) / len(bucket)) if bucket else 0.0,
@@ -186,10 +211,22 @@ def summarize(entries: list[ResultEntry]) -> SummaryReport:
     return SummaryReport(overall=overall, by_problem_solver=by_problem_solver)
 
 
+def _validate_single_variant(entries: list[ResultEntry], meta: SummaryMeta) -> None:
+    variants = {(entry.solver_id, entry.param_set_index) for entry in entries}
+    expected = (meta.solver_id, meta.param_set_index)
+    if not variants or variants == {expected}:
+        return
+    raise ValueError(
+        "SummaryReport must contain exactly one solver variant: "
+        f"expected={expected!r}, got={sorted(variants)!r}"
+    )
+
+
 def _build_entry(
     solve_result: SolveResult,
     validation_report: ValidationReport,
     *,
+    dataset: str,
     repeat_index: int,
     param_set_index: int,
 ) -> ResultEntry:
@@ -209,6 +246,7 @@ def _build_entry(
 
     return ResultEntry(
         problem_type=validation_report.problem_type,
+        dataset=dataset,
         encoding=validation_report.encoding,
         direction=validation_report.direction,
         problem_id=solve_result.problem_id,

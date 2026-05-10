@@ -114,22 +114,20 @@ def test_compatibility_check_rejects_mkp_solver_for_tsp(tmp_path: Path) -> None:
         direction="max",
     )
     spec = ExperimentSpec(
-        experiment_id="bad",
+        experiment_name="bad",
         problem_type="tsp",
         dataset="SMALL",
         problem_ids=("tsp5",),
         solver_ids=("bsma",),
         repeat=1,
         seed=1,
-        param_set_index=0,
-        output_dir=tmp_path / "out",
     )
 
     with pytest.raises(ValueError, match="incompatible"):
         validate_execute_args(spec, problem_root, solver_root)
 
 
-def test_tsp_worker_curriculum_uses_shared_memory(tmp_path: Path) -> None:
+def test_tsp_worker_uses_shared_memory(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "out"
@@ -155,9 +153,9 @@ params:
 
     result = main(
         [
-            "--experiment-id",
+            "--experiment-name",
             "tsp_worker",
-            "--problem-type",
+            "--type",
             "tsp",
             "--dataset",
             "SMALL",
@@ -165,23 +163,20 @@ params:
             "tsp5",
             "--solver",
             "nn_tsp_v1",
-            "--param-set-index",
-            "0",
             "--repeat",
             "2",
-            "--base-seed",
+            "--seed",
             "7",
-            "--output-dir",
-            str(output_root),
-            "--execution-mode",
-            "worker_curriculum",
+            "--worker",
+            "2",
         ],
         problem_root=problem_root,
         solver_root=solver_root,
+        output_root=output_root,
     )
 
     assert len(result.rows) == 2
-    with (output_root / "tsp_worker" / "summary.json").open("r", encoding="utf-8") as fh:
+    with (output_root / "tsp_worker" / "nn_tsp_v1" / "param_0" / "summary.json").open("r", encoding="utf-8") as fh:
         summary = json.load(fh)
     assert summary["by_problem_solver"][0]["problem_type"] == "tsp"
     assert summary["by_problem_solver"][0]["direction"] == "min"

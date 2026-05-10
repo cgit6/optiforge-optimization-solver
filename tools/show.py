@@ -4,41 +4,83 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
+from collections import defaultdict
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
-from .stat import ResultEntry, ResultMetadata, SummaryReport
+from .stat import ResultEntry, ResultMetadata, SummaryMeta, SummaryReport, result_entries, summarize
 
 if TYPE_CHECKING:
     from ..simulator.core import SimulatorResult
 
-
 def write_simulator_result(
     simulator_result: "SimulatorResult",
-    entries: list[ResultEntry],
-    summary: SummaryReport,
     *,
-    experiment_id: str,
+    experiment_name: str,
     output_root: Path | str,
-) -> Path:
-    if not experiment_id.strip():
-        raise ValueError("experiment_id cannot be empty")
-    if len(entries) != len(simulator_result.rows):
-        raise ValueError("entries length must match simulator_result rows")
+    variant_metadata: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
+) -> tuple[Path, ...]:
+    if not experiment_name.strip():
+        raise ValueError("experiment_name cannot be empty")
+    # 1. 資料轉換
+    entries = result_entries(simulator_result)
+    # 2. 分組
+    grouped: dict[tuple[str, int], list[ResultEntry]] = defaultdict(list)
+    for entry in entries:
+        grouped[(entry.solver_id, entry.param_set_index)].append(entry)
 
-    output_dir = Path(output_root) / experiment_id
+    written_dirs: list[Path] = []
+
+    # 3. 寫檔案
+    for (solver_id, param_set_index), bucket in sorted(grouped.items()):
+        output_dir = Path(output_root) / experiment_name / solver_id / f"param_{param_set_index}"
+        _reset_variant_output_dir(output_dir)
+
+        _write_runs_csv(output_dir / "runs.csv", bucket)
+        _write_runs_json(output_dir / "runs.json", bucket)
+        _write_summary(
+            output_dir,
+            summarize(
+                bucket,
+                meta=_summary_meta(
+                    simulator_result,
+                    solver_id,
+                    param_set_index,
+                    variant_metadata=variant_metadata,
+                ),
+            ),
+        ) # 寫統計結果
+        written_dirs.append(output_dir)
+    return tuple(written_dirs)
+
+
+def _summary_meta(
+    simulator_result: "SimulatorResult",
+    solver_id: str,
+    param_set_index: int,
+    *,
+    variant_metadata: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
+) -> SummaryMeta:
+    key = (solver_id, param_set_index)
+    if key not in simulator_result.variant_params:
+        raise KeyError(
+            f"variant params not found for summary: solver_id={solver_id!r}, "
+            f"param_set_index={param_set_index!r}"
+        )
+    return SummaryMeta(
+        solver_id=solver_id,
+        param_set_index=param_set_index,
+        params=simulator_result.variant_params[key],
+        experiment=dict((variant_metadata or {}).get(key, {})),
+    )
+
+
+def _reset_variant_output_dir(output_dir: Path) -> None:
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    _write_runs_csv(output_dir / "runs.csv", entries)
-    _write_runs_json(output_dir / "runs.json", entries)
-
-    legacy_runs_jsonl = output_dir / "runs.jsonl"
-    if legacy_runs_jsonl.exists():
-        legacy_runs_jsonl.unlink()
-
-    _write_summary(output_dir, summary)
-    return output_dir
 
 
 def _entry_to_json_dict(entry: ResultEntry) -> dict[str, Any]:
@@ -85,15 +127,16 @@ def _write_summary(output_dir: Path, summary: SummaryReport) -> None:
 
 
 def _summary_to_csv_rows(summary: SummaryReport) -> list[dict[str, Any]]:
+    meta_json = json.dumps(asdict(summary.overall.meta), ensure_ascii=False, sort_keys=True)
     rows: list[dict[str, Any]] = [
         {
             "row_type": "overall",
+            "meta_json": meta_json,
             "problem_type": "",
+            "dataset": "",
             "encoding": "",
             "direction": summary.overall.direction or "",
             "problem_id": "",
-            "solver_id": "",
-            "param_set_index": summary.overall.param_set_index,
             "run_count": summary.overall.total_runs,
             "valid_run_count": summary.overall.valid_run_count,
             "feasible_rate": summary.overall.feasible_rate,
@@ -118,12 +161,12 @@ def _summary_to_csv_rows(summary: SummaryReport) -> list[dict[str, Any]]:
         rows.append(
             {
                 "row_type": "group",
+                "meta_json": meta_json,
                 "problem_type": group.problem_type,
+                "dataset": group.dataset,
                 "encoding": group.encoding,
                 "direction": group.direction,
                 "problem_id": group.problem_id,
-                "solver_id": group.solver_id,
-                "param_set_index": group.param_set_index,
                 "run_count": group.run_count,
                 "valid_run_count": group.valid_run_count,
                 "feasible_rate": group.feasible_rate,
@@ -149,6 +192,7 @@ def _summary_to_csv_rows(summary: SummaryReport) -> list[dict[str, Any]]:
 def _empty_entry() -> ResultEntry:
     return ResultEntry(
         problem_type="",
+        dataset="",
         encoding="",
         direction="",
         problem_id="",

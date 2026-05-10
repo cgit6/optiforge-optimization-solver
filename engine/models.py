@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Literal, Mapping, Optional
 
 import numpy as np
 
-ExecutionMode = Literal["grid", "worker_curriculum"]
 Direction = Literal["max", "min"] # 優化問題
 
 
@@ -47,23 +45,18 @@ def _normalize_best_known(value: int | float | None, *, allow_none: bool) -> int
 @dataclass(frozen=True)
 class ExperimentSpec:
     """實驗規格"""
-    experiment_id: str # 實驗 id
+    experiment_name: str # 實驗名稱
     dataset: str # 題庫
     problem_ids: tuple[str, ...]
     solver_ids: tuple[str, ...]
     repeat: int
     seed: int # 隨機種子
-    param_set_index: int
-    output_dir: Path
-    problem_type: str = "" 
-    benchmark_enabled: bool = False
-    execution_mode: ExecutionMode = "grid"
-
-    isbuild: bool = True # 是否創建(創建後就不能再改這個物件中的值了)
+    worker_count: int = 1
+    problem_type: str = "mkp"
 
     def __post_init__(self) -> None:
-        if not self.experiment_id.strip():
-            raise ValueError("experiment_id cannot be empty.")
+        if not self.experiment_name.strip():
+            raise ValueError("experiment_name cannot be empty.")
         if not self.problem_type.strip():
             raise ValueError("problem_type cannot be empty.")
         if not self.dataset.strip():
@@ -72,8 +65,8 @@ class ExperimentSpec:
             raise ValueError("repeat must be > 0.")
         if self.seed < 0:
             raise ValueError("seed must be >= 0.")
-        if self.param_set_index < 0:
-            raise ValueError("param_set_index must be >= 0.")
+        if self.worker_count <= 0:
+            raise ValueError("worker_count must be > 0.")
         if not self.problem_ids:
             raise ValueError("problem_ids cannot be empty.")
         if not self.solver_ids:
@@ -82,8 +75,10 @@ class ExperimentSpec:
             raise ValueError("problem_ids cannot contain empty value.")
         if any(not solver_id.strip() for solver_id in self.solver_ids):
             raise ValueError("solver_ids cannot contain empty value.")
-        if self.execution_mode not in ("grid", "worker_curriculum"):
-            raise ValueError("execution_mode must be 'grid' or 'worker_curriculum'.")
+        if len(set(self.problem_ids)) != len(self.problem_ids):
+            raise ValueError("problem_ids cannot contain duplicate value.")
+        if len(set(self.solver_ids)) != len(self.solver_ids):
+            raise ValueError("solver_ids cannot contain duplicate value.")
 
 
 @dataclass(frozen=True, kw_only=True)
