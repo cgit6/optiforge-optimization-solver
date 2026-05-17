@@ -4,6 +4,7 @@ from pathlib import Path
 
 from mkp.valid.bsma_equivalence import max_outer_iterations_for_budget, verify_equivalence_streaming
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import buildProblemRegistry, problemBuilders
 
 
 def test_weish_streaming_equivalence_smoke_matches_memory_path(tmp_path: Path):
@@ -15,7 +16,10 @@ def test_weish_streaming_equivalence_smoke_matches_memory_path(tmp_path: Path):
     max_iter = max_outer_iterations_for_budget(budget=budget)
     seed = 101
     trace_dir = tmp_path / "stream_traces"
-    repository = ProblemRepository(config_root=repo_root / "configs/problems")
+    repository = ProblemRepository(
+        config_root=repo_root / "configs/problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    )
     problem = repository.load("WEISH", "weish01")
 
     mem = verify_equivalence(
@@ -47,7 +51,10 @@ def test_weish_streaming_smoke_two_problems_small_budget(tmp_path: Path):
     budget = 2000
     max_iter = max_outer_iterations_for_budget(budget=budget)
     trace_dir = tmp_path / "batch_traces"
-    repository = ProblemRepository(config_root=repo_root / "configs/problems")
+    repository = ProblemRepository(
+        config_root=repo_root / "configs/problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    )
     for problem_id in ("weish01", "weish30"):
         problem = repository.load("WEISH", problem_id)
         report = verify_equivalence_streaming(

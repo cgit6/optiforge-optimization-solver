@@ -1,9 +1,10 @@
-"""BRLSMASCA test 版的 Numba 加速版 v2：與 ``BRLSMASCATestCore`` 主迴圈對齊。
+"""BRLSMASCA test 版的 Numba 加速版 v2：與 ``BRLSMASCATestCore`` 主迴圈語意對齊。
 
 為 **BSMA + BSCA** 混合體，對齊時須同時遵守兩邊慣例：
 
 - **BSMA 段**：``update_sma_weight`` 每列使用 ``np.random.random(items)`` 一次取向量（不可逐格 ``random()``）；
-  ``sma_local`` 的 ``vb`` / ``vc`` 用 ``np.random.uniform(..., size=items)``；v2 將只依賴 row 的 ``pool`` 移到物品迴圈外。
+  ``sma_local`` 的 ``vb`` / ``vc`` 用 ``np.random.uniform(..., size=items)``；同伴選擇以 direct randint 保留
+  「排除自己且兩者不同」語意。
 - **BSCA 段**：``sca_sin`` / ``sca_cos`` 用 ``math.pi``、``math.sin`` / ``math.cos``（與 ``BSCA`` 參考版一致）。
 - **族群 dtype**：``sort_pop`` 產出之 ``pop_sol`` / ``individual_best_sol`` 須為 **float64**（與 ``BSMA.sort_pop`` 一致）；若為 ``int``，SCA 浮點中間值寫入會被 NumPy 截斷，與本檔全程 float 的 njit 版會分叉。
 
@@ -23,7 +24,8 @@ import numpy as np
 from numba import njit
 from scipy.optimize import linprog
 
-from ..engine.models import ProblemModel, SolveResult
+from ..engine.models import SolveResult
+from ..problem import ProblemModel
 from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
@@ -99,13 +101,29 @@ def _policy_action(best_method: np.ndarray, i: int) -> int:
     if r < 0.9:
         return int(best_method[i])
     bm = int(best_method[i])
-    k = 0
-    small = np.empty(3, dtype=np.int64)
-    for a in range(4):
-        if a != bm:
-            small[k] = a
-            k += 1
-    return int(np.random.choice(small))
+    pick = np.random.randint(0, 3)
+    if pick >= bm:
+        return pick + 1
+    return pick
+
+
+@njit(cache=True)
+def _map_position_excluding(pos: int, excluded: int) -> int:
+    if pos >= excluded:
+        return pos + 1
+    return pos
+
+
+@njit(cache=True)
+def _select_two_distinct_indices_excluding(pop_size: int, excluded: int) -> tuple[int, int]:
+    first_pos = np.random.randint(0, pop_size - 1)
+    second_pos = np.random.randint(0, pop_size - 2)
+    if second_pos >= first_pos:
+        second_pos += 1
+    return (
+        _map_position_excluding(first_pos, excluded),
+        _map_position_excluding(second_pos, excluded),
+    )
 
 
 @njit(cache=True)
@@ -149,7 +167,6 @@ def _sma_local_row(
     max_iter: int,
     pop_size: int,
     items: int,
-    pool: np.ndarray,
     vb: np.ndarray,
     vc: np.ndarray,
     ctf_id: int,
@@ -161,16 +178,9 @@ def _sma_local_row(
     # 與 ``BSMA_numba`` / ``BRLSMASCATestCore.sma_local`` 相同：一次取向量 uniform
     vb[:] = np.random.uniform(-a, a, items)
     vc[:] = np.random.uniform(-b, b, items)
-    k = 0
-    for kk in range(pop_size):
-        if kk != row:
-            pool[k] = kk
-            k += 1
     for j in range(items):
         r = np.random.random()
-        pair = np.random.choice(pool[: pop_size - 1], 2, replace=False)
-        a_idx = int(pair[0])
-        b_idx = int(pair[1])
+        a_idx, b_idx = _select_two_distinct_indices_excluding(pop_size, row)
         if r < p:
             pop_sol[row, j] = gbest_sol[j] + vb[j] * (
                 W[row, j] * pop_sol[a_idx, j] - pop_sol[b_idx, j]
@@ -254,7 +264,6 @@ def _bscasma_main_loop_numba(
     idx_work: np.ndarray,
     acc_res: np.ndarray,
     gbest_sol: np.ndarray,
-    pool: np.ndarray,
     vb: np.ndarray,
     vc: np.ndarray,
     ctf_id: int,
@@ -287,7 +296,6 @@ def _bscasma_main_loop_numba(
                     max_iter,
                     pop_size,
                     items,
-                    pool,
                     vb,
                     vc,
                     ctf_id,
@@ -404,10 +412,19 @@ class BRLSMASCATestNumbaCore:
         self.best_method = self.init_best_method()
 
     def init_best_method(self) -> np.ndarray:
-        probabilities = list(self._prob_arr_template)
-        elements = [0, 1, 2, 3]
-        random_selection = np.random.choice(elements, size=self.pop_size, p=probabilities)
-        return np.asarray(random_selection, dtype=np.int64)
+        thresholds = np.cumsum(np.asarray(self._prob_arr_template, dtype=np.float64))
+        random_selection = np.empty(self.pop_size, dtype=np.int64)
+        for i in range(self.pop_size):
+            r = np.random.random()
+            if r < thresholds[0]:
+                random_selection[i] = 0
+            elif r < thresholds[1]:
+                random_selection[i] = 1
+            elif r < thresholds[2]:
+                random_selection[i] = 2
+            else:
+                random_selection[i] = 3
+        return random_selection
 
     def pseudo_utility(self) -> np.ndarray:
         constraints = np.concatenate((self.capacities, np.ones(self.items)))
@@ -481,7 +498,6 @@ class BRLSMASCATestNumbaCore:
         idx_work = np.empty(ps, dtype=np.int64)
         acc_res = np.zeros(dm, dtype=np.float64)
         gbest_sol = np.empty(it, dtype=np.float64)
-        pool = np.empty(max(1, ps - 1), dtype=np.int64)
         vb = np.empty(it, dtype=np.float64)
         vc = np.empty(it, dtype=np.float64)
         rng_seed = int(self.seed) if self.seed is not None else 0
@@ -512,7 +528,6 @@ class BRLSMASCATestNumbaCore:
             idx_work,
             acc_res,
             gbest_sol,
-            pool,
             vb,
             vc,
             self.ctf_id,

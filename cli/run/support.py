@@ -8,11 +8,10 @@ from pathlib import Path
 from ... import engine
 from ...engine.models import ExperimentSpec
 from ...engine.repository import ProblemRepository
+from ...problem import buildProblemRegistry, problemBuilders
 from ...simulator import SimulatorResult
 from ...tools.show import write_simulator_result
 from ...tools.solver_config_loader import SolverConfigLoader
-
-DEFAULT_OUTPUT_ROOT = Path("output")
 
 def _splitProblemIds(raw: str) -> tuple[str, ...]:
     """將命令參數 problems 中逗號分隔的題目清單轉換為 tuple 格式"""
@@ -23,7 +22,7 @@ def _splitProblemIds(raw: str) -> tuple[str, ...]:
 
 
 def _splitSolverIds(raw: str) -> tuple[str, ...]:
-    """將命令參數 solver 轉換為 tuple；多 solver 由 CLI 驗證層拒絕。"""
+    """將命令參數 solver 轉換為 tuple"""
     values = tuple(part.strip() for part in raw.split(",") if part.strip())
     if not values:
         raise ValueError("--solver must contain at least one solver id.")
@@ -34,7 +33,8 @@ def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root:
     if len(spec.solver_ids) != 1:
         raise ValueError("cli.run accepts exactly one solver; use cli.exp for multi-solver experiments.")
 
-    repository = ProblemRepository(config_root=problem_root)
+    problem_registry = buildProblemRegistry(problemBuilders())
+    repository = ProblemRepository(config_root=problem_root, registry=problem_registry)
     problem_metas = [
         repository.read_metadata(spec.dataset, problem_id, spec.problem_type)
         for problem_id in spec.problem_ids
@@ -86,7 +86,7 @@ def parser() -> argparse.ArgumentParser:
 
 build_parser = parser
 
-
+# 一次模擬只允許執行一種問題類型
 def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
     """建立 ExperimentSpec 物件"""
 
@@ -96,7 +96,7 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
 
     return ExperimentSpec(
         experiment_name=args.experiment_name, # 實驗名稱
-        problem_type=str(args.problem_type).strip(),
+        problem_type=str(args.problem_type).strip(), # 問題類型
         dataset=args.dataset, # 資料集
         problem_ids=problem_ids, # 問題ID
         solver_ids=solver_ids, # 求解器ID
@@ -110,23 +110,20 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
 def executeSimulator(
     spec: ExperimentSpec,
     *,
-    problem_root: Path | str = Path("configs/problems"),
-    solver_root: Path | str = Path("configs/solvers"),
-    output_root: Path | str = DEFAULT_OUTPUT_ROOT,
+    problem_root: Path = Path("configs/problems"),
+    solver_root: Path = Path("configs/solvers"),
+    output_root: Path = Path("output"),
 ) -> SimulatorResult:
-    """驗證參數、`engine.build`、建立 `Simulator`，依 worker_count 選串行或併發路徑後輸出結果。"""
-    problem_root_p = Path(problem_root)
-    solver_root_p = Path(solver_root)
-    output_root_p = Path(output_root) # 由命令參數決定的輸出目錄
+    """驗證參數、`engine.build`、建立 `Simulator`，依 worker_count 選串行或併發路徑後輸出結果"""
 
     # 驗證命令行參數合法性
-    validate_execute_args(spec, problem_root_p, solver_root_p)
+    validate_execute_args(spec, problem_root, solver_root)
 
     # 建立 SimulationBundle 物件
     bundle = engine.build(
         spec=spec,
-        problem_root=problem_root_p,
-        solver_root=solver_root_p,
+        problem_root=problem_root,
+        solver_root=solver_root,
     )
     try:
         sim = bundle.new_simulator()
@@ -140,7 +137,7 @@ def executeSimulator(
         write_simulator_result(
             simulator_result,
             experiment_name=spec.experiment_name,
-            output_root=output_root_p,
+            output_root=output_root,
         )
         return simulator_result
 

@@ -100,7 +100,7 @@ def test_app_cli_success_runs_all_solver_params(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml", param_count=2)
 
     argv = [
@@ -130,7 +130,7 @@ def test_app_cli_worker_runs_batch(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     argv = [
@@ -187,7 +187,7 @@ def test_app_cli_fail_fast_when_problem_yaml_missing(tmp_path: Path):
 def test_app_cli_fail_fast_when_solver_yaml_missing(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
 
     argv = [
         "--experiment-name",
@@ -213,7 +213,7 @@ def test_app_cli_fail_fast_when_solver_yaml_missing(tmp_path: Path):
 def test_app_cli_missing_required_arg_rejected(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     argv = [
@@ -238,7 +238,7 @@ def test_app_cli_missing_required_arg_rejected(tmp_path: Path):
 def test_validate_execute_args_rejects_multiple_solvers_for_cli_run(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     spec = ExperimentSpec(
         experiment_name="e",
         dataset="WEISH",

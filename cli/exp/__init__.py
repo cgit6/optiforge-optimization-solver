@@ -1,10 +1,11 @@
-"""Experiment CLI entrypoint."""
+"""Experiment CLI entrypoint and bundled evaluators."""
 
 from __future__ import annotations
 
-from .main import main, parser
+from .literature_mkp import literature_mkp_evaluator
+from .main import main
 
 __all__ = [
+    "literature_mkp_evaluator",
     "main",
-    "parser",
 ]

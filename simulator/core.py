@@ -22,6 +22,7 @@ from ..engine.bank import (
     configure_problem_bank_worker,
     get_worker_problem_bank,
 )
+from ..problem.registry import ProblemTypeSpec
 from ..solver.BSMA import BSMASolver
 from ..solver.BSMA_numba import BSMANumbaSolver
 from ..solver.BSMA_numba_v2 import BSMANumbaSolver as BSMANumbaSolverV2
@@ -79,11 +80,12 @@ class SimulatorResult:
 
 def _configure_curriculum_process_worker(
     packs: tuple[ProblemShmPack, ...],
+    problem_specs: tuple[ProblemTypeSpec, ...],
     solver_configs: dict[tuple[str, int], dict[str, Any]],
     progress_queue: Any | None = None,
 ) -> None:
     global _worker_solver_configs, _worker_progress_queue
-    configure_problem_bank_worker(packs)
+    configure_problem_bank_worker(packs, problem_specs)
     _worker_solver_configs = {k: copy.deepcopy(v) for k, v in solver_configs.items()}
     _worker_progress_queue = progress_queue
 
@@ -343,6 +345,7 @@ class Simulator:
 
         worker_cfgs = self._solver_configs.to_worker_init_dict()
         packs = self._problem_bank.export_worker_packs()
+        problem_specs = self._problem_bank.export_worker_problem_specs()
         per_chunk_results: list[list[SolveResult] | None] = [None] * len(chunks)
         # 作業系統
         if sys.platform == "win32":
@@ -358,7 +361,7 @@ class Simulator:
                     max_workers=max_workers, # 併發數量
                     mp_context=mp_context,
                     initializer=_configure_curriculum_process_worker,
-                    initargs=(packs, worker_cfgs, progress_queue),
+                    initargs=(packs, problem_specs, worker_cfgs, progress_queue),
                 ) as pool:
                     future_to_index = {
                         pool.submit(_run_task_chunk_process, chunk): idx

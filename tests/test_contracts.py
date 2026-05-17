@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from mkp.engine.models import ExperimentSpec, ProblemModel, SolveResult, RunTask
+from mkp.engine.models import ExperimentSpec, SolveResult, RunTask
+from mkp.problem import ProblemModel
 
 
 def test_experiment_spec_valid():

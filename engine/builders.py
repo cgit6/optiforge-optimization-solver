@@ -18,7 +18,7 @@ from ..solver.BSCA_numba_v2 import BSCANumbaSolver as BSCANumbaSolverV2
 
 
 # 註冊新求解
-def default_solver_builders() -> dict[str, SolverBuilder]:
+def solverBuilders() -> dict[str, SolverBuilder]:
     return {
         "stub_solver": lambda: StubMaxIterationsSolver(),
         "bsma": lambda: BSMASolver(),

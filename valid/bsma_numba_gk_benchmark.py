@@ -24,6 +24,7 @@ except ImportError as exc:
     raise SystemExit("請先安裝 numba：pip install numba") from exc
 
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.solver.BSMA import BSMASolver
 from mkp.solver.BSMA_numba import BSMANumbaSolver
 
@@ -33,7 +34,8 @@ def _repo_root() -> Path:
 
 
 def _load_problem(problem_id: str):
-    return ProblemRepository(config_root=_repo_root() / "configs" / "problems").load(
+    registry = buildProblemRegistry(problemBuilders())
+    return ProblemRepository(config_root=_repo_root() / "configs" / "problems", registry=registry).load(
         "GK", problem_id, "mkp"
     )
 

@@ -5,11 +5,12 @@ from typing import Any, Callable, Protocol
 
 import numpy as np
 
-from ..engine.models import BaseProblem, MKPProblem, SolveResult
+from ..engine.models import SolveResult
+from ..problem import MKPProblem, Problem
 
 
 class Solver(Protocol):
-    def solve(self, problem: BaseProblem, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
+    def solve(self, problem: Problem, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
         """Solve one problem instance and return standardized SolveResult."""
 
 
@@ -44,7 +45,7 @@ class SolverRegistry:
 class StubMaxIterationsSolver:
     """Simple solver for contract tests."""
 
-    def solve(self, problem: BaseProblem, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
+    def solve(self, problem: Problem, config: dict[str, Any], rng: np.random.Generator) -> SolveResult:
         if not isinstance(problem, MKPProblem):
             raise TypeError("StubMaxIterationsSolver only supports MKPProblem")
         stop_condition = config.get("stop_condition", {})

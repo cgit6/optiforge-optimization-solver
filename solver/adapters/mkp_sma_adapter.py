@@ -5,7 +5,7 @@ import time
 import numpy as np
 from scipy.optimize import linprog
 
-from ...engine.models import MKPProblem
+from ...problem import MKPProblem
 
 
 class MKPSMAAdapter:

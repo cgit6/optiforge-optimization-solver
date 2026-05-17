@@ -10,7 +10,7 @@ import numpy as np
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 
-from ..engine.models import ProblemModel
+from ..problem import ProblemModel
 
 # 定義一個函數的界面(輸入是路徑，輸出是題目)
 ProblemPayloadConverter = Callable[[Path], dict[str, Any]]
@@ -34,7 +34,7 @@ def dat_file_path(*, repo_root: Path, dataset: str, problem_id: str) -> Path:
 
 # (內部函數) 組合出轉換後的 yaml 保存路徑
 def yaml_file_path(*, repo_root: Path, dataset: str, problem_id: str) -> Path:
-    return repo_root / "configs/problems" / dataset / f"{problem_id}.yaml"
+    return repo_root / "configs/problems" / "mkp" / dataset / f"{problem_id}.yaml"
 
 
 # 執行轉換操作
@@ -99,6 +99,7 @@ def transformToYaml(
     body = {
         "problem_id": problem_id, # 問題編號
         "dataset": dataset, # 題庫名稱
+        "problem_type": "mkp",
         "items": payload["items"], # 物品數量
         "dim": payload["dim"], # 維度數量
         "values": _flow_sequence(list(payload["values"])), # 物品價值

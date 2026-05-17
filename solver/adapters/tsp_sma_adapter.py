@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...engine.models import TSPProblem
+from ...problem import TSPProblem
 
 
 class TSPSMAAdapter:

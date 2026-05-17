@@ -9,8 +9,11 @@ def test_cli_exp_main_builds_and_runs_experiment(monkeypatch, tmp_path: Path) ->
     calls: dict[str, object] = {}
 
     class FakeExperiment:
-        def run(self, *, eval_name, problem_root, solver_root, output_root):
-            calls["run"] = (eval_name, problem_root, solver_root, output_root)
+        def register(self, name, evaluator):
+            calls["register"] = (name, evaluator)
+
+        def run(self, *, problem_root, solver_root, output_root):
+            calls["run"] = (problem_root, solver_root, output_root)
             return "report"
 
     def fake_build(exp_path, *, problem_root, solver_root):
@@ -18,21 +21,12 @@ def test_cli_exp_main_builds_and_runs_experiment(monkeypatch, tmp_path: Path) ->
         return FakeExperiment()
 
     monkeypatch.setattr(exp_main, "build", fake_build)
+    monkeypatch.setattr(exp_main, "DEFAULT_CONFIG_PATH", tmp_path / "exp.yaml")
+    monkeypatch.setattr(exp_main, "DEFAULT_PROBLEM_ROOT", tmp_path / "problems")
+    monkeypatch.setattr(exp_main, "DEFAULT_SOLVER_ROOT", tmp_path / "solvers")
+    monkeypatch.setattr(exp_main, "DEFAULT_OUTPUT_ROOT", tmp_path / "output")
 
-    result = exp_main.main(
-        [
-            "--config",
-            str(tmp_path / "exp.yaml"),
-            "--problem-root",
-            str(tmp_path / "problems"),
-            "--solver-root",
-            str(tmp_path / "solvers"),
-            "--output-root",
-            str(tmp_path / "output"),
-            "--eval",
-            "custom",
-        ]
-    )
+    result = exp_main.main()
 
     assert result == "report"
     assert calls["build"] == (
@@ -40,8 +34,8 @@ def test_cli_exp_main_builds_and_runs_experiment(monkeypatch, tmp_path: Path) ->
         tmp_path / "problems",
         tmp_path / "solvers",
     )
+    assert calls["register"][0] == "literature_mkp"
     assert calls["run"] == (
-        "custom",
         tmp_path / "problems",
         tmp_path / "solvers",
         tmp_path / "output",

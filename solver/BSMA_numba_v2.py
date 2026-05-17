@@ -1,10 +1,11 @@
-"""BSMA 的 Numba 加速版：與 [solver/BSMA.py](BSMA.py) 的 ``BSMACore`` 主迴圈數值行為對齊。
+"""BSMA 的 Numba 加速版：與 [solver/BSMA.py](BSMA.py) 的 ``BSMACore`` 主迴圈語意對齊。
 
 需安裝 ``numba``（例如 ``pip install numba``）。``linprog`` / ``pseudo_utility`` 仍在 Python。
 
 主迴圈為**單一** ``@njit``（開頭於 njit 內 ``np.random.seed``，Numba RNG 不中斷）。
 族群排序使用與 ``BSMA._argsort_pop_fit_desc_deterministic`` 相同的**決定性**規則（純 njit）：
 適配值非遞增，同值則列索引較小者在前。
+SMA local 的兩個同伴以 direct randint 抽樣，保留「排除自己且兩者不同」語意，但不保證與舊版逐 seed bitwise 相同。
 """
 
 
@@ -20,7 +21,8 @@ import numpy as np
 from numba import njit
 from scipy.optimize import linprog
 
-from ..engine.models import ProblemModel, SolveResult
+from ..engine.models import SolveResult
+from ..problem import ProblemModel
 from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
@@ -137,6 +139,25 @@ def _sort_pop_desc_deterministic_inplace(
 
 
 @njit(cache=True)
+def _map_position_excluding(pos: int, excluded: int) -> int:
+    if pos >= excluded:
+        return pos + 1
+    return pos
+
+
+@njit(cache=True)
+def _select_two_distinct_indices_excluding(pop_size: int, excluded: int) -> tuple[int, int]:
+    first_pos = np.random.randint(0, pop_size - 1)
+    second_pos = np.random.randint(0, pop_size - 2)
+    if second_pos >= first_pos:
+        second_pos += 1
+    return (
+        _map_position_excluding(first_pos, excluded),
+        _map_position_excluding(second_pos, excluded),
+    )
+
+
+@njit(cache=True)
 def _bsma_main_loop_numba(
     pop_sol: np.ndarray,
     pop_fit: np.ndarray,
@@ -155,7 +176,6 @@ def _bsma_main_loop_numba(
     acc_res: np.ndarray,
     vb: np.ndarray,
     vc: np.ndarray,
-    pool: np.ndarray,
     tmp_sol: np.ndarray,
     tmp_fit: np.ndarray,
     idx_work: np.ndarray,
@@ -214,16 +234,9 @@ def _bsma_main_loop_numba(
                 p = np.tanh(abs(pop_fit[i] - gbest_fit))
                 vb[:] = np.random.uniform(-a, a, items)
                 vc[:] = np.random.uniform(-b, b, items)
-                k = 0
-                for jj2 in range(pop_size):
-                    if jj2 != i:
-                        pool[k] = jj2
-                        k += 1
                 for j in range(items):
                     r = np.random.random()
-                    pair = np.random.choice(pool[: pop_size - 1], 2, replace=False)
-                    a_idx = int(pair[0])
-                    b_idx = int(pair[1])
+                    a_idx, b_idx = _select_two_distinct_indices_excluding(pop_size, i)
                     if r < p:
                         pop_sol[i, j] = gbest_sol[j] + vb[j] * (
                             W[i, j] * pop_sol[a_idx, j] - pop_sol[b_idx, j]
@@ -349,7 +362,6 @@ class BSMANumbaCore:
         acc_res = np.zeros(dm, dtype=np.float64)
         vb = np.empty(it, dtype=np.float64)
         vc = np.empty(it, dtype=np.float64)
-        pool = np.empty(ps - 1, dtype=np.int64)
         tmp_sol = np.empty((ps, it), dtype=np.float64)
         tmp_fit = np.empty(ps, dtype=np.float64)
         idx_work = np.empty(ps, dtype=np.int64)
@@ -374,7 +386,6 @@ class BSMANumbaCore:
             acc_res,
             vb,
             vc,
-            pool,
             tmp_sol,
             tmp_fit,
             idx_work,

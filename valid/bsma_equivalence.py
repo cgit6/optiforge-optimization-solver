@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 from ruamel.yaml import YAML
 
-from ..engine.models import ProblemModel
+from ..problem import ProblemModel
 from ..solver.BSMA import BSMACore, BSMASolver
 
 
@@ -95,7 +95,9 @@ def _capture_new_loop_meta(problem: ProblemModel, seed: int, max_iterations: int
 
 
 def _build_problem_from_yaml(repo_root: Path, dataset: str, problem_id: str) -> ProblemModel:
-    file_path = repo_root / "configs/problems" / dataset / f"{problem_id}.yaml"
+    file_path = repo_root / "configs/problems" / "mkp" / dataset / f"{problem_id}.yaml"
+    if not file_path.is_file():
+        raise FileNotFoundError(f"problem YAML not found: {file_path}")
     yaml = YAML(typ="safe")
     data = yaml.load(file_path.read_text(encoding="utf-8"))
     return ProblemModel(

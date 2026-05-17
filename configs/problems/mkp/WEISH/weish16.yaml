@@ -1,5 +1,6 @@
-problem_id: weish15
+problem_id: weish16
 dataset: WEISH
+problem_type: mkp
 items: 60
 dim: 5
 values: [360, 83, 59, 130, 431, 67, 230, 52, 93, 125, 670, 892, 600, 38, 48, 147,
@@ -67,5 +68,5 @@ weights:
 - [27, 4, 96, 13, 1]
 - [11, 66, 2, 40, 18]
 - [91, 9, 81, 0, 88]
-capacities: [1130, 420, 1380, 1000, 1630]
-best_known: 7486
+capacities: [1200, 1300, 630, 1100, 1400]
+best_known: 7289

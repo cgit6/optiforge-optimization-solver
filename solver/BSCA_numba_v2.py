@@ -17,7 +17,8 @@ import numpy as np
 from numba import njit
 from scipy.optimize import linprog
 
-from ..engine.models import ProblemModel, SolveResult
+from ..engine.models import SolveResult
+from ..problem import ProblemModel
 from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic

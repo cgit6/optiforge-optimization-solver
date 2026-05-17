@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mkp.engine.models import ProblemModel, SolveResult, RunTask, TSPProblem
+from mkp.engine.models import SolveResult, RunTask
+from mkp.problem import ProblemModel, TSPProblem
 from mkp.simulator import SimulatorResult, SimulatorRunRow
 from mkp.solver.validator import Validator
 from mkp.tools.show import write_simulator_result

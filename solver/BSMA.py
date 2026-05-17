@@ -9,7 +9,8 @@ from typing import Any
 import numpy as np
 from scipy.optimize import linprog
 
-from ..engine.models import ProblemModel, SolveResult
+from ..engine.models import SolveResult
+from ..problem import ProblemModel
 from ..tools.continuous_to_binary import flip_probability, parse_ctf_kind
 
 # 這邊要改成 可以提交狀態(SolveResult.addAct(狀態, 編碼, extend))、對外暴露過程(extend 物件)

@@ -6,7 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from ..engine.models import MKPProblem, SolveResult
+from ..engine.models import SolveResult
+from ..problem import MKPProblem
 from .adapters.mkp_sma_adapter import MKPSMAAdapter
 from .sma_core import SMACore
 

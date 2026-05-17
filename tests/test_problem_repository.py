@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import buildProblemRegistry, problemBuilders
 
 
 def _write_problem_yaml(path: Path, content: str) -> None:
@@ -13,9 +14,13 @@ def _write_problem_yaml(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _repo(root: Path) -> ProblemRepository:
+    return ProblemRepository(config_root=root, registry=buildProblemRegistry(problemBuilders()))
+
+
 def test_load_valid_problem_yaml(tmp_path: Path):
     root = tmp_path / "problems"
-    problem_file = root / "WEISH" / "weish01.yaml"
+    problem_file = root / "mkp" / "WEISH" / "weish01.yaml"
     _write_problem_yaml(
         problem_file,
         """
@@ -33,7 +38,7 @@ capacities: [7, 8]
 """.strip(),
     )
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     model = repo.load("WEISH", "weish01")
 
     assert model.problem_id == "weish01"
@@ -41,6 +46,30 @@ capacities: [7, 8]
     assert model.items == 3
     assert model.dim == 2
     assert model.best_known == 100
+
+
+def test_load_does_not_fallback_to_legacy_dataset_path(tmp_path: Path):
+    root = tmp_path / "problems"
+    _write_problem_yaml(
+        root / "WEISH" / "weish01.yaml",
+        """
+problem_id: weish01
+dataset: WEISH
+items: 3
+dim: 2
+best_known: 100
+values: [10, 20, 30]
+weights:
+  - [1, 2]
+  - [3, 4]
+  - [5, 6]
+capacities: [7, 8]
+""".strip(),
+    )
+
+    repo = _repo(root)
+    with pytest.raises(FileNotFoundError, match=r"problems/mkp/WEISH/weish01\.yaml"):
+        repo.load("WEISH", "weish01")
 
 
 @pytest.mark.parametrize("missing_field", ["best_known", "values", "weights", "capacities"])
@@ -58,9 +87,9 @@ def test_load_missing_required_fields(tmp_path: Path, missing_field: str):
     }
     del lines[missing_field]
     content = "\n".join(lines.values())
-    _write_problem_yaml(root / "WEISH" / "weish01.yaml", content)
+    _write_problem_yaml(root / "mkp" / "WEISH" / "weish01.yaml", content)
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     with pytest.raises(ValueError, match="Missing required field"):
         repo.load("WEISH", "weish01")
 
@@ -119,9 +148,9 @@ capacities: [7]
 )
 def test_load_dimension_mismatch(tmp_path: Path, content: str, error_match: str):
     root = tmp_path / "problems"
-    _write_problem_yaml(root / "WEISH" / "weish01.yaml", content.strip())
+    _write_problem_yaml(root / "mkp" / "WEISH" / "weish01.yaml", content.strip())
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     with pytest.raises(ValueError, match=error_match):
         repo.load("WEISH", "weish01")
 
@@ -129,7 +158,7 @@ def test_load_dimension_mismatch(tmp_path: Path, content: str, error_match: str)
 def test_load_best_known_null_fails_fast(tmp_path: Path):
     root = tmp_path / "problems"
     _write_problem_yaml(
-        root / "WEISH" / "weish01.yaml",
+        root / "mkp" / "WEISH" / "weish01.yaml",
         """
 problem_id: weish01
 dataset: WEISH
@@ -145,7 +174,7 @@ capacities: [7, 8]
 """.strip(),
     )
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     with pytest.raises(ValueError, match="best_known must be a positive integer"):
         repo.load("WEISH", "weish01")
 
@@ -153,7 +182,7 @@ capacities: [7, 8]
 def test_load_best_known_zero_fails_fast(tmp_path: Path):
     root = tmp_path / "problems"
     _write_problem_yaml(
-        root / "WEISH" / "weish01.yaml",
+        root / "mkp" / "WEISH" / "weish01.yaml",
         """
 problem_id: weish01
 dataset: WEISH
@@ -169,7 +198,7 @@ capacities: [7, 8]
 """.strip(),
     )
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     with pytest.raises(ValueError, match="best_known must be a positive integer"):
         repo.load("WEISH", "weish01")
 
@@ -177,7 +206,7 @@ capacities: [7, 8]
 def test_load_best_known_negative_fail_fast(tmp_path: Path):
     root = tmp_path / "problems"
     _write_problem_yaml(
-        root / "WEISH" / "weish01.yaml",
+        root / "mkp" / "WEISH" / "weish01.yaml",
         """
 problem_id: weish01
 dataset: WEISH
@@ -193,7 +222,7 @@ capacities: [7, 8]
 """.strip(),
     )
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     with pytest.raises(ValueError, match="best_known must be a positive integer"):
         repo.load("WEISH", "weish01")
 
@@ -201,7 +230,7 @@ capacities: [7, 8]
 def test_load_hits_cache_on_second_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     root = tmp_path / "problems"
     _write_problem_yaml(
-        root / "WEISH" / "weish01.yaml",
+        root / "mkp" / "WEISH" / "weish01.yaml",
         """
 problem_id: weish01
 dataset: WEISH
@@ -217,7 +246,7 @@ capacities: [7, 8]
 """.strip(),
     )
 
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
     call_count = {"n": 0}
     original_read_yaml = repo._read_yaml
 
@@ -238,7 +267,7 @@ def test_concurrent_loads_do_not_corrupt_yaml_parser(tmp_path: Path) -> None:
     """ruamel YAML 實例非執行緒安全；並行 load 須通過（Simulator worker_curriculum）。"""
     root = tmp_path / "problems"
     _write_problem_yaml(
-        root / "WEISH" / "weish01.yaml",
+        root / "mkp" / "WEISH" / "weish01.yaml",
         """
 problem_id: weish01
 dataset: WEISH
@@ -253,7 +282,7 @@ weights:
 capacities: [7, 8]
 """.strip(),
     )
-    repo = ProblemRepository(config_root=root)
+    repo = _repo(root)
 
     def _load(_: int) -> str:
         return repo.load("WEISH", "weish01").problem_id

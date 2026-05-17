@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mkp.experiment import CheckResult, EvaluationReport, Experiment, FAIL, STRICT_PASS, build
+from mkp.experiment import DatasetEvalDecision, DatasetEvalInput, Experiment, FAIL, PASS, build
 
 
-def _write_problem_yaml(path: Path, *, problem_id: str = "p1", dataset: str = "DATA") -> None:
+def _write_problem_yaml(path: Path, *, problem_id: str, dataset: str = "DATA") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         f"""
@@ -45,7 +45,13 @@ params:
     )
 
 
-def _config_text(*, seed: str = "[1, 3]", collects: int = 1) -> str:
+def _config_text(*, seed: str = "[1, 3]", collects: int = 1, datasets: str | None = None) -> str:
+    dataset_block = datasets or """
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+"""
     return f"""
 experiment_name: exp_search
 seed: {seed}
@@ -53,63 +59,38 @@ collects: {collects}
 worker: 1
 solvers: [stub_solver]
 repeat: 1
-stages:
-  transfer:
-    variants:
-      - combo_id: transfer_stub_v
-        solver: stub_solver
-        param_set_index: 0
-        algorithm: HSMSCA
-        transfer_type: V
-  param:
-    variants:
-      - combo_id: param_stub
-        solver: stub_solver
-        param_set_index: 0
-        algorithm: HSMSCA
-  final:
-    variants:
-      - combo_id: final_stub
-        solver: stub_solver
-        param_set_index: 0
-        algorithm: HSMSCA
+evaluation:
+  name: custom
+  config: {{}}
 dataset_settings:
-  - experiment-id: exp1
-    dataset: DATA
-    problems: [p1]
-    type: mkp
+{dataset_block}
 """.strip()
 
 
-def _project(tmp_path: Path, *, seed: str = "[1, 3]", collects: int = 1) -> tuple[Experiment, Path, Path]:
+def _project(tmp_path: Path, *, seed: str = "[1, 3]", collects: int = 1, datasets: str | None = None) -> tuple[Experiment, Path, Path]:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     exp_path = tmp_path / "exp_cfg.yaml"
-    _write_problem_yaml(problem_root / "DATA" / "p1.yaml")
+    _write_problem_yaml(problem_root / "DATA" / "p1.yaml", problem_id="p1")
+    _write_problem_yaml(problem_root / "DATA" / "p2.yaml", problem_id="p2")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
-    exp_path.write_text(_config_text(seed=seed, collects=collects), encoding="utf-8")
+    exp_path.write_text(_config_text(seed=seed, collects=collects, datasets=datasets), encoding="utf-8")
     return build(exp_path, problem_root=problem_root, solver_root=solver_root), problem_root, solver_root
-
-
-def _custom_report(seed: int, verdict: str) -> EvaluationReport:
-    return EvaluationReport(
-        seed=seed,
-        verdict=verdict,
-        checks=(CheckResult(name="custom", verdict=verdict),),
-        problem_metrics=(),
-        combo_metrics=(),
-    )
 
 
 def test_custom_evaluator_collects_only_passing_seed(tmp_path: Path) -> None:
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1)
-    experiment.register(
-        "custom",
-        lambda _cfg, seed, _summaries: _custom_report(seed, STRICT_PASS if seed == 2 else FAIL),
-    )
 
+    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
+        passed = input_data.seed == 2
+        return DatasetEvalDecision(
+            passed=passed,
+            verdict=PASS if passed else FAIL,
+            message=f"seed={input_data.seed}",
+        )
+
+    experiment.register("custom", evaluator)
     report = experiment.run(
-        eval_name="custom",
         problem_root=problem_root,
         solver_root=solver_root,
         output_root=tmp_path / "output",
@@ -117,26 +98,60 @@ def test_custom_evaluator_collects_only_passing_seed(tmp_path: Path) -> None:
 
     assert report.collected_seeds == (2,)
     assert [attempt.collected for attempt in report.attempts] == [False, True]
-    assert not (tmp_path / "output" / "exp_search" / "collect_0000").exists()
     assert (
         tmp_path
         / "output"
         / "exp_search"
         / "collect_0001"
         / "exp1"
-        / "transfer"
         / "stub_solver"
         / "param_0"
         / "summary.json"
     ).exists()
 
 
+def test_dataset_fail_restarts_next_seed_from_first_dataset(tmp_path: Path) -> None:
+    datasets = """
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+  - experiment-id: exp2
+    dataset: DATA
+    problems: [p2]
+    type: mkp
+"""
+    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
+    calls: list[tuple[int, str]] = []
+
+    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
+        calls.append((input_data.seed, input_data.dataset_setting.experiment_id))
+        passed = not (input_data.seed == 1 and input_data.dataset_setting.experiment_id == "exp2")
+        return DatasetEvalDecision(
+            passed=passed,
+            verdict=PASS if passed else FAIL,
+            message=input_data.dataset_setting.experiment_id,
+        )
+
+    experiment.register("custom", evaluator)
+    report = experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    assert report.collected_seeds == (2,)
+    assert calls == [(1, "exp1"), (1, "exp2"), (2, "exp1"), (2, "exp2")]
+
+
 def test_collects_multiple_seeds_without_overwrite(tmp_path: Path) -> None:
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 3]", collects=2)
-    experiment.register("custom", lambda _cfg, seed, _summaries: _custom_report(seed, STRICT_PASS))
+    experiment.register(
+        "custom",
+        lambda _input: DatasetEvalDecision(passed=True, verdict=PASS, message="ok"),
+    )
 
     report = experiment.run(
-        eval_name="custom",
         problem_root=problem_root,
         solver_root=solver_root,
         output_root=tmp_path / "output",
@@ -149,10 +164,12 @@ def test_collects_multiple_seeds_without_overwrite(tmp_path: Path) -> None:
 
 def test_failed_seed_does_not_write_variant_outputs(tmp_path: Path) -> None:
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 1]", collects=1)
-    experiment.register("custom", lambda _cfg, seed, _summaries: _custom_report(seed, FAIL))
+    experiment.register(
+        "custom",
+        lambda _input: DatasetEvalDecision(passed=False, verdict=FAIL, message="failed"),
+    )
 
     report = experiment.run(
-        eval_name="custom",
         problem_root=problem_root,
         solver_root=solver_root,
         output_root=tmp_path / "output",

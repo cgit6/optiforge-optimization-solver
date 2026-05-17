@@ -8,8 +8,9 @@ import pytest
 
 from mkp.cli.run import main, validate_execute_args
 from mkp.engine import Engine
-from mkp.engine.models import ExperimentSpec, SolveResult, TSPProblem
+from mkp.engine.models import ExperimentSpec, SolveResult
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import TSPProblem, buildProblemRegistry, problemBuilders
 from mkp.solver.validator import Validator
 
 
@@ -58,7 +59,8 @@ def test_tsp_canonical_repository_loads_problem(tmp_path: Path) -> None:
     root = tmp_path / "problems"
     _write_tsp(root / "tsp" / "SMALL" / "tsp5.yaml")
 
-    problem = ProblemRepository(root).load("SMALL", "tsp5", "tsp")
+    registry = buildProblemRegistry(problemBuilders())
+    problem = ProblemRepository(root, registry=registry).load("SMALL", "tsp5", "tsp")
 
     assert isinstance(problem, TSPProblem)
     assert problem.problem_type == "tsp"

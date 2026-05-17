@@ -56,7 +56,7 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     spec = ExperimentSpec(
@@ -100,8 +100,8 @@ def test_engine_build_fails_when_experiment_problem_yaml_is_invalid(tmp_path: Pa
     """僅本次 spec 指到的題目會被 load 驗證；壞檔必須在 problem_ids 內才會讓 build 失敗。"""
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
-    (problem_root / "WEISH" / "broken.yaml").write_text("items: not_a_mapping\n", encoding="utf-8")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    (problem_root / "mkp" / "WEISH" / "broken.yaml").write_text("items: not_a_mapping\n", encoding="utf-8")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     spec = ExperimentSpec(
@@ -125,8 +125,8 @@ def test_engine_build_succeeds_when_unused_catalog_yaml_is_invalid(tmp_path: Pat
     """目錄內其他題目的壞檔不阻擋 build（與舊版「全庫驗證」語意不同）。"""
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
-    (problem_root / "WEISH" / "broken.yaml").write_text("items: not_a_mapping\n", encoding="utf-8")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    (problem_root / "mkp" / "WEISH" / "broken.yaml").write_text("items: not_a_mapping\n", encoding="utf-8")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     spec = ExperimentSpec(
@@ -152,8 +152,8 @@ def test_engine_build_succeeds_when_unused_catalog_yaml_is_invalid(tmp_path: Pat
 def test_engine_build_fails_when_experiment_problem_has_unknown_best_known(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
-    (problem_root / "WEISH" / "broken.yaml").write_text(
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    (problem_root / "mkp" / "WEISH" / "broken.yaml").write_text(
         """
 problem_id: broken
 dataset: WEISH
@@ -191,7 +191,7 @@ capacities: [10, 8]
 def test_engine_build_fails_when_experiment_problem_not_in_catalog(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     spec = ExperimentSpec(
@@ -216,7 +216,7 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
 ) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
     spec = ExperimentSpec(

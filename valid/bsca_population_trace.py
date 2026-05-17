@@ -19,10 +19,10 @@ from ruamel.yaml import YAML
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1].parent))
-    from mkp.engine.models import ProblemModel
+    from mkp.problem import ProblemModel
     from mkp.solver.BSCA import BSCACore
 else:
-    from ..engine.models import ProblemModel
+    from ..problem import ProblemModel
     from ..solver.BSCA import BSCACore
 
 
@@ -351,7 +351,7 @@ class NewTraceBSCA(PopulationTraceMixin, BSCACore):
 
 
 def _build_problem_from_yaml(repo_root: Path, dataset: str, problem_id: str) -> ProblemModel:
-    file_path = repo_root / "configs/problems" / dataset / f"{problem_id}.yaml"
+    file_path = repo_root / "configs/problems" / "mkp" / dataset / f"{problem_id}.yaml"
     if not file_path.is_file():
         raise FileNotFoundError(f"problem YAML not found: {file_path}")
     yaml = YAML(typ="safe")

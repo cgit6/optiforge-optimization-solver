@@ -10,12 +10,16 @@ import pytest
 pytest.importorskip("numba")
 
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.solver.BSCASMA import BRLSMASCATestCore
 from mkp.solver.BSCASMA_numba import BRLSMASCATestNumbaCore
 
 
 def _load_gk(repo_root: Path, problem_id: str):
-    return ProblemRepository(config_root=repo_root / "configs" / "problems").load(
+    return ProblemRepository(
+        config_root=repo_root / "configs" / "problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    ).load(
         "GK", problem_id, "mkp"
     )
 

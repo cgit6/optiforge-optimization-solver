@@ -9,6 +9,7 @@ from mkp.engine.models import ExperimentSpec, SolveResult, RunTask
 from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
+from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.simulator import Simulator
 from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
@@ -81,6 +82,12 @@ params:
     )
 
 
+def _build_problem_bank(problem_root: Path, spec: ExperimentSpec) -> ProblemBank:
+    problem_registry = buildProblemRegistry(problemBuilders())
+    repository = ProblemRepository(config_root=problem_root, registry=problem_registry)
+    return ProblemBank.build(repository=repository, spec=spec, registry=problem_registry)
+
+
 def _build_spec() -> ExperimentSpec:
     return ExperimentSpec(
         experiment_name="exp_batch",
@@ -97,11 +104,10 @@ def _build_simulator(tmp_path: Path) -> tuple[Simulator, Path]:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
-    repository = ProblemRepository(config_root=problem_root)
-    bank = ProblemBank.build_for_spec(repository=repository, spec=_build_spec())
+    bank = _build_problem_bank(problem_root, _build_spec())
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(_build_spec(), solver_root)
@@ -199,7 +205,7 @@ def _build_seed_simulator(
 ) -> Simulator:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "p1.yaml", problem_id="p1")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "p1.yaml", problem_id="p1")
     for solver_id, params in solver_params.items():
         params_yaml = "\n".join(f"  - {param}" for param in params)
         _write_solver_yaml_with_params(
@@ -216,8 +222,7 @@ def _build_seed_simulator(
         repeat=repeat,
         seed=seed,
     )
-    repository = ProblemRepository(config_root=problem_root)
-    bank = ProblemBank.build_for_spec(repository=repository, spec=spec)
+    bank = _build_problem_bank(problem_root, spec)
     registry = SolverRegistry()
     for solver_id in solver_ids:
         registry.register(solver_id, lambda: CountingSolver())
@@ -246,12 +251,11 @@ def _find_seed(tasks: list[RunTask], *, solver_id: str, param_set_index: int, re
 def test_expand_tasks_order_and_seed_keys_include_param_set(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "p1.yaml", problem_id="p1")
-    _write_problem_yaml(problem_root / "WEISH" / "p2.yaml", problem_id="p2")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "p1.yaml", problem_id="p1")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "p2.yaml", problem_id="p2")
     _write_solver_yaml(solver_root / "s_a.yaml", solver_id="s_a")
     _write_solver_yaml(solver_root / "s_b.yaml", solver_id="s_b")
 
-    repository = ProblemRepository(config_root=problem_root)
     bank_spec = ExperimentSpec(
         experiment_name="exp_w",
         dataset="WEISH",
@@ -260,7 +264,7 @@ def test_expand_tasks_order_and_seed_keys_include_param_set(tmp_path: Path):
         repeat=2,
         seed=999,
     )
-    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
+    bank = _build_problem_bank(problem_root, bank_spec)
     registry = SolverRegistry()
     registry.register("s_a", lambda: CountingSolver())
     registry.register("s_b", lambda: CountingSolver())
@@ -401,10 +405,9 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml", problem_id="weish01")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml", problem_id="weish01")
     _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
-    repository = ProblemRepository(config_root=problem_root)
     bank_spec = ExperimentSpec(
         experiment_name="exp_par",
         dataset="WEISH",
@@ -414,7 +417,7 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
         seed=100,
         worker_count=2,
     )
-    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
+    bank = _build_problem_bank(problem_root, bank_spec)
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
@@ -441,10 +444,11 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
 def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml", problem_id="weish01")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml", problem_id="weish01")
     _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
-    repository = ProblemRepository(config_root=problem_root)
+    problem_registry = buildProblemRegistry(problemBuilders())
+    repository = ProblemRepository(config_root=problem_root, registry=problem_registry)
     spec = ExperimentSpec(
         experiment_name="exp_batch_fail_problem",
         dataset="WEISH",
@@ -456,7 +460,7 @@ def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
 
     CountingSolver.calls = 0
     with pytest.raises(FileNotFoundError):
-        ProblemBank.build_for_spec(repository=repository, spec=spec)
+        ProblemBank.build(repository=repository, spec=spec, registry=problem_registry)
     assert CountingSolver.calls == 0
 
 
@@ -476,11 +480,10 @@ def test_solver_snapshot_raises_when_solver_yaml_missing(tmp_path: Path) -> None
 
 def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml", problem_id="weish01")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml", problem_id="weish01")
     solver_root = tmp_path / "solvers"
     _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
 
-    repository = ProblemRepository(config_root=problem_root)
     bank_spec = ExperimentSpec(
         experiment_name="exp_mismatch",
         dataset="WEISH",
@@ -489,7 +492,7 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
         repeat=1,
         seed=1,
     )
-    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
+    bank = _build_problem_bank(problem_root, bank_spec)
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)

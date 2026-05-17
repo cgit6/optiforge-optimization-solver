@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mkp.engine.models import ProblemModel
+from mkp.problem import ProblemModel
 from mkp.solver.BSMA import BSMASolver
 from mkp.solver.registry import SolverRegistry
 

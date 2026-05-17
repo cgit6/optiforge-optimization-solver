@@ -6,7 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from ..engine.models import SolveResult, TSPProblem
+from ..engine.models import SolveResult
+from ..problem import TSPProblem
 from .adapters.tsp_sma_adapter import TSPSMAAdapter
 from .sma_core import SMACore
 

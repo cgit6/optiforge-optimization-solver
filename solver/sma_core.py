@@ -5,7 +5,7 @@ from typing import Protocol
 
 import numpy as np
 
-from ..engine.models import Direction
+from ..problem import Direction
 
 
 class SMAAdapter(Protocol):

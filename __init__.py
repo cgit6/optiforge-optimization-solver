@@ -4,9 +4,9 @@ from .cli.convert import getConverter, listConverters, register
 from .cli.run import executeSimulator
 from .converter import transformToMomery, transformToYaml
 from .engine import Engine, SimulationBundle, SolverConfigsSnapshot, build
-from .engine.models import BaseProblem, ExperimentSpec, MKPProblem, ProblemModel, SolveResult, TSPProblem, RunTask
-from .engine.problem_registry import ProblemRegistry, ProblemTypeSpec
+from .engine.models import ExperimentSpec, SolveResult, RunTask
 from .engine.repository import ProblemRepository
+from .problem import Problem, MKPProblem, ProblemModel, ProblemRegistry, ProblemTypeSpec, TSPProblem
 from .simulator import Simulator, SimulatorResult, SimulatorRunRow
 from .solver.BSCA import BSCACore, BSCASolver
 from .solver.BSCASMA import BRLSMASCATestCore, BRLSMASCATestSolver
@@ -50,7 +50,7 @@ __all__ = [
     "NearestNeighborTSPSolver",
     "main",
     "ProblemModel",
-    "BaseProblem",
+    "Problem",
     "MKPProblem",
     "TSPProblem",
     "ProblemRegistry",

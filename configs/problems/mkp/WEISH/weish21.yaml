@@ -1,5 +1,6 @@
 problem_id: weish21
 dataset: WEISH
+problem_type: mkp
 items: 70
 dim: 5
 values: [360, 83, 59, 130, 431, 67, 230, 52, 93, 125, 670, 892, 600, 38, 48, 147,

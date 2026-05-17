@@ -20,6 +20,7 @@ from mkp.cli.convert import (
 )
 from mkp.converter import transformToYaml
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import buildProblemRegistry, problemBuilders
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -73,7 +74,10 @@ def test_converter_core_writes_yaml_and_loads_model(tmp_path: Path):
     assert yaml_path.exists()
     assert "problem_id: weish01" in yaml_path.read_text(encoding="utf-8")
 
-    repository = ProblemRepository(config_root=tmp_path / "configs/problems")
+    repository = ProblemRepository(
+        config_root=tmp_path / "configs/problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    )
     model = repository.load("WEISH", "weish01")
     assert model.problem_id == "weish01"
     assert model.items == 3
@@ -141,7 +145,7 @@ def test_get_converter_returns_new_parsers():
 def test_convert_cli_converts_dataset_and_overwrites_yaml(tmp_path: Path):
     _write_weish_dat(tmp_path / "data/WEISH/weish01.dat", best_known=10)
     _write_weish_dat(tmp_path / "data/WEISH/weish02.dat", best_known=20)
-    old_yaml = tmp_path / "configs/problems/WEISH/weish01.yaml"
+    old_yaml = tmp_path / "configs/problems/mkp/WEISH/weish01.yaml"
     old_yaml.parent.mkdir(parents=True, exist_ok=True)
     old_yaml.write_text("problem_id: old\n", encoding="utf-8")
 
@@ -157,10 +161,13 @@ def test_convert_cli_converts_dataset_and_overwrites_yaml(tmp_path: Path):
     )
 
     assert output_paths == [
-        tmp_path / "configs/problems/WEISH/weish01.yaml",
-        tmp_path / "configs/problems/WEISH/weish02.yaml",
+        tmp_path / "configs/problems/mkp/WEISH/weish01.yaml",
+        tmp_path / "configs/problems/mkp/WEISH/weish02.yaml",
     ]
-    repository = ProblemRepository(config_root=tmp_path / "configs/problems")
+    repository = ProblemRepository(
+        config_root=tmp_path / "configs/problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    )
     assert repository.load("WEISH", "weish01").best_known == 10
     assert repository.load("WEISH", "weish02").best_known == 20
 
@@ -181,7 +188,7 @@ def test_convert_cli_converts_txt_dataset(tmp_path: Path):
         ]
     )
 
-    assert output_paths == [tmp_path / "configs/problems/GK/mk_gk01.yaml"]
+    assert output_paths == [tmp_path / "configs/problems/mkp/GK/mk_gk01.yaml"]
     yaml = YAML(typ="safe")
     payload = yaml.load(output_paths[0].read_text(encoding="utf-8"))
     assert payload["best_known"] is None
@@ -207,7 +214,7 @@ def test_convert_cli_skips_cb_bundle_file(tmp_path: Path):
     )
 
     assert output_paths == [
-        tmp_path / "configs/problems/OR5x100/OR5x100-0.25_1.yaml",
-        tmp_path / "configs/problems/OR5x100/OR5x100-0.25_2.yaml",
+        tmp_path / "configs/problems/mkp/OR5x100/OR5x100-0.25_1.yaml",
+        tmp_path / "configs/problems/mkp/OR5x100/OR5x100-0.25_2.yaml",
     ]
-    assert not (tmp_path / "configs/problems/OR5x100/OR5x100.yaml").exists()
+    assert not (tmp_path / "configs/problems/mkp/OR5x100/OR5x100.yaml").exists()

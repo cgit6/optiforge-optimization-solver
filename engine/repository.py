@@ -7,8 +7,8 @@ from typing import Any
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from .models import BaseProblem
-from .problem_registry import ProblemRegistry, default_problem_registry
+from ..problem import Problem
+from ..problem.registry import ProblemRegistry
 
 
 class ProblemRepository:
@@ -16,27 +16,27 @@ class ProblemRepository:
 
     def __init__(
         self,
-        config_root: Path | str = Path("configs/problems"),
+        problem_root: Path | None = None,
         *,
-        problem_registry: ProblemRegistry | None = None,
+        config_root: Path | None = None,
+        registry: ProblemRegistry,
     ) -> None:
-        self._config_root = Path(config_root)
-        self._registry = problem_registry or default_problem_registry()
+        root = problem_root if problem_root is not None else config_root
+        if root is None:
+            raise TypeError("ProblemRepository requires problem_root or config_root.")
+        self._problem_root = Path(root)
+        self._registry = registry # 優化題目型別對照表
         self._yaml = YAML(typ="safe")
-        self._cache: dict[tuple[str, str, str], BaseProblem] = {}
+        self._cache: dict[tuple[str, str, str], Problem] = {}
+
+        # 併發鎖
         self._cache_lock = threading.Lock()
         self._yaml_parse_lock = threading.Lock()
 
     def resolve_path(self, problem_type: str, dataset: str, problem_id: str) -> Path:
-        canonical = self._config_root / problem_type / dataset / f"{problem_id}.yaml"
-        if canonical.exists():
-            return canonical
-        legacy = self._config_root / dataset / f"{problem_id}.yaml"
-        if problem_type == "mkp" and legacy.exists():
-            return legacy
-        return canonical
+        return self._problem_root / problem_type / dataset / f"{problem_id}.yaml"
 
-    def load(self, dataset: str, problem_id: str, problem_type: str = "mkp") -> BaseProblem:
+    def load(self, dataset: str, problem_id: str, problem_type: str = "mkp") -> Problem:
         key = (problem_type, dataset, problem_id)
         with self._cache_lock:
             if key in self._cache:
@@ -54,6 +54,7 @@ class ProblemRepository:
             )
         spec = self._registry.get(problem_type)
         model = spec.loader(data, dataset, problem_id, file_path)
+        self._registry.validate_model(model, problem_type)
         with self._cache_lock:
             if key in self._cache:
                 return self._cache[key]

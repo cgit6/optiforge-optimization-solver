@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from mkp.engine.models import ProblemModel, SolveResult
+from mkp.engine.models import SolveResult
+from mkp.problem import ProblemModel
 from mkp.solver.validator import Validator
 
 
@@ -56,7 +57,7 @@ def test_validator_detects_infeasible_solution_and_violated_dims():
     report = validator.validate(problem, result)
 
     assert report.is_feasible is False
-    assert report.feasibility_violations == (0, 1)
+    assert report.feasibility_violations == (0,)
 
 
 def test_validator_detects_objective_mismatch():

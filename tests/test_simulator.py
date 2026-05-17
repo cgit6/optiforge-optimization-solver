@@ -9,6 +9,7 @@ from mkp.engine.models import ExperimentSpec, RunTask
 from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
+from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.simulator import Simulator, SimulatorResult
 from mkp.solver.registry import SolverRegistry
 from mkp.solver.validator import Validator
@@ -84,10 +85,11 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
 
-    _write_problem_yaml(problem_root / "WEISH" / "weish01.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
 
-    repository = ProblemRepository(config_root=problem_root)
+    problem_registry = buildProblemRegistry(problemBuilders())
+    repository = ProblemRepository(config_root=problem_root, registry=problem_registry)
     bank_spec = ExperimentSpec(
         experiment_name=experiment_name,
         dataset="WEISH",
@@ -96,7 +98,7 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim"
         repeat=1,
         seed=0,
     )
-    bank = ProblemBank.build_for_spec(repository=repository, spec=bank_spec)
+    bank = ProblemBank.build(repository=repository, spec=bank_spec, registry=problem_registry)
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: solver)
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)

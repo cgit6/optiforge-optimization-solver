@@ -16,6 +16,7 @@ from .bsma_equivalence import (
 from ..cli.convert import getConverter
 from ..converter import transformToYaml
 from ..engine.repository import ProblemRepository
+from ..problem import buildProblemRegistry, problemBuilders
 
 
 def default_weish_problem_ids() -> list[str]:
@@ -43,7 +44,10 @@ def run_weish_equivalence_suite(
 
     max_iter = max_outer_iterations_for_budget(budget=budget, pop_size=BSMA_DEFAULT_POP_SIZE)
     eval_upper_bound = BSMA_DEFAULT_POP_SIZE * (max_iter + 1)
-    repository = ProblemRepository(config_root=repo_root / "configs/problems")
+    repository = ProblemRepository(
+        config_root=repo_root / "configs/problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    )
 
     rows: list[dict[str, Any]] = []
     t_suite = time.perf_counter()

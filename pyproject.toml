@@ -32,6 +32,7 @@ packages = [
     "mkp.converter",
     "mkp.engine",
     "mkp.experiment",
+    "mkp.problem",
     "mkp.simulator",
     "mkp.solver",
     "mkp.tools",

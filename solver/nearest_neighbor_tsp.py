@@ -6,7 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from ..engine.models import SolveResult, TSPProblem
+from ..engine.models import SolveResult
+from ..problem import TSPProblem
 
 
 @dataclass

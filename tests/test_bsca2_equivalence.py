@@ -8,12 +8,16 @@ import pytest
 pytest.importorskip("numba")
 
 from mkp.engine.repository import ProblemRepository
+from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.solver.BSCA import BSCACore
 from mkp.solver.BSCA_numba import BSCANumbaCore
 
 
 def _load_weish01(repo_root: Path):
-    return ProblemRepository(config_root=repo_root / "configs" / "problems").load(
+    return ProblemRepository(
+        config_root=repo_root / "configs" / "problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    ).load(
         "WEISH", "weish01", "mkp"
     )
 

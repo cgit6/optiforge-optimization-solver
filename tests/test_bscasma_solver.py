@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mkp.engine.models import ProblemModel
+from mkp.problem import ProblemModel
 from mkp.solver.BSCASMA import BRLSMASCATestSolver
 from mkp.solver.registry import SolverRegistry
 
@@ -19,9 +19,13 @@ def _build_problem(*, best_known: int = 4554) -> ProblemModel:
     from pathlib import Path
 
     from mkp.engine.repository import ProblemRepository
+    from mkp.problem import buildProblemRegistry, problemBuilders
 
     repo_root = Path(__file__).resolve().parents[1]
-    repository = ProblemRepository(config_root=repo_root / "configs/problems")
+    repository = ProblemRepository(
+        config_root=repo_root / "configs/problems",
+        registry=buildProblemRegistry(problemBuilders()),
+    )
     problem = repository.load("WEISH", "weish01")
     if best_known == problem.best_known:
         return problem
