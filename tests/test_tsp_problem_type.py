@@ -122,7 +122,6 @@ def test_compatibility_check_rejects_mkp_solver_for_tsp(tmp_path: Path) -> None:
         problem_ids=("tsp5",),
         solver_ids=("bsma",),
         repeat=1,
-        seed=1,
     )
 
     with pytest.raises(ValueError, match="incompatible"):

@@ -90,21 +90,24 @@ def _configure_curriculum_process_worker(
     _worker_progress_queue = progress_queue
 
 
-def _progress_bar(total: int, desc: str) -> tqdm:
+def _progress_bar(total: int, desc: str, *, enabled: bool = True) -> tqdm:
     return tqdm(
         total=total,
         desc=desc,
         unit="task",
         dynamic_ncols=True,
-        disable=not sys.stderr.isatty(),
+        disable=(not enabled) or (not sys.stderr.isatty()),
     )
 
 
 def _seed_by_task(
     spec: ExperimentSpec,
     solver_configs: SolverConfigsSnapshot,
+    *,
+    base_seed: int,
 ) -> dict[tuple[str, str, int, int], int]:
     """依 task identity 派生 seed，避免其他 solver/params 數量改變造成 seed 位移。"""
+    base_seed = _validate_base_seed(base_seed)
     seeds: dict[tuple[str, str, int, int], int] = {}
     for problem_id in spec.problem_ids:
         for solver_id in spec.solver_ids:
@@ -112,7 +115,7 @@ def _seed_by_task(
                 solver_config = solver_configs.get(solver_id, param_set_index)
                 for repeat_index in range(spec.repeat):
                     seeds[(problem_id, solver_id, param_set_index, repeat_index)] = _stable_task_seed(
-                        base_seed=spec.seed,
+                        base_seed=base_seed,
                         problem_type=spec.problem_type,
                         dataset=spec.dataset,
                         problem_id=problem_id,
@@ -121,6 +124,13 @@ def _seed_by_task(
                         repeat_index=repeat_index,
                     )
     return seeds
+
+
+def _validate_base_seed(seed: int) -> int:
+    seed = int(seed)
+    if seed < 0:
+        raise ValueError("seed must be >= 0.")
+    return seed
 
 
 def _stable_task_seed(
@@ -202,7 +212,7 @@ class Simulator:
         self._spec = spec # 實驗規格
         self._problem_bank = problem_bank # 問題庫
         self._solver_registry = solver_registry # 求解器註冊表
-        self._solver_configs = solver_configs # engine 預載之 solver YAML（執行期不讀檔）
+        self._solver_configs = solver_configs # engine 預載之 solver YAML
         self._validator = validator # 驗證器
 
     def close(self) -> None:
@@ -225,9 +235,10 @@ class Simulator:
             validation_report=validation_report,
         )
 
-    def expand_tasks(self) -> list[RunTask]:
-        spec = self._spec
-        seeds = _seed_by_task(spec, self._solver_configs)
+    def expand_tasks(self, *, seed: int) -> list[RunTask]:
+        """把一份高階的實驗設定 ExperimentSpec，展開成一串可以真的執行的單筆任務 RunTask"""
+        spec = self._spec # 實驗規格
+        seeds = _seed_by_task(spec, self._solver_configs, base_seed=seed)
         tasks: list[RunTask] = []
 
         for problem_id in spec.problem_ids:
@@ -256,14 +267,18 @@ class Simulator:
             for param_set_index in self._solver_configs.param_set_indices(solver_id)
         }
 
-    def run_sequential(self) -> SimulatorResult:
+    def run_sequential(self, *, seed: int, show_progress: bool = True) -> SimulatorResult:
         """在主執行緒依 `expand_tasks` 順序逐筆呼叫 `run_task`（多題或多 repeat 時仍是一筆接一筆）。"""
         spec = self._spec
-        tasks = self.expand_tasks()
+        tasks = self.expand_tasks(seed=seed) 
         rows: list[SimulatorRunRow] = []
 
         # 進度條顯示
-        with _progress_bar(total=len(tasks), desc=f"{spec.experiment_name} sequential") as progress:
+        with _progress_bar(
+            total=len(tasks),
+            desc=f"{spec.experiment_name} sequential",
+            enabled=show_progress,
+        ) as progress:
             for task in tasks:
                 rows.append(self.run_task(task))
                 progress.update(1)
@@ -320,7 +335,7 @@ class Simulator:
             )
         return rows
 
-    def run_batch(self) -> SimulatorResult:
+    def run_batch(self, *, seed: int, show_progress: bool = True) -> SimulatorResult:
         """以 `worker_count` 個 process workers 並行執行展開後的任務。"""
         spec = self._spec
         if not self._can_use_process_workers():
@@ -336,7 +351,7 @@ class Simulator:
                 parts.append(f"solver 設定快照缺少：{missing}（請以相同 spec 呼叫 engine.build）。")
             raise RuntimeError(" ".join(parts))
 
-        tasks = self.expand_tasks()
+        tasks = self.expand_tasks(seed=seed)
         max_workers = min(spec.worker_count, len(tasks), os.cpu_count() or 1)
         chunks: list[list[RunTask]] = [[] for _ in range(max_workers)]
         for index, task in enumerate(tasks):
@@ -353,9 +368,13 @@ class Simulator:
         else:
             mp_context = get_context("fork") # 其他平台使用 fork 模式
 
-        progress_queue = mp_context.Queue()
+        progress_queue = mp_context.Queue() if show_progress else None
         try:
-            with _progress_bar(total=len(tasks), desc=f"{spec.experiment_name} batch") as progress:
+            with _progress_bar(
+                total=len(tasks),
+                desc=f"{spec.experiment_name} batch",
+                enabled=show_progress,
+            ) as progress:
                 # 建立 ProcessPoolExecutor，並行執行 _run_task_chunk_process
                 with ProcessPoolExecutor(
                     max_workers=max_workers, # 併發數量
@@ -369,15 +388,18 @@ class Simulator:
                     }
                     pending = set(future_to_index)
                     while pending:
-                        self._drain_progress_queue(progress_queue, progress)
+                        if progress_queue is not None:
+                            self._drain_progress_queue(progress_queue, progress)
                         done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
                         for future in done:
                             chunk_idx = future_to_index[future]
                             per_chunk_results[chunk_idx] = future.result()
-                    self._drain_progress_queue(progress_queue, progress)
+                    if progress_queue is not None:
+                        self._drain_progress_queue(progress_queue, progress)
         finally:
-            progress_queue.close()
-            progress_queue.join_thread()
+            if progress_queue is not None:
+                progress_queue.close()
+                progress_queue.join_thread()
 
         ordered_results: list[list[SolveResult]] = []
         for idx, result in enumerate(per_chunk_results):

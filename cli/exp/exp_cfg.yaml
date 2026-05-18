@@ -7,10 +7,6 @@ worker: 10 # 併發數
 solvers: [bsma_numba, bsca_numba, brlsmasca_numba] # 要執行的演算法
 repeat: 20 # 重複次數
 
-evaluation:
-  name: literature_mkp
-  config: {}
-
 # 題庫設定
 # 實驗會依序執行
 dataset_settings:
@@ -18,38 +14,62 @@ dataset_settings:
     dataset: WEISH
     problems: [weish01, weish02, weish03, weish04, weish05, weish06, weish07, weish08, weish09, weish10, weish11, weish12, weish13, weish14, weish15, weish16, weish17, weish18, weish19, weish20, weish21, weish22, weish23, weish24, weish25, weish26, weish27, weish28, weish29, weish30]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: weing-expTest
     dataset: WEING
     problems: [weing1, weing2, weing3, weing4, weing5, weing6, weing7, weing8]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: hp-expTest
     dataset: HP
     problems: [hp1, hp2]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: pet-expTest
     dataset: PET
     problems: [pet2, pet3, pet4, pet5, pet6, pet7]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: sent-expTest
     dataset: SENT
     problems: [sent01, sent02]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: pb-expTest
     dataset: PB
     problems: [pb1, pb2, pb4, pb5, pb6, pb7]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: OR5x100-expTest
     dataset: OR5x100
     problems: [OR5x100-0.25_1, OR5x100-0.25_2, OR5x100-0.25_3, OR5x100-0.25_4, OR5x100-0.25_5]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 
   - experiment-id: gk-expTest
     dataset: GK
     problems: [mk_gk01, mk_gk02, mk_gk03, mk_gk04, mk_gk05, mk_gk06, mk_gk07, mk_gk08, mk_gk09]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}

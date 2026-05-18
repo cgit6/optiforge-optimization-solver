@@ -95,7 +95,6 @@ def _build_spec() -> ExperimentSpec:
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=3,
-        seed=1234,
     )
 
 
@@ -127,7 +126,7 @@ def _build_simulator(tmp_path: Path) -> tuple[Simulator, Path]:
 def test_expand_tasks_count_and_fields():
     simulator, _ = _build_simulator(Path("/tmp/sim_expand_1"))
     try:
-        tasks = simulator.expand_tasks()
+        tasks = simulator.expand_tasks(seed=1234)
 
         assert len(tasks) == 3
         assert tasks[0].problem_id == "weish01"
@@ -143,8 +142,8 @@ def test_expand_tasks_count_and_fields():
 def test_rng_seed_reproducibility_and_independence():
     simulator, _ = _build_simulator(Path("/tmp/sim_expand_2"))
     try:
-        tasks_a = simulator.expand_tasks()
-        tasks_b = simulator.expand_tasks()
+        tasks_a = simulator.expand_tasks(seed=1234)
+        tasks_b = simulator.expand_tasks(seed=1234)
 
         assert [t.seed for t in tasks_a] == [t.seed for t in tasks_b]
         assert len(set(t.seed for t in tasks_a)) == len(tasks_a)
@@ -181,7 +180,6 @@ params:
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
 
     snapshot = SolverConfigsSnapshot.build(spec, solver_root)
@@ -200,7 +198,6 @@ def _build_seed_simulator(
     *,
     solver_ids: tuple[str, ...],
     solver_params: dict[str, tuple[str, ...]],
-    seed: int = 999,
     repeat: int = 2,
 ) -> Simulator:
     problem_root = tmp_path / "problems"
@@ -220,7 +217,6 @@ def _build_seed_simulator(
         problem_ids=("p1",),
         solver_ids=solver_ids,
         repeat=repeat,
-        seed=seed,
     )
     bank = _build_problem_bank(problem_root, spec)
     registry = SolverRegistry()
@@ -262,7 +258,6 @@ def test_expand_tasks_order_and_seed_keys_include_param_set(tmp_path: Path):
         problem_ids=("p1", "p2"),
         solver_ids=("s_a", "s_b"),
         repeat=2,
-        seed=999,
     )
     bank = _build_problem_bank(problem_root, bank_spec)
     registry = SolverRegistry()
@@ -278,7 +273,7 @@ def test_expand_tasks_order_and_seed_keys_include_param_set(tmp_path: Path):
         validator=validator,
     )
     try:
-        tasks = simulator.expand_tasks()
+        tasks = simulator.expand_tasks(seed=999)
 
         assert len(tasks) == 2 * 2 * 1 * 2
         first = tasks[0]
@@ -321,9 +316,9 @@ def test_task_seed_is_independent_of_other_solvers_and_solver_order(tmp_path: Pa
         solver_params={"s_b": solver_params["s_b"]},
     )
     try:
-        seed_ab = _find_seed(sim_ab.expand_tasks(), solver_id="s_b", param_set_index=0)
-        seed_ba = _find_seed(sim_ba.expand_tasks(), solver_id="s_b", param_set_index=0)
-        seed_b = _find_seed(sim_b.expand_tasks(), solver_id="s_b", param_set_index=0)
+        seed_ab = _find_seed(sim_ab.expand_tasks(seed=999), solver_id="s_b", param_set_index=0)
+        seed_ba = _find_seed(sim_ba.expand_tasks(seed=999), solver_id="s_b", param_set_index=0)
+        seed_b = _find_seed(sim_b.expand_tasks(seed=999), solver_id="s_b", param_set_index=0)
 
         assert seed_ab == seed_ba == seed_b
     finally:
@@ -350,8 +345,8 @@ def test_task_seed_uses_param_content_not_param_set_index(tmp_path: Path) -> Non
         solver_params={"s_a": ("{pop_size: 20, z: 0.02}",)},
     )
     try:
-        full_tasks = sim_full.expand_tasks()
-        reduced_tasks = sim_reduced.expand_tasks()
+        full_tasks = sim_full.expand_tasks(seed=999)
+        reduced_tasks = sim_reduced.expand_tasks(seed=999)
 
         seed_full_param_1 = _find_seed(full_tasks, solver_id="s_a", param_set_index=1)
         seed_reduced_param_0 = _find_seed(reduced_tasks, solver_id="s_a", param_set_index=0)
@@ -370,17 +365,15 @@ def test_task_seed_changes_when_base_seed_or_repeat_changes(tmp_path: Path) -> N
         tmp_path / "seed1",
         solver_ids=("s_a",),
         solver_params=solver_params,
-        seed=1,
     )
     sim_seed_2 = _build_seed_simulator(
         tmp_path / "seed2",
         solver_ids=("s_a",),
         solver_params=solver_params,
-        seed=2,
     )
     try:
-        tasks_seed_1 = sim_seed_1.expand_tasks()
-        tasks_seed_2 = sim_seed_2.expand_tasks()
+        tasks_seed_1 = sim_seed_1.expand_tasks(seed=1)
+        tasks_seed_2 = sim_seed_2.expand_tasks(seed=2)
 
         assert _find_seed(tasks_seed_1, solver_id="s_a", param_set_index=0, repeat_index=0) != _find_seed(
             tasks_seed_2,
@@ -414,7 +407,6 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=n,
-        seed=100,
         worker_count=2,
     )
     bank = _build_problem_bank(problem_root, bank_spec)
@@ -431,7 +423,7 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
     )
 
     try:
-        result = simulator.run_batch()
+        result = simulator.run_batch(seed=100)
         assert len(result.rows) == n
 
         write_simulator_result(result, experiment_name="exp_par", output_root=output_root)
@@ -455,7 +447,6 @@ def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
         problem_ids=("missing", "weish01"),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
 
     CountingSolver.calls = 0
@@ -472,7 +463,6 @@ def test_solver_snapshot_raises_when_solver_yaml_missing(tmp_path: Path) -> None
         problem_ids=("weish01",),
         solver_ids=("no_such_solver",),
         repeat=1,
-        seed=1,
     )
     with pytest.raises(FileNotFoundError):
         SolverConfigsSnapshot.build(spec, solver_root)
@@ -490,7 +480,6 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
     bank = _build_problem_bank(problem_root, bank_spec)
     registry = SolverRegistry()
@@ -523,7 +512,7 @@ def test_run_batch_writes_summary_files(tmp_path: Path):
     simulator, output_root = _build_simulator(tmp_path)
 
     try:
-        result = simulator.run_sequential()
+        result = simulator.run_sequential(seed=1)
 
         assert len(result.rows) == 3
         write_simulator_result(result, experiment_name="exp_batch", output_root=output_root)

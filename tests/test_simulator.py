@@ -96,7 +96,6 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim"
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=0,
     )
     bank = ProblemBank.build(repository=repository, spec=bank_spec, registry=problem_registry)
     registry = SolverRegistry()
@@ -202,7 +201,6 @@ def test_solver_snapshot_build_fails_when_solver_dir_has_no_yaml(tmp_path: Path)
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=0,
     )
     with pytest.raises(FileNotFoundError):
         SolverConfigsSnapshot.build(bank_spec, tmp_path / "missing-solvers")

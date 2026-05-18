@@ -65,7 +65,6 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=7,
     )
 
     bundle = Engine.build(
@@ -87,7 +86,7 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     assert bundle.default_rng is np.random.default_rng
     sim = bundle.new_simulator()
     try:
-        result = sim.run_sequential()
+        result = sim.run_sequential(seed=7)
         assert len(result.rows) == 2
         write_simulator_result(result, experiment_name="exp_engine_1", output_root=output_root)
         assert (output_root / "exp_engine_1" / "stub_solver" / "param_0" / "runs.csv").exists()
@@ -110,7 +109,6 @@ def test_engine_build_fails_when_experiment_problem_yaml_is_invalid(tmp_path: Pa
         problem_ids=("broken",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
 
     with pytest.raises((ValueError, FileNotFoundError, TypeError)):
@@ -135,7 +133,6 @@ def test_engine_build_succeeds_when_unused_catalog_yaml_is_invalid(tmp_path: Pat
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
 
     bundle = Engine.build(
@@ -177,7 +174,6 @@ capacities: [10, 8]
         problem_ids=("broken",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
 
     with pytest.raises(ValueError, match="best_known must be a positive integer"):
@@ -200,7 +196,6 @@ def test_engine_build_fails_when_experiment_problem_not_in_catalog(tmp_path: Pat
         problem_ids=("not_in_folder",),
         solver_ids=("stub_solver",),
         repeat=1,
-        seed=1,
     )
 
     with pytest.raises(FileNotFoundError, match="catalog"):
@@ -225,7 +220,6 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=2,
-        seed=42,
         worker_count=2,
     )
 
@@ -246,7 +240,7 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
     load_calls["n"] = 0
     sim = bundle.new_simulator()
     try:
-        sim.run_batch()
+        sim.run_batch(seed=42)
         assert load_calls["n"] == 0
     finally:
         sim.close()

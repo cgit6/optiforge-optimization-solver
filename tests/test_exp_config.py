@@ -78,14 +78,14 @@ collects: {collects}
 solvers: {solvers}
 worker: {worker}
 repeat: {repeat}
-evaluation:
-  name: {evaluation_name}
-  config: {evaluation_config}
 {extra_top_level}{dataset_key}:
   - experiment-id: {experiment_id}
     dataset: DATA
     problems: {problems}
     type: mkp
+    evaluation:
+      name: {evaluation_name}
+      config: {evaluation_config}
 {dataset_extra}
 """.strip()
 
@@ -94,7 +94,7 @@ def _write_valid_project(tmp_path: Path, *, config_text: str | None = None) -> t
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     exp_path = tmp_path / "exp_cfg.yaml"
-    _write_problem_yaml(problem_root / "DATA" / "p1.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p1.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
     exp_path.write_text(config_text or _valid_config_text(), encoding="utf-8")
     return exp_path, problem_root, solver_root
@@ -110,14 +110,14 @@ def test_build_sample_exp_cfg_success() -> None:
     assert experiment.cfg.repeat == 20
     assert experiment.cfg.worker_count == 10
     assert experiment.cfg.solver_ids == ("bsma_numba", "bsca_numba", "brlsmasca_numba")
-    assert experiment.cfg.evaluation.name == "literature_mkp"
-    assert experiment.cfg.evaluation.config == {}
     assert len(experiment.cfg.dataset_settings) == 8
     first = experiment.cfg.dataset_settings[0]
     assert first.experiment_id == "weish-expTest"
     assert first.dataset == "WEISH"
     assert first.problem_type == "mkp"
     assert len(first.problem_ids) == 30
+    assert first.evaluation.name == "literature_mkp"
+    assert first.evaluation.config == {}
 
 
 def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:
@@ -142,7 +142,6 @@ def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:
 
     assert isinstance(report, ExperimentReport)
     assert report.experiment_name == "exp_search"
-    assert report.evaluation_name == "literature_mkp"
     assert (tmp_path / "output" / "exp_search" / "summary.json").exists()
 
 
@@ -198,7 +197,7 @@ def test_load_config_rejects_missing_solver_yaml(tmp_path: Path) -> None:
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     exp_path = tmp_path / "exp_cfg.yaml"
-    _write_problem_yaml(problem_root / "DATA" / "p1.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p1.yaml")
     exp_path.write_text(_valid_config_text(solvers="[missing_solver]"), encoding="utf-8")
 
     with pytest.raises(FileNotFoundError, match="Solver config YAML not found"):
@@ -242,10 +241,42 @@ def test_load_config_rejects_missing_experiment_name(tmp_path: Path) -> None:
 def test_load_config_rejects_missing_evaluation_name(tmp_path: Path) -> None:
     exp_path, problem_root, solver_root = _write_valid_project(
         tmp_path,
-        config_text=_valid_config_text().replace("  name: literature_mkp\n", ""),
+        config_text=_valid_config_text().replace("      name: literature_mkp\n", ""),
     )
 
     with pytest.raises(ValueError, match="evaluation"):
+        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_load_config_rejects_missing_dataset_evaluation_block(tmp_path: Path) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text="""
+experiment_name: exp_search
+seed: [1, 3]
+collects: 1
+solvers: [stub_solver]
+worker: 1
+repeat: 2
+dataset_settings:
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+""".strip(),
+    )
+
+    with pytest.raises(ValueError, match="missing required key"):
+        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_load_config_rejects_removed_top_level_evaluation_block(tmp_path: Path) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text="evaluation:\n  name: literature_mkp\n  config: {}\n" + _valid_config_text(),
+    )
+
+    with pytest.raises(ValueError, match="unknown key"):
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
@@ -255,7 +286,7 @@ def test_load_config_rejects_non_mapping_evaluation_config(tmp_path: Path) -> No
         config_text=_valid_config_text(evaluation_config="[1, 2, 3]"),
     )
 
-    with pytest.raises(ValueError, match="evaluation.config"):
+    with pytest.raises(ValueError, match="evaluation\\.config"):
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
@@ -265,11 +296,40 @@ def test_load_config_rejects_duplicate_experiment_id(tmp_path: Path) -> None:
     dataset: DATA
     problems: [p1]
     type: mkp
+    evaluation:
+      name: literature_mkp
+      config: {}
 """
     exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=settings)
 
     with pytest.raises(ValueError, match="experiment-id is duplicated"):
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_load_config_supports_dataset_specific_evaluation_configs(tmp_path: Path) -> None:
+    config_text = _valid_config_text(
+        dataset_extra="""
+  - experiment-id: exp2
+    dataset: DATA
+    problems: [p2]
+    type: mkp
+    evaluation:
+      name: literature_mkp
+      config:
+        target_variant:
+          solver: stub_solver
+          param_set_index: 0
+""",
+    )
+    exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=config_text)
+    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p2.yaml", problem_id="p2")
+
+    experiment = load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+    assert experiment.dataset_settings[0].evaluation.config == {}
+    assert experiment.dataset_settings[1].evaluation.config == {
+        "target_variant": {"solver": "stub_solver", "param_set_index": 0}
+    }
 
 
 def test_load_config_rejects_missing_problem_yaml(tmp_path: Path) -> None:
@@ -287,7 +347,7 @@ def test_load_config_rejects_solver_problem_capability_mismatch(tmp_path: Path) 
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     exp_path = tmp_path / "exp_cfg.yaml"
-    _write_problem_yaml(problem_root / "DATA" / "p1.yaml")
+    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p1.yaml")
     _write_solver_yaml(solver_root / "stub_solver.yaml", problem_types=("tsp",))
     exp_path.write_text(_valid_config_text(), encoding="utf-8")
 

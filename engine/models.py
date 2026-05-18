@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 
 import numpy as np
 
@@ -11,12 +11,11 @@ class ExperimentSpec:
     """實驗規格"""
     experiment_name: str # 實驗名稱
     dataset: str # 題庫
-    problem_ids: tuple[str, ...]
-    solver_ids: tuple[str, ...]
-    repeat: int
-    seed: int # 隨機種子
-    problem_type: str = "mkp"
-    worker_count: int = 1
+    problem_ids: tuple[str, ...] # 題目 id 清單
+    solver_ids: tuple[str, ...] # 求解器
+    repeat: int # 重複次數
+    problem_type: str # 優化問題
+    worker_count: int # 併發數
 
     def __post_init__(self) -> None:
         if not self.experiment_name.strip():
@@ -27,8 +26,6 @@ class ExperimentSpec:
             raise ValueError("dataset cannot be empty.")
         if self.repeat <= 0:
             raise ValueError("repeat must be > 0.")
-        if self.seed < 0:
-            raise ValueError("seed must be >= 0.")
         if self.worker_count <= 0:
             raise ValueError("worker_count must be > 0.")
         if not self.problem_ids:

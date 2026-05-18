@@ -13,8 +13,19 @@ DEFAULT_PROBLEM_ROOT = Path("configs/problems") # 題庫路徑
 DEFAULT_SOLVER_ROOT = Path("configs/solvers") # 求解器路徑
 DEFAULT_OUTPUT_ROOT = Path("output") # 輸出路徑
 
+_BUILTIN_EVALUATORS = {
+    "literature_mkp": literature_mkp_evaluator,
+}
 
-# 註冊評估函數這邊可以再調整，
+
+def _register_configured_evaluators(experiment) -> None:
+    names = {setting.evaluation.name for setting in experiment.cfg.dataset_settings}
+    missing = sorted(name for name in names if name not in _BUILTIN_EVALUATORS)
+    if missing:
+        raise KeyError(f"unknown evaluator(s) in experiment config: {missing}")
+    for name in sorted(names):
+        experiment.register(name, _BUILTIN_EVALUATORS[name])
+
 
 def main() -> ExperimentReport:
     # 1. 創建實驗模組
@@ -23,9 +34,7 @@ def main() -> ExperimentReport:
         problem_root=DEFAULT_PROBLEM_ROOT,
         solver_root=DEFAULT_SOLVER_ROOT,
     )
-    # 2. 註冊評估函數
-    # 這邊或許不用迴護註冊這件事
-    experiment.register("literature_mkp", literature_mkp_evaluator) 
+    _register_configured_evaluators(experiment)
 
     # 3. 執行實驗
     return experiment.run(

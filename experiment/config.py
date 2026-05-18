@@ -13,13 +13,26 @@ from ..tools.solver_config_loader import SolverConfigLoader
 
 
 _REQUIRED_TOP_LEVEL_KEYS = frozenset(
-    {"experiment_name", "seed", "collects", "solvers", "repeat", "dataset_settings", "evaluation"}
+    {"experiment_name", "seed", "collects", "solvers", "repeat", "dataset_settings"}
 )
 _ALLOWED_TOP_LEVEL_KEYS = _REQUIRED_TOP_LEVEL_KEYS | {"worker"}
-_REQUIRED_DATASET_KEYS = frozenset({"experiment-id", "dataset", "problems", "type"})
+_REQUIRED_DATASET_KEYS = frozenset({"experiment-id", "dataset", "problems", "type", "evaluation"})
 _ALLOWED_DATASET_KEYS = _REQUIRED_DATASET_KEYS
 _REQUIRED_EVALUATION_KEYS = frozenset({"name"})
 _ALLOWED_EVALUATION_KEYS = _REQUIRED_EVALUATION_KEYS | {"config"}
+
+
+@dataclass(frozen=True)
+class EvaluationSpec:
+    name: str
+    config: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("evaluation.name cannot be empty.")
+        if not isinstance(self.config, dict):
+            raise ValueError("evaluation.config must be a mapping.")
+        object.__setattr__(self, "config", dict(self.config))
 
 
 @dataclass(frozen=True)
@@ -28,6 +41,7 @@ class DatasetSetting:
     dataset: str
     problem_ids: tuple[str, ...]
     problem_type: str
+    evaluation: EvaluationSpec
 
     def __post_init__(self) -> None:
         if not self.experiment_id.strip():
@@ -45,19 +59,6 @@ class DatasetSetting:
 
 
 @dataclass(frozen=True)
-class EvaluationSpec:
-    name: str
-    config: dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if not self.name.strip():
-            raise ValueError("evaluation.name cannot be empty.")
-        if not isinstance(self.config, dict):
-            raise ValueError("evaluation.config must be a mapping.")
-        object.__setattr__(self, "config", dict(self.config))
-
-
-@dataclass(frozen=True)
 class ExperimentConfig:
     experiment_name: str
     seed_range: tuple[int, int]
@@ -65,7 +66,6 @@ class ExperimentConfig:
     solver_ids: tuple[str, ...]
     repeat: int
     dataset_settings: tuple[DatasetSetting, ...]
-    evaluation: EvaluationSpec
     worker_count: int = 1
 
     def __post_init__(self) -> None:
@@ -136,7 +136,6 @@ def _parse_config(raw: dict[str, Any], *, problem_root: Path, solver_root: Path)
         problem_root=problem_root,
         solver_capabilities=solver_capabilities,
     )
-    evaluation = _parse_evaluation(raw["evaluation"])
     return ExperimentConfig(
         experiment_name=experiment_name,
         seed_range=seed_range,
@@ -144,7 +143,6 @@ def _parse_config(raw: dict[str, Any], *, problem_root: Path, solver_root: Path)
         solver_ids=solver_ids,
         repeat=repeat,
         dataset_settings=dataset_settings,
-        evaluation=evaluation,
         worker_count=worker_count,
     )
 
@@ -202,6 +200,7 @@ def _parse_dataset_setting(
     dataset = _parse_non_empty_string(item["dataset"], f"{context}.dataset")
     problem_type = _parse_non_empty_string(item["type"], f"{context}.type")
     problem_ids = _parse_string_list(item["problems"], f"{context}.problems")
+    evaluation = _parse_evaluation(item["evaluation"], context=f"{context}.evaluation")
 
     metas = [repository.read_metadata(dataset, problem_id, problem_type) for problem_id in problem_ids]
     triples = {(m["problem_type"], m["encoding"], m["direction"]) for m in metas}
@@ -220,25 +219,26 @@ def _parse_dataset_setting(
         dataset=dataset,
         problem_ids=problem_ids,
         problem_type=problem_type,
+        evaluation=evaluation,
     )
 
 
-def _parse_evaluation(value: Any) -> EvaluationSpec:
+def _parse_evaluation(value: Any, *, context: str = "evaluation") -> EvaluationSpec:
     if not isinstance(value, dict):
-        raise ValueError("evaluation must be a mapping.")
+        raise ValueError(f"{context} must be a mapping.")
     _validate_keys(
         value,
         required=_REQUIRED_EVALUATION_KEYS,
         allowed=_ALLOWED_EVALUATION_KEYS,
-        context="evaluation",
+        context=context,
     )
     raw_config = value.get("config", {})
     if raw_config is None:
         raw_config = {}
     if not isinstance(raw_config, dict):
-        raise ValueError("evaluation.config must be a mapping.")
+        raise ValueError(f"{context}.config must be a mapping.")
     return EvaluationSpec(
-        name=_parse_non_empty_string(value["name"], "evaluation.name"),
+        name=_parse_non_empty_string(value["name"], f"{context}.name"),
         config=raw_config,
     )
 

@@ -51,6 +51,9 @@ def _config_text(*, seed: str = "[1, 3]", collects: int = 1, datasets: str | Non
     dataset: DATA
     problems: [p1]
     type: mkp
+    evaluation:
+      name: custom
+      config: {}
 """
     return f"""
 experiment_name: exp_search
@@ -59,9 +62,6 @@ collects: {collects}
 worker: 1
 solvers: [stub_solver]
 repeat: 1
-evaluation:
-  name: custom
-  config: {{}}
 dataset_settings:
 {dataset_block}
 """.strip()
@@ -71,8 +71,8 @@ def _project(tmp_path: Path, *, seed: str = "[1, 3]", collects: int = 1, dataset
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     exp_path = tmp_path / "exp_cfg.yaml"
-    _write_problem_yaml(problem_root / "DATA" / "p1.yaml", problem_id="p1")
-    _write_problem_yaml(problem_root / "DATA" / "p2.yaml", problem_id="p2")
+    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p1.yaml", problem_id="p1")
+    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p2.yaml", problem_id="p2")
     _write_solver_yaml(solver_root / "stub_solver.yaml")
     exp_path.write_text(_config_text(seed=seed, collects=collects, datasets=datasets), encoding="utf-8")
     return build(exp_path, problem_root=problem_root, solver_root=solver_root), problem_root, solver_root
@@ -116,10 +116,16 @@ def test_dataset_fail_restarts_next_seed_from_first_dataset(tmp_path: Path) -> N
     dataset: DATA
     problems: [p1]
     type: mkp
+    evaluation:
+      name: custom
+      config: {}
   - experiment-id: exp2
     dataset: DATA
     problems: [p2]
     type: mkp
+    evaluation:
+      name: custom
+      config: {}
 """
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
     calls: list[tuple[int, str]] = []
@@ -162,6 +168,49 @@ def test_collects_multiple_seeds_without_overwrite(tmp_path: Path) -> None:
     assert (tmp_path / "output" / "exp_search" / "collect_0002" / "collect_summary.json").exists()
 
 
+def test_experiment_reuses_dataset_simulators_across_seed_range(tmp_path: Path, monkeypatch) -> None:
+    datasets = """
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+    evaluation:
+      name: custom
+      config: {}
+  - experiment-id: exp2
+    dataset: DATA
+    problems: [p2]
+    type: mkp
+    evaluation:
+      name: custom
+      config: {}
+"""
+    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=2, datasets=datasets)
+    experiment.register(
+        "custom",
+        lambda _input: DatasetEvalDecision(passed=True, verdict=PASS, message="ok"),
+    )
+
+    exp_module = __import__("mkp.experiment.experiment", fromlist=["Engine"])
+    original_build = exp_module.Engine.build
+    build_names: list[str] = []
+
+    def counting_build(*args, **kwargs):
+        build_names.append(kwargs["spec"].experiment_name)
+        return original_build(*args, **kwargs)
+
+    monkeypatch.setattr(exp_module.Engine, "build", counting_build)
+
+    report = experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    assert report.collected_seeds == (1, 2)
+    assert build_names == ["exp_search_exp1", "exp_search_exp2"]
+
+
 def test_failed_seed_does_not_write_variant_outputs(tmp_path: Path) -> None:
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 1]", collects=1)
     experiment.register(
@@ -178,3 +227,93 @@ def test_failed_seed_does_not_write_variant_outputs(tmp_path: Path) -> None:
     assert report.collected_seeds == ()
     assert not (tmp_path / "output" / "exp_search" / "collect_0001").exists()
     assert (tmp_path / "output" / "exp_search" / "summary.json").exists()
+
+
+def test_experiment_prints_dataset_status_lines(tmp_path: Path, capsys) -> None:
+    datasets = """
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+    evaluation:
+      name: custom
+      config: {}
+  - experiment-id: exp2
+    dataset: DATA
+    problems: [p2]
+    type: mkp
+    evaluation:
+      name: custom
+      config: {}
+"""
+    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 1]", collects=1, datasets=datasets)
+
+    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
+        passed = input_data.dataset_setting.experiment_id == "exp1"
+        return DatasetEvalDecision(
+            passed=passed,
+            verdict=PASS if passed else FAIL,
+            message=input_data.dataset_setting.experiment_id,
+        )
+
+    experiment.register("custom", evaluator)
+    experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    captured = capsys.readouterr()
+    lines = [line.strip() for line in captured.err.splitlines() if line.strip()]
+    assert lines == [
+        "[seed 1] (1/2) DATA   進行中",
+        "[seed 1] (1/2) DATA   通過",
+        "[seed 1] (2/2) DATA   進行中",
+        "[seed 1] (2/2) DATA   未通過",
+    ]
+
+
+def test_experiment_uses_dataset_specific_evaluation_configs(tmp_path: Path) -> None:
+    datasets = """
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+    evaluation:
+      name: custom
+      config:
+        expected_seed: 1
+  - experiment-id: exp2
+    dataset: DATA
+    problems: [p2]
+    type: mkp
+    evaluation:
+      name: custom
+      config:
+        expected_seed: 2
+"""
+    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
+    seen: list[tuple[str, dict]] = []
+
+    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
+        seen.append((input_data.dataset_setting.experiment_id, dict(input_data.evaluation_config)))
+        passed = input_data.seed == input_data.evaluation_config["expected_seed"]
+        return DatasetEvalDecision(
+            passed=passed,
+            verdict=PASS if passed else FAIL,
+            message="ok" if passed else "mismatch",
+        )
+
+    experiment.register("custom", evaluator)
+    report = experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    assert report.collected_seeds == ()
+    assert seen == [
+        ("exp1", {"expected_seed": 1}),
+        ("exp2", {"expected_seed": 2}),
+        ("exp1", {"expected_seed": 1}),
+    ]

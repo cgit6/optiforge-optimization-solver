@@ -101,18 +101,18 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
         problem_ids=problem_ids, # 問題ID
         solver_ids=solver_ids, # 求解器ID
         repeat=args.repeat, # 獨立實驗次數
-        seed=args.seed, # 基礎種子
         worker_count=args.worker_count, # worker 數
     )
 
 
 
 def executeSimulator(
-    spec: ExperimentSpec,
+    spec: ExperimentSpec, # 實驗規格
     *,
-    problem_root: Path = Path("configs/problems"),
-    solver_root: Path = Path("configs/solvers"),
-    output_root: Path = Path("output"),
+    seed: int,
+    problem_root: Path,
+    solver_root: Path,
+    output_root: Path,
 ) -> SimulatorResult:
     """驗證參數、`engine.build`、建立 `Simulator`，依 worker_count 選串行或併發路徑後輸出結果"""
 
@@ -129,9 +129,9 @@ def executeSimulator(
         sim = bundle.new_simulator()
         # 1. 執行模擬
         if spec.worker_count > 1:
-            simulator_result = sim.run_batch() # 併發執行
+            simulator_result = sim.run_batch(seed=seed) # 併發執行
         else:
-            simulator_result = sim.run_sequential() # 單一執行
+            simulator_result = sim.run_sequential(seed=seed) # 單一執行
 
         # 3. 輸出: 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
         write_simulator_result(

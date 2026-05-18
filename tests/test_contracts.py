@@ -12,7 +12,6 @@ def test_experiment_spec_valid():
         problem_ids=("weish01", "weish02"),
         solver_ids=("solver_a",),
         repeat=3,
-        seed=42,
         worker_count=2,
     )
     assert spec.repeat == 3
@@ -40,7 +39,6 @@ def test_experiment_spec_invalid(kwargs):
         problem_ids=("weish01",),
         solver_ids=("solver_a",),
         repeat=1,
-        seed=1,
     )
     base.update(kwargs)
     with pytest.raises(ValueError):

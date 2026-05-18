@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from mkp.cli.exp.literature_mkp import literature_mkp_evaluator
-from mkp.experiment import DatasetEvalInput, DatasetSetting, FAIL, PASS, VariantSummary
+from mkp.experiment import DatasetEvalInput, DatasetSetting, EvaluationSpec, FAIL, PASS, VariantSummary
 from mkp.simulator import SimulatorResult
 from mkp.tools.stat import ExcludedCounts, OverallSummary, ProblemSolverSummary, SummaryMeta, SummaryReport
 
@@ -70,7 +70,13 @@ def _input(
 ) -> DatasetEvalInput:
     return DatasetEvalInput(
         seed=7,
-        dataset_setting=DatasetSetting("exp1", "DATA", ("p1",), "mkp"),
+        dataset_setting=DatasetSetting(
+            "exp1",
+            "DATA",
+            ("p1",),
+            "mkp",
+            EvaluationSpec(name="literature_mkp", config={} if config is None else config),
+        ),
         evaluation_name="literature_mkp",
         evaluation_config={} if config is None else config,
         variant_summaries=variants

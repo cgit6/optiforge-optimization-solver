@@ -69,7 +69,7 @@ def test_create_experiment_spec_uses_new_cli_defaults() -> None:
     assert spec.problem_type == "mkp"
     assert spec.solver_ids == ("stub_solver",)
     assert spec.repeat == 20
-    assert spec.seed == 55688
+    assert args.seed == 55688
     assert spec.worker_count == 1
 
 
@@ -245,7 +245,6 @@ def test_validate_execute_args_rejects_multiple_solvers_for_cli_run(tmp_path: Pa
         problem_ids=("weish01",),
         solver_ids=("a", "b"),
         repeat=1,
-        seed=1,
     )
     with pytest.raises(ValueError, match="cli.run accepts exactly one solver"):
         validate_execute_args(spec, problem_root, solver_root)

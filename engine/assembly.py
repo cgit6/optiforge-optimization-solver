@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import numpy as np
 
@@ -55,6 +55,7 @@ def build(
     # 預先把這次會用到的 solver YAML 設定全部載好，封裝成唯讀快照，讓後面模擬執行時直接從記憶體拿
     solver_configs = SolverConfigsSnapshot.build(spec, Path(solver_root))
     # 讀 problem_repository 的 cacha 抓這次要實驗的題庫和題目，返回 ProblemBank 物件
+    # 這裡也會放進 share memory 中
     problem_bank = ProblemBank.build(repository=problem_repository, spec=spec, registry=problem_registry)
     
     # 求解器註冊清單
@@ -65,7 +66,7 @@ def build(
         spec=spec, # 實驗設定
         catalog_summary=summary, # 題庫索引摘要
         catalog=tuple(catalog), # 掃描整個題庫後得到的題目索引清單
-        problem_bank=problem_bank, # 題庫
+        problem_bank=problem_bank, # 題目緩存
         solver_configs=solver_configs, # 求解器參數設定
         solver_builders=builders, # 求解器註冊清單
         default_rng=cast(DefaultRngFactory, np.random.default_rng),
@@ -81,17 +82,18 @@ class SimulationBundle:
     spec: ExperimentSpec # 實驗規格
     catalog_summary: CatalogSummary # 題庫索引摘要
     catalog: tuple[ProblemCatalogEntry, ...] # 
-    problem_bank: ProblemBank # 題庫
+    problem_bank: ProblemBank # 題目清單
     solver_configs: SolverConfigsSnapshot # 算法的設定
     solver_builders: dict[str, SolverBuilder] # 建構算法函數的函數
     default_rng: DefaultRngFactory # RNG 工廠函數
     solver_root: Path # 求解器根路徑
+    exp_cfg: Any | None = None # 實驗模組的設定(選填，如果執行 cil.exp 的時候會把 exp_cfg.yaml 的設定保存至此地)
 
     def new_simulator(self) -> Simulator:
         """以目前 bundle 的題庫設定建立 `Simulator`；輸出由 caller 透過 stat 模組處理。
 
         呼叫端應以 :meth:`Simulator.run_sequential` 或 :meth:`Simulator.run_batch` 執行；
-        若需覆寫種子應建立新的 :class:`ExperimentSpec` 與 bundle。
+        seed 由 run 方法輸入，因此同一個 bundle 可用不同 seed 重複執行。
         """
         from ..simulator.core import Simulator
 
@@ -105,6 +107,9 @@ class SimulationBundle:
             solver_configs=self.solver_configs,
             validator=Validator(),
         )
+
+    def new(self) -> Simulator:
+        return self.new_simulator()
 
 class Engine:
     """將 Repository、Registry、Loader、Validator、Writer 與 Simulator 組成一個可跑批次。"""
