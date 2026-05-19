@@ -11,11 +11,17 @@ from typing import Any
 from .config import DatasetSetting, ExperimentConfig, load_config
 from .evaluation import (
     DatasetEvalDecision,
-    DatasetEvalInput,
-    DatasetEvaluator,
     DatasetRunResult,
+    ExperimentEvalInput,
+    ExperimentEvaluator,
     FAIL,
     PASS,
+    PaperSetDecisionRecord,
+    PaperSetEvalInput,
+    PaperSetEvaluator,
+    PaperSetRunResult,
+    SOFT_PASS,
+    STRICT_PASS,
     VariantSummary,
 )
 from ..engine.assembly import Engine
@@ -25,9 +31,11 @@ from ..tools.show import write_simulator_result
 from ..tools.stat import ResultEntry, SummaryMeta, SummaryReport, result_entries, summarize
 
 
+PaperSetEvaluationRecord = PaperSetDecisionRecord
+
+
 @dataclass(frozen=True)
-class DatasetEvaluationRecord:
-    dataset_setting: DatasetSetting
+class GlobalEvaluationRecord:
     decision: DatasetEvalDecision
 
 
@@ -36,7 +44,8 @@ class SeedAttempt:
     seed: int
     verdict: str
     collected: bool
-    dataset_evaluations: tuple[DatasetEvaluationRecord, ...]
+    paper_set_evaluations: tuple[PaperSetEvaluationRecord, ...]
+    global_evaluation: GlobalEvaluationRecord | None = None
     message: str = ""
 
 
@@ -45,7 +54,8 @@ class CollectedSeed:
     collect_index: int
     seed: int
     output_dir: str
-    dataset_evaluations: tuple[DatasetEvaluationRecord, ...]
+    paper_set_evaluations: tuple[PaperSetEvaluationRecord, ...]
+    global_evaluation: GlobalEvaluationRecord | None = None
 
 
 @dataclass(frozen=True)
@@ -60,16 +70,24 @@ class ExperimentReport:
 @dataclass
 class Experiment:
     cfg: ExperimentConfig # 實驗設定
-    evaluators: dict[str, DatasetEvaluator] = field(default_factory=dict) # 評估函數的註冊清單
+    evaluators: dict[str, PaperSetEvaluator] = field(default_factory=dict) # 評估函數的註冊清單
+    global_evaluators: dict[str, ExperimentEvaluator] = field(default_factory=dict)
     collected_results: list[CollectedSeed] = field(default_factory=list) # 符合條件的實驗 seed
 
-    def register(self, name: str, evaluator: DatasetEvaluator) -> None:
+    def register(self, name: str, evaluator: PaperSetEvaluator) -> None:
         if not name.strip():
             raise ValueError("evaluator name cannot be empty.")
         self.evaluators[name] = evaluator
 
+    def register_global(self, name: str, evaluator: ExperimentEvaluator) -> None:
+        if not name.strip():
+            raise ValueError("evaluator name cannot be empty.")
+        self.global_evaluators[name] = evaluator
+
     def run(self, *, problem_root: Path, solver_root: Path, output_root: Path) -> ExperimentReport:
-        dataset_evaluators = self._dataset_evaluators()
+        paper_set_evaluators = self._paper_set_evaluators()
+        global_evaluator = self._global_evaluator()
+        paper_set_groups = _paper_set_groups(self.cfg.dataset_settings)
         # 輸出位置
         experiment_output_dir = Path(output_root) / self.cfg.experiment_name
         if experiment_output_dir.exists():
@@ -99,64 +117,104 @@ class Experiment:
                     break
 
                 dataset_results: list[DatasetRunResult] = []
-                dataset_evaluations: list[DatasetEvaluationRecord] = []
-                seed_failed = False
+                paper_set_evaluations: list[PaperSetEvaluationRecord] = []
+                global_evaluation: GlobalEvaluationRecord | None = None
+                dataset_index = 0
 
-                for dataset_index, dataset_setting in enumerate(self.cfg.dataset_settings, start=1):
-                    _emit_dataset_status(
-                        seed=seed,
-                        dataset_index=dataset_index,
-                        dataset_total=dataset_total,
-                        dataset_name_width=dataset_name_width,
-                        dataset_setting=dataset_setting,
-                        status="進行中",
-                    )
-                    dataset_result = self._run_dataset_seed(
-                        dataset_setting,
-                        seed=seed,
-                        simulator=simulators[dataset_setting.experiment_id],
-                    )
-                    decision = dataset_evaluators[dataset_setting.experiment_id](
-                        DatasetEvalInput(
+                for paper_set, grouped_settings in paper_set_groups:
+                    grouped_results: list[DatasetRunResult] = []
+                    for dataset_setting in grouped_settings:
+                        dataset_index += 1
+                        _emit_dataset_status(
                             seed=seed,
+                            dataset_index=dataset_index,
+                            dataset_total=dataset_total,
+                            dataset_name_width=dataset_name_width,
                             dataset_setting=dataset_setting,
-                            evaluation_name=dataset_setting.evaluation.name,
-                            evaluation_config=dataset_setting.evaluation.config,
-                            variant_summaries=dataset_result.variant_summaries,
-                            simulator_result=dataset_result.simulator_result,
+                            status="進行中",
+                        )
+                        dataset_result = self._run_dataset_seed(
+                            dataset_setting,
+                            seed=seed,
+                            simulator=simulators[dataset_setting.experiment_id],
+                        )
+                        grouped_results.append(dataset_result)
+                        dataset_results.append(dataset_result)
+
+                    paper_set_result = _paper_set_run_result(
+                        paper_set=paper_set,
+                        dataset_settings=grouped_settings,
+                        dataset_results=grouped_results,
+                        seed=seed,
+                    )
+                    first_setting = grouped_settings[0]
+                    decision = paper_set_evaluators[paper_set](
+                        PaperSetEvalInput(
+                            seed=seed,
+                            paper_set=paper_set,
+                            dataset_settings=grouped_settings,
+                            evaluation_name=first_setting.evaluation.name,
+                            evaluation_config=first_setting.evaluation.config,
+                            variant_summaries=paper_set_result.variant_summaries,
+                            dataset_results=paper_set_result.dataset_results,
                         )
                     )
-                    dataset_evaluations.append(
-                        DatasetEvaluationRecord(
-                            dataset_setting=dataset_setting,
+                    paper_set_evaluations.append(
+                        PaperSetEvaluationRecord(
+                            paper_set=paper_set,
+                            dataset_settings=grouped_settings,
                             decision=decision,
                         )
                     )
-                    _emit_dataset_status(
-                        seed=seed,
-                        dataset_index=dataset_index,
-                        dataset_total=dataset_total,
-                        dataset_name_width=dataset_name_width,
-                        dataset_setting=dataset_setting,
-                        status="通過" if decision.passed else "未通過",
+                    for status_index, dataset_setting in enumerate(grouped_settings, start=1):
+                        _emit_dataset_status(
+                            seed=seed,
+                            dataset_index=dataset_index - len(grouped_settings) + status_index,
+                            dataset_total=dataset_total,
+                            dataset_name_width=dataset_name_width,
+                            dataset_setting=dataset_setting,
+                            status="通過" if decision.passed else "未通過",
+                        )
+                if global_evaluator is not None:
+                    evaluation_name, evaluator = global_evaluator
+                    first_setting = self.cfg.dataset_settings[0]
+                    global_evaluation = GlobalEvaluationRecord(
+                        decision=evaluator(
+                            ExperimentEvalInput(
+                                seed=seed,
+                                evaluation_name=evaluation_name,
+                                evaluation_config=first_setting.evaluation.config,
+                                variant_summaries=_aggregate_variant_summaries(
+                                    dataset_results,
+                                    experiment_meta={"scope": "all-level"},
+                                ),
+                                dataset_results=tuple(dataset_results),
+                                paper_set_evaluations=tuple(paper_set_evaluations),
+                            )
+                        )
                     )
-                    if not decision.passed:
-                        seed_failed = True
-                        break
-                    dataset_results.append(dataset_result)
 
-                attempt_verdict = FAIL if seed_failed else PASS
+                attempt_verdict = _seed_verdict(
+                    paper_set_evaluations=paper_set_evaluations,
+                    global_evaluation=global_evaluation,
+                )
+                collected_seed_pass = attempt_verdict == STRICT_PASS
                 attempts.append(
                     SeedAttempt(
                         seed=seed,
                         verdict=attempt_verdict,
-                        collected=not seed_failed,
-                        dataset_evaluations=tuple(dataset_evaluations),
-                        message=_attempt_message(dataset_evaluations, collected=not seed_failed),
+                        collected=collected_seed_pass,
+                        paper_set_evaluations=tuple(paper_set_evaluations),
+                        global_evaluation=global_evaluation,
+                        message=_attempt_message(
+                            paper_set_evaluations,
+                            global_evaluation=global_evaluation,
+                            collected=collected_seed_pass,
+                        ),
                     )
                 )
 
-                if seed_failed:
+                if not collected_seed_pass:
                     continue
 
                 collect_index = len(collected) + 1
@@ -166,14 +224,16 @@ class Experiment:
                     collect_index=collect_index,
                     seed=seed,
                     dataset_results=dataset_results,
-                    dataset_evaluations=dataset_evaluations,
+                    paper_set_evaluations=paper_set_evaluations,
+                    global_evaluation=global_evaluation,
                     output_root=Path(output_root),
                 )
                 collected_seed = CollectedSeed(
                     collect_index=collect_index,
                     seed=seed,
                     output_dir=str(collect_dir),
-                    dataset_evaluations=tuple(dataset_evaluations),
+                    paper_set_evaluations=tuple(paper_set_evaluations),
+                    global_evaluation=global_evaluation,
                 )
                 collected.append(collected_seed)
                 self.collected_results.append(collected_seed)
@@ -236,7 +296,8 @@ class Experiment:
         collect_index: int,
         seed: int,
         dataset_results: list[DatasetRunResult],
-        dataset_evaluations: list[DatasetEvaluationRecord],
+        paper_set_evaluations: list[PaperSetEvaluationRecord],
+        global_evaluation: GlobalEvaluationRecord | None,
         output_root: Path,
     ) -> None:
         collect_dir.mkdir(parents=True, exist_ok=True)
@@ -263,18 +324,29 @@ class Experiment:
             {
                 "collect_index": collect_index,
                 "seed": seed,
-                "dataset_evaluations": [asdict(record) for record in dataset_evaluations],
+                "paper_set_evaluations": [asdict(record) for record in paper_set_evaluations],
+                "global_evaluation": asdict(global_evaluation) if global_evaluation is not None else None,
             },
         )
 
-    def _dataset_evaluators(self) -> dict[str, DatasetEvaluator]:
-        evaluators: dict[str, DatasetEvaluator] = {}
-        for dataset_setting in self.cfg.dataset_settings:
-            evaluation_name = dataset_setting.evaluation.name
+    def _paper_set_evaluators(self) -> dict[str, PaperSetEvaluator]:
+        evaluators: dict[str, PaperSetEvaluator] = {}
+        for paper_set, grouped_settings in _paper_set_groups(self.cfg.dataset_settings):
+            evaluation_name = grouped_settings[0].evaluation.name
             if evaluation_name not in self.evaluators:
                 raise KeyError(f"unknown evaluator: {evaluation_name}")
-            evaluators[dataset_setting.experiment_id] = self.evaluators[evaluation_name]
+            evaluators[paper_set] = self.evaluators[evaluation_name]
         return evaluators
+
+    def _global_evaluator(self) -> tuple[str, ExperimentEvaluator] | None:
+        names = {setting.evaluation.name for setting in self.cfg.dataset_settings}
+        if len(names) != 1:
+            return None
+        name = next(iter(names))
+        evaluator = self.global_evaluators.get(name)
+        if evaluator is None:
+            return None
+        return (name, evaluator)
 
 
 def build(
@@ -338,20 +410,73 @@ def _variant_summaries(simulator_result: Any) -> tuple[VariantSummary, ...]:
 
 
 def _attempt_message(
-    dataset_evaluations: list[DatasetEvaluationRecord],
+    paper_set_evaluations: list[PaperSetEvaluationRecord],
     *,
+    global_evaluation: GlobalEvaluationRecord | None,
     collected: bool,
 ) -> str:
     if collected:
         return "seed collected"
-    if not dataset_evaluations:
-        return "seed failed"
-    failed = dataset_evaluations[-1]
-    return (
-        f"{failed.dataset_setting.experiment_id}: {failed.decision.message}"
-        if failed.decision.message
-        else f"{failed.dataset_setting.experiment_id}: dataset failed"
-    )
+    for record in paper_set_evaluations:
+        if record.decision.verdict != STRICT_PASS:
+            if record.decision.message:
+                return f"{record.paper_set}: {record.decision.message}"
+            return f"{record.paper_set}: {record.decision.verdict}"
+    if global_evaluation is not None:
+        if global_evaluation.decision.message:
+            return f"all-level: {global_evaluation.decision.message}"
+        return f"all-level: {global_evaluation.decision.verdict}"
+    return "seed not collected"
+
+
+def _seed_verdict(
+    *,
+    paper_set_evaluations: list[PaperSetEvaluationRecord],
+    global_evaluation: GlobalEvaluationRecord | None,
+) -> str:
+    verdicts = [record.decision.verdict for record in paper_set_evaluations]
+    if global_evaluation is not None:
+        verdicts.append(global_evaluation.decision.verdict)
+    if any(verdict == FAIL for verdict in verdicts):
+        return FAIL
+    if verdicts and all(verdict == STRICT_PASS for verdict in verdicts):
+        return STRICT_PASS
+    return SOFT_PASS
+
+
+def _aggregate_variant_summaries(
+    dataset_results: list[DatasetRunResult],
+    *,
+    experiment_meta: dict[str, Any],
+) -> tuple[VariantSummary, ...]:
+    grouped_entries: dict[tuple[str, int], list[ResultEntry]] = defaultdict(list)
+    variant_params: dict[tuple[str, int], dict[str, Any]] = {}
+    for dataset_result in dataset_results:
+        for entry in result_entries(dataset_result.simulator_result):
+            grouped_entries[(entry.solver_id, entry.param_set_index)].append(entry)
+        for key, params in dataset_result.simulator_result.variant_params.items():
+            variant_params.setdefault(key, dict(params))
+
+    variant_summaries: list[VariantSummary] = []
+    for solver_id, param_set_index in sorted(grouped_entries):
+        key = (solver_id, param_set_index)
+        variant_summaries.append(
+            VariantSummary(
+                solver_id=solver_id,
+                param_set_index=param_set_index,
+                params=variant_params[key],
+                summary=summarize(
+                    grouped_entries[key],
+                    meta=SummaryMeta(
+                        solver_id=solver_id,
+                        param_set_index=param_set_index,
+                        params=variant_params[key],
+                        experiment=experiment_meta,
+                    ),
+                ),
+            )
+        )
+    return tuple(variant_summaries)
 
 
 def _emit_dataset_status(
@@ -376,3 +501,33 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
+
+
+def _paper_set_groups(dataset_settings: tuple[DatasetSetting, ...]) -> tuple[tuple[str, tuple[DatasetSetting, ...]], ...]:
+    ordered: list[str] = []
+    grouped: dict[str, list[DatasetSetting]] = {}
+    for setting in dataset_settings:
+        if setting.paper_set not in grouped:
+            ordered.append(setting.paper_set)
+            grouped[setting.paper_set] = []
+        grouped[setting.paper_set].append(setting)
+    return tuple((paper_set, tuple(grouped[paper_set])) for paper_set in ordered)
+
+
+def _paper_set_run_result(
+    *,
+    paper_set: str,
+    dataset_settings: tuple[DatasetSetting, ...],
+    dataset_results: list[DatasetRunResult],
+    seed: int,
+) -> PaperSetRunResult:
+    return PaperSetRunResult(
+        seed=seed,
+        paper_set=paper_set,
+        dataset_settings=dataset_settings,
+        dataset_results=tuple(dataset_results),
+        variant_summaries=_aggregate_variant_summaries(
+            dataset_results,
+            experiment_meta={"paper_set": paper_set},
+        ),
+    )

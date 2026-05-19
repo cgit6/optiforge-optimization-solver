@@ -75,6 +75,7 @@ def _input(
             "DATA",
             ("p1",),
             "mkp",
+            "set1",
             EvaluationSpec(name="literature_mkp", config={} if config is None else config),
         ),
         evaluation_name="literature_mkp",

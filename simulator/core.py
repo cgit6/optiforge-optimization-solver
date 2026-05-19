@@ -43,12 +43,20 @@ from ..solver.validator import ValidationReport, Validator
 _PROCESS_SAFE_SOLVERS = {
     "bsma",
     "bsma_numba",
+    "bsma_numba_literature",
+    "bsma_numba_transfer_literature",
     "bsma_numba_v2",
     "bsca",
     "bsca_numba",
+    "bsca_numba_literature",
+    "bsca_numba_transfer_literature",
     "bsca_numba_v2",
     "brlsmasca",
     "brlsmasca_numba",
+    "brlsmasca_numba_literature",
+    "brlsmasca_numba_transfer_literature",
+    "brlsmasca_numba_random50_transfer_literature",
+    "brlsmasca_numba_random50_literature",
     "brlsmasca_numba_v2",
     "sma_mkp_modular_v1",
     "sma_tsp_modular_v1",
@@ -163,12 +171,15 @@ def _build_process_local_registry() -> SolverRegistry:
     registry.register("stub_solver", lambda: StubMaxIterationsSolver())
     registry.register("bsma", lambda: BSMASolver())
     registry.register("bsma_numba", lambda: BSMANumbaSolver())
+    registry.register("bsma_numba_literature", lambda: BSMANumbaSolver())
     registry.register("bsma_numba_v2", lambda: BSMANumbaSolverV2())
     registry.register("bsca", lambda: BSCASolver())
     registry.register("bsca_numba", lambda: BSCANumbaSolver())
+    registry.register("bsca_numba_literature", lambda: BSCANumbaSolver())
     registry.register("bsca_numba_v2", lambda: BSCANumbaSolverV2())
     registry.register("brlsmasca", lambda: BRLSMASCATestSolver())
     registry.register("brlsmasca_numba", lambda: BRLSMASCATestNumbaSolver())
+    registry.register("brlsmasca_numba_literature", lambda: BRLSMASCATestNumbaSolver())
     registry.register("brlsmasca_numba_v2", lambda: BRLSMASCATestNumbaSolverV2())
     registry.register("sma_mkp_modular_v1", lambda: SMAMKPModularV1Solver())
     registry.register("sma_tsp_modular_v1", lambda: SMATSPModularV1Solver())

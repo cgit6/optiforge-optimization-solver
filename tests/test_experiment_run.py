@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mkp.experiment import DatasetEvalDecision, DatasetEvalInput, Experiment, FAIL, PASS, build
+from mkp.experiment import (
+    Experiment,
+    ExperimentEvalInput,
+    FAIL,
+    PASS,
+    PaperSetEvalInput,
+    SOFT_PASS,
+    STRICT_PASS,
+    DatasetEvalDecision,
+    build,
+)
 
 
 def _write_problem_yaml(path: Path, *, problem_id: str, dataset: str = "DATA") -> None:
@@ -51,6 +61,7 @@ def _config_text(*, seed: str = "[1, 3]", collects: int = 1, datasets: str | Non
     dataset: DATA
     problems: [p1]
     type: mkp
+    paper_set: set1
     evaluation:
       name: custom
       config: {}
@@ -81,7 +92,7 @@ def _project(tmp_path: Path, *, seed: str = "[1, 3]", collects: int = 1, dataset
 def test_custom_evaluator_collects_only_passing_seed(tmp_path: Path) -> None:
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1)
 
-    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
+    def evaluator(input_data: PaperSetEvalInput) -> DatasetEvalDecision:
         passed = input_data.seed == 2
         return DatasetEvalDecision(
             passed=passed,
@@ -116,6 +127,7 @@ def test_dataset_fail_restarts_next_seed_from_first_dataset(tmp_path: Path) -> N
     dataset: DATA
     problems: [p1]
     type: mkp
+    paper_set: set1
     evaluation:
       name: custom
       config: {}
@@ -123,6 +135,7 @@ def test_dataset_fail_restarts_next_seed_from_first_dataset(tmp_path: Path) -> N
     dataset: DATA
     problems: [p2]
     type: mkp
+    paper_set: set2
     evaluation:
       name: custom
       config: {}
@@ -130,13 +143,14 @@ def test_dataset_fail_restarts_next_seed_from_first_dataset(tmp_path: Path) -> N
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
     calls: list[tuple[int, str]] = []
 
-    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
-        calls.append((input_data.seed, input_data.dataset_setting.experiment_id))
-        passed = not (input_data.seed == 1 and input_data.dataset_setting.experiment_id == "exp2")
+    def evaluator(input_data: PaperSetEvalInput) -> DatasetEvalDecision:
+        experiment_id = input_data.dataset_settings[0].experiment_id
+        calls.append((input_data.seed, experiment_id))
+        passed = not (input_data.seed == 1 and experiment_id == "exp2")
         return DatasetEvalDecision(
             passed=passed,
             verdict=PASS if passed else FAIL,
-            message=input_data.dataset_setting.experiment_id,
+            message=experiment_id,
         )
 
     experiment.register("custom", evaluator)
@@ -174,6 +188,7 @@ def test_experiment_reuses_dataset_simulators_across_seed_range(tmp_path: Path, 
     dataset: DATA
     problems: [p1]
     type: mkp
+    paper_set: set1
     evaluation:
       name: custom
       config: {}
@@ -181,6 +196,7 @@ def test_experiment_reuses_dataset_simulators_across_seed_range(tmp_path: Path, 
     dataset: DATA
     problems: [p2]
     type: mkp
+    paper_set: set2
     evaluation:
       name: custom
       config: {}
@@ -235,6 +251,7 @@ def test_experiment_prints_dataset_status_lines(tmp_path: Path, capsys) -> None:
     dataset: DATA
     problems: [p1]
     type: mkp
+    paper_set: set1
     evaluation:
       name: custom
       config: {}
@@ -242,18 +259,20 @@ def test_experiment_prints_dataset_status_lines(tmp_path: Path, capsys) -> None:
     dataset: DATA
     problems: [p2]
     type: mkp
+    paper_set: set2
     evaluation:
       name: custom
       config: {}
 """
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 1]", collects=1, datasets=datasets)
 
-    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
-        passed = input_data.dataset_setting.experiment_id == "exp1"
+    def evaluator(input_data: PaperSetEvalInput) -> DatasetEvalDecision:
+        experiment_id = input_data.dataset_settings[0].experiment_id
+        passed = experiment_id == "exp1"
         return DatasetEvalDecision(
             passed=passed,
             verdict=PASS if passed else FAIL,
-            message=input_data.dataset_setting.experiment_id,
+            message=experiment_id,
         )
 
     experiment.register("custom", evaluator)
@@ -279,6 +298,7 @@ def test_experiment_uses_dataset_specific_evaluation_configs(tmp_path: Path) -> 
     dataset: DATA
     problems: [p1]
     type: mkp
+    paper_set: set1
     evaluation:
       name: custom
       config:
@@ -287,6 +307,7 @@ def test_experiment_uses_dataset_specific_evaluation_configs(tmp_path: Path) -> 
     dataset: DATA
     problems: [p2]
     type: mkp
+    paper_set: set2
     evaluation:
       name: custom
       config:
@@ -295,8 +316,8 @@ def test_experiment_uses_dataset_specific_evaluation_configs(tmp_path: Path) -> 
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
     seen: list[tuple[str, dict]] = []
 
-    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
-        seen.append((input_data.dataset_setting.experiment_id, dict(input_data.evaluation_config)))
+    def evaluator(input_data: PaperSetEvalInput) -> DatasetEvalDecision:
+        seen.append((input_data.dataset_settings[0].experiment_id, dict(input_data.evaluation_config)))
         passed = input_data.seed == input_data.evaluation_config["expected_seed"]
         return DatasetEvalDecision(
             passed=passed,
@@ -316,4 +337,83 @@ def test_experiment_uses_dataset_specific_evaluation_configs(tmp_path: Path) -> 
         ("exp1", {"expected_seed": 1}),
         ("exp2", {"expected_seed": 2}),
         ("exp1", {"expected_seed": 1}),
+        ("exp2", {"expected_seed": 2}),
     ]
+
+
+def test_experiment_groups_datasets_by_paper_set(tmp_path: Path) -> None:
+    datasets = """
+  - experiment-id: exp1
+    dataset: DATA
+    problems: [p1]
+    type: mkp
+    paper_set: set1
+    evaluation:
+      name: custom
+      config: {}
+  - experiment-id: exp2
+    dataset: DATA
+    problems: [p2]
+    type: mkp
+    paper_set: set1
+    evaluation:
+      name: custom
+      config: {}
+"""
+    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 1]", collects=1, datasets=datasets)
+    seen: list[tuple[str, tuple[str, ...]]] = []
+
+    def evaluator(input_data: PaperSetEvalInput) -> DatasetEvalDecision:
+        seen.append(
+            (
+                input_data.paper_set,
+                tuple(setting.experiment_id for setting in input_data.dataset_settings),
+            )
+        )
+        return DatasetEvalDecision(passed=True, verdict=PASS, message="ok")
+
+    experiment.register("custom", evaluator)
+    report = experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    assert report.collected_seeds == (1,)
+    assert seen == [("set1", ("exp1", "exp2"))]
+
+
+def test_experiment_collects_only_when_paper_set_and_global_are_strict(tmp_path: Path) -> None:
+    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1)
+
+    def paper_set_evaluator(input_data: PaperSetEvalInput) -> DatasetEvalDecision:
+        if input_data.seed == 1:
+            return DatasetEvalDecision(
+                passed=True,
+                verdict=SOFT_PASS,
+                message="near miss",
+            )
+        return DatasetEvalDecision(
+            passed=True,
+            verdict=STRICT_PASS,
+            message="strict",
+        )
+
+    def global_evaluator(input_data: ExperimentEvalInput) -> DatasetEvalDecision:
+        return DatasetEvalDecision(
+            passed=True,
+            verdict=STRICT_PASS,
+            message=f"all-level seed={input_data.seed}",
+        )
+
+    experiment.register("custom", paper_set_evaluator)
+    experiment.register_global("custom", global_evaluator)
+    report = experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    assert report.collected_seeds == (2,)
+    assert [attempt.verdict for attempt in report.attempts] == [SOFT_PASS, STRICT_PASS]
+    assert report.attempts[0].global_evaluation is not None

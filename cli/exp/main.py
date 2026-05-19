@@ -5,6 +5,11 @@ from pathlib import Path
 
 from ...experiment import ExperimentReport, build
 from .literature_mkp import literature_mkp_evaluator
+from .literature_mkp_support import literature_mkp_support_evaluator
+from .literature_mkp_support_full import (
+    literature_mkp_support_full_experiment_evaluator,
+    literature_mkp_support_full_paper_set_evaluator,
+)
 
 
 # 這種東西應該放在專案設定中
@@ -14,7 +19,12 @@ DEFAULT_SOLVER_ROOT = Path("configs/solvers") # 求解器路徑
 DEFAULT_OUTPUT_ROOT = Path("output") # 輸出路徑
 
 _BUILTIN_EVALUATORS = {
-    "literature_mkp": literature_mkp_evaluator,
+    "literature_mkp": (literature_mkp_evaluator, None),
+    "literature_mkp_support": (literature_mkp_support_evaluator, None),
+    "literature_mkp_support_full": (
+        literature_mkp_support_full_paper_set_evaluator,
+        literature_mkp_support_full_experiment_evaluator,
+    ),
 }
 
 
@@ -24,7 +34,10 @@ def _register_configured_evaluators(experiment) -> None:
     if missing:
         raise KeyError(f"unknown evaluator(s) in experiment config: {missing}")
     for name in sorted(names):
-        experiment.register(name, _BUILTIN_EVALUATORS[name])
+        paper_set_evaluator, global_evaluator = _BUILTIN_EVALUATORS[name]
+        experiment.register(name, paper_set_evaluator)
+        if global_evaluator is not None:
+            experiment.register_global(name, global_evaluator)
 
 
 def main() -> ExperimentReport:

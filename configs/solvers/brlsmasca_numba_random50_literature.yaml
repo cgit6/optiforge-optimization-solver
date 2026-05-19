@@ -1,0 +1,17 @@
+solver_id: brlsmasca_numba_random50_literature
+solver_class: BRLSMASCATestNumbaSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 5000
+  max_seconds: null
+params:
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
+    ctf: tanh_abs
+    policy_mode: random_family_50_50
