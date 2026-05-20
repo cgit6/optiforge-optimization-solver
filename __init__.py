@@ -15,16 +15,12 @@ from .converter import transformToMomery, transformToYaml
 from .engine import Engine, SimulationBundle, SolverConfigsSnapshot, build
 from .engine.models import ExperimentSpec, SolveResult, RunTask
 from .engine.repository import ProblemRepository
-from .problem import Problem, MKPProblem, ProblemModel, ProblemRegistry, ProblemTypeSpec, TSPProblem
+from .problem import Problem, MKPProblem, ProblemModel, ProblemRegistry, ProblemTypeSpec, TSPProblem, ValidationReport
 from .simulator import Simulator, SimulatorResult, SimulatorRunRow
 from .solver.BSCA import BSCACore, BSCASolver
 from .solver.BSCASMA import BRLSMASCATestCore, BRLSMASCATestSolver
 from .solver.BSMA import BSMACore, BSMASolver
-from .solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
 from .solver.registry import SolverRegistry, StubMaxIterationsSolver
-from .solver.sma_mkp_modular import SMAMKPModularV1Solver
-from .solver.sma_tsp_modular import SMATSPModularV1Solver
-from .solver.validator import ValidationReport, Validator
 from .tools.show import write_simulator_result
 from .tools.solver_config_loader import SolverConfigLoader
 from .tools.stat import ResultEntry
@@ -54,9 +50,6 @@ __all__ = [
     "BRLSMASCATestSolver",
     "BSMACore",
     "BSMASolver",
-    "SMAMKPModularV1Solver",
-    "SMATSPModularV1Solver",
-    "NearestNeighborTSPSolver",
     "main",
     "ProblemModel",
     "Problem",
@@ -78,6 +71,5 @@ __all__ = [
     "SolverRegistry",
     "StubMaxIterationsSolver",
     "ValidationReport",
-    "Validator",
     "write_simulator_result",
 ]

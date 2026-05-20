@@ -12,7 +12,6 @@ from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.simulator import Simulator, SimulatorResult
 from mkp.solver.registry import SolverRegistry
-from mkp.solver.validator import Validator
 from mkp.tools.show import write_simulator_result
 
 
@@ -103,14 +102,12 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim"
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: solver)
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
-    validator = Validator()
     return (
         Simulator(
             spec=bank_spec,
             problem_bank=bank,
             solver_registry=registry,
             solver_configs=solver_configs,
-            validator=validator,
         ),
         output_root,
     )

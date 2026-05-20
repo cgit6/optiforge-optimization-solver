@@ -65,7 +65,6 @@ def _variant_summary(
 
 def _input(
     *,
-    config: dict | None = None,
     variants: tuple[VariantSummary, ...] | None = None,
 ) -> DatasetEvalInput:
     return DatasetEvalInput(
@@ -75,10 +74,9 @@ def _input(
             "DATA",
             ("p1",),
             "mkp",
-            EvaluationSpec(name="literature_mkp", config={} if config is None else config),
+            EvaluationSpec(name="literature_mkp"),
         ),
         evaluation_name="literature_mkp",
-        evaluation_config={} if config is None else config,
         variant_summaries=variants
         or (
             _variant_summary(solver_id="solver_a", param_set_index=0, params={"z": 0.08}, pdev=1.0),
@@ -88,58 +86,12 @@ def _input(
     )
 
 
-def test_literature_evaluator_passes_with_empty_config() -> None:
+def test_literature_evaluator_passes_valid_summaries() -> None:
     decision = literature_mkp_evaluator(_input())
 
     assert decision.passed is True
     assert decision.verdict == PASS
     assert "variant_pdevs" in decision.details
-
-
-def test_literature_evaluator_fails_when_required_variant_missing() -> None:
-    decision = literature_mkp_evaluator(
-        _input(
-            config={
-                "required_variants": [
-                    {"solver": "solver_a", "param_set_index": 0},
-                    {"solver": "solver_missing", "param_set_index": 9},
-                ]
-            }
-        )
-    )
-
-    assert decision.passed is False
-    assert decision.verdict == FAIL
-    assert decision.details["missing_variants"][0]["solver_id"] == "solver_missing"
-
-
-def test_literature_evaluator_fails_when_target_not_near_best() -> None:
-    decision = literature_mkp_evaluator(
-        _input(
-            config={
-                "pdev_tolerance": 0.1,
-                "target_variant": {"solver": "solver_b", "param_set_index": 1},
-            }
-        )
-    )
-
-    assert decision.passed is False
-    assert decision.verdict == FAIL
-    assert decision.details["best_variant"]["solver_id"] == "solver_a"
-
-
-def test_literature_evaluator_passes_when_target_within_tolerance() -> None:
-    decision = literature_mkp_evaluator(
-        _input(
-            config={
-                "pdev_tolerance": 1.1,
-                "target_variant": {"solver": "solver_b", "param_set_index": 1},
-            }
-        )
-    )
-
-    assert decision.passed is True
-    assert decision.verdict == PASS
 
 
 def test_literature_evaluator_fails_on_invalid_summary() -> None:

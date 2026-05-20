@@ -12,7 +12,6 @@ from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.simulator import Simulator
 from mkp.solver.registry import SolverRegistry
-from mkp.solver.validator import Validator
 from mkp.tools.show import write_simulator_result
 
 
@@ -111,14 +110,12 @@ def _build_simulator(tmp_path: Path) -> tuple[Simulator, Path]:
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(_build_spec(), solver_root)
-    validator = Validator()
     return (
         Simulator(
             spec=_build_spec(),
             problem_bank=bank,
             solver_registry=registry,
             solver_configs=solver_configs,
-            validator=validator,
         ),
         output_root,
     )
@@ -235,7 +232,6 @@ def _build_seed_simulator(
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=SolverConfigsSnapshot.build(spec, solver_root),
-        validator=Validator(),
     )
 
 
@@ -280,13 +276,11 @@ def test_expand_tasks_order_and_seed_keys_preserve_variants(tmp_path: Path):
     registry.register("s_a", lambda: CountingSolver())
     registry.register("s_b", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
-    validator = Validator()
     simulator = Simulator(
         spec=bank_spec,
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
-        validator=validator,
     )
     try:
         tasks = simulator.expand_tasks(seed=999)
@@ -536,13 +530,11 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
-    validator = Validator()
     simulator = Simulator(
         spec=bank_spec,
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
-        validator=validator,
     )
 
     try:
@@ -576,13 +568,11 @@ def test_run_batch_matches_sequential_seed_assignment(tmp_path: Path):
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
-    validator = Validator()
     simulator = Simulator(
         spec=bank_spec,
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
-        validator=validator,
     )
 
     try:
@@ -648,13 +638,11 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: CountingSolver())
     solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
-    validator = Validator()
     simulator = Simulator(
         spec=bank_spec,
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
-        validator=validator,
     )
     try:
         task = RunTask(

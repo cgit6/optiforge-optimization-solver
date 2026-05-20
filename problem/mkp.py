@@ -3,13 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 
 from .interface import Direction, Problem, as_int_array, as_int_matrix, normalize_best_known
 from .registry import ProblemShmPack, ProblemTypeSpec
+from .validation import ValidationReport, build_validation_report
 from .yaml import require_fields, validate_identity
+
+if TYPE_CHECKING:
+    from ..engine.models import SolveResult
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,18 +55,25 @@ class MKPProblem(Problem):
         object.__setattr__(self, "capacities", capacities)
         object.__setattr__(self, "best_known", normalize_best_known(self.best_known, allow_none=False))
 
+    # 目標函數
     def fitness(self, solution: np.ndarray) -> int:
         solution = np.asarray(solution, dtype=int)
         if solution.shape != (self.items,):
             raise ValueError("solution shape must equal problem.items")
         return int(np.dot(self.values, solution))
 
+    # 限制式
     def violates_constraints(self, solution: np.ndarray) -> bool:
         solution = np.asarray(solution, dtype=int)
         if solution.shape != (self.items,):
             return True
         used = np.sum(np.multiply(self.weights.T, solution), axis=1)
         return bool(np.any(used > self.capacities))
+
+    # 求解完畢後驗證可行性
+    def validate(self, solve_result: "SolveResult") -> ValidationReport:
+        solution = np.asarray(solve_result.best_solution, dtype=int)
+        return build_validation_report(self, solve_result, solution=solution)
 
 
 @dataclass(frozen=True)

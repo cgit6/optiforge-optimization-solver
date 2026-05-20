@@ -9,9 +9,8 @@ import numpy as np
 import pytest
 
 from mkp.engine.models import SolveResult, RunTask
-from mkp.problem import ProblemModel, TSPProblem
+from mkp.problem import ProblemModel, TSPProblem, ValidationReport
 from mkp.simulator import SimulatorResult, SimulatorRunRow
-from mkp.solver.validator import Validator
 from mkp.tools.show import write_simulator_result
 from mkp.tools.stat import SummaryMeta, SummaryReport, result_entries, summarize
 from mkp.tools.stat import _build_entry  # 內部函式：保留覆蓋率
@@ -112,10 +111,9 @@ def _make_row(
 
 
 def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path: Path):
-    validator = Validator()
     problem = _build_problem()
     run = _build_solve_result(np.array([1, 1, 1]), 60)
-    report = validator.validate(problem, run)
+    report = problem.validate(run)
     row = _make_row(run, report, repeat_index=0)
 
     stale_runs_jsonl = tmp_path / "exp_001" / "stub_solver" / "param_0" / "runs.jsonl"
@@ -162,7 +160,6 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
 
 
 def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
-    validator = Validator()
     problem = _build_problem()
 
     valid_run = _build_solve_result(np.array([1, 1, 1]), 60)
@@ -170,9 +167,9 @@ def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
     mismatch_run = _build_solve_result(np.array([1, 0, 1]), 41)
 
     rows = (
-        _make_row(valid_run, validator.validate(problem, valid_run), repeat_index=0),
-        _make_row(infeasible_run, validator.validate(problem, infeasible_run), repeat_index=1),
-        _make_row(mismatch_run, validator.validate(problem, mismatch_run), repeat_index=2),
+        _make_row(valid_run, problem.validate(valid_run), repeat_index=0),
+        _make_row(infeasible_run, problem.validate(infeasible_run), repeat_index=1),
+        _make_row(mismatch_run, problem.validate(mismatch_run), repeat_index=2),
     )
 
     simulator_result = _simulator_result(rows, params_by_variant={("stub_solver", 0): {"z": 0.08, "pop_size": 20}})
@@ -258,13 +255,12 @@ def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
 
 
 def test_summarize_rejects_mixed_param_sets() -> None:
-    validator = Validator()
     problem = _build_problem()
     run_a = _build_solve_result(np.array([1, 1, 1]), 60)
     run_b = _build_solve_result(np.array([1, 0, 1]), 40)
     rows = (
-        _make_row(run_a, validator.validate(problem, run_a), repeat_index=0, param_set_index=0),
-        _make_row(run_b, validator.validate(problem, run_b), repeat_index=0, param_set_index=1),
+        _make_row(run_a, problem.validate(run_a), repeat_index=0, param_set_index=0),
+        _make_row(run_b, problem.validate(run_b), repeat_index=0, param_set_index=1),
     )
 
     with pytest.raises(ValueError, match="exactly one solver variant"):
@@ -272,13 +268,12 @@ def test_summarize_rejects_mixed_param_sets() -> None:
 
 
 def test_summarize_rejects_mixed_solvers() -> None:
-    validator = Validator()
     problem = _build_problem()
     run_a = _build_solve_result(np.array([1, 1, 1]), 60, solver_id="stub_solver")
     run_b = _build_solve_result(np.array([1, 0, 1]), 40, solver_id="other_solver")
     rows = (
-        _make_row(run_a, validator.validate(problem, run_a), repeat_index=0, param_set_index=0),
-        _make_row(run_b, validator.validate(problem, run_b), repeat_index=1, param_set_index=0),
+        _make_row(run_a, problem.validate(run_a), repeat_index=0, param_set_index=0),
+        _make_row(run_b, problem.validate(run_b), repeat_index=1, param_set_index=0),
     )
 
     with pytest.raises(ValueError, match="exactly one solver variant"):
@@ -286,13 +281,12 @@ def test_summarize_rejects_mixed_solvers() -> None:
 
 
 def test_write_splits_param_sets_and_writes_each_variant_meta(tmp_path: Path) -> None:
-    validator = Validator()
     problem = _build_problem()
     run_a = _build_solve_result(np.array([1, 1, 1]), 60)
     run_b = _build_solve_result(np.array([1, 0, 1]), 40)
     rows = (
-        _make_row(run_a, validator.validate(problem, run_a), repeat_index=0, param_set_index=0),
-        _make_row(run_b, validator.validate(problem, run_b), repeat_index=0, param_set_index=1),
+        _make_row(run_a, problem.validate(run_a), repeat_index=0, param_set_index=0),
+        _make_row(run_b, problem.validate(run_b), repeat_index=0, param_set_index=1),
     )
     simulator_result = _simulator_result(
         rows,
@@ -317,10 +311,9 @@ def test_write_splits_param_sets_and_writes_each_variant_meta(tmp_path: Path) ->
 
 
 def test_write_summary_meta_includes_experiment_metadata(tmp_path: Path) -> None:
-    validator = Validator()
     problem = _build_problem()
     run = _build_solve_result(np.array([1, 1, 1]), 60)
-    row = _make_row(run, validator.validate(problem, run), repeat_index=0)
+    row = _make_row(run, problem.validate(run), repeat_index=0)
     simulator_result = _simulator_result((row,), params_by_variant={("stub_solver", 0): {"z": 0.08}})
 
     write_simulator_result(
@@ -349,11 +342,10 @@ def test_write_summary_meta_includes_experiment_metadata(tmp_path: Path) -> None
 
 
 def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
-    validator = Validator()
     problem = _build_problem()
 
     invalid_run = _build_solve_result(np.array([0, 0, 3]), 91, feasible=False, error="solver_warning")
-    report = validator.validate(problem, invalid_run)
+    report = problem.validate(invalid_run)
     row = _make_row(invalid_run, report, repeat_index=0)
 
     simulator_result = _simulator_result((row,))
@@ -372,12 +364,11 @@ def test_write_keeps_invalid_runs_in_outputs(tmp_path: Path):
 
 
 def test_runtime_error_is_excluded_separately():
-    validator = Validator()
     problem = _build_problem()
 
     # objective 正確且可行，但 solver 帶 error，應歸類 runtime_error
     error_run = _build_solve_result(np.array([1, 1, 0]), 30, feasible=True, error="runtime_fail")
-    report = validator.validate(problem, error_run)
+    report = problem.validate(error_run)
     entry = _build_entry(error_run, report, dataset="WEISH", repeat_index=0, param_set_index=0)
     summary = summarize([entry], meta=_summary_meta())
 
@@ -387,14 +378,13 @@ def test_runtime_error_is_excluded_separately():
 
 
 def test_summary_adds_std_worst_and_pdev_for_multiple_valid_mkp_runs():
-    validator = Validator()
     problem = _build_problem()
 
     run_a = _build_solve_result(np.array([1, 1, 1]), 60)
     run_b = _build_solve_result(np.array([1, 0, 1]), 40)
     entries = [
-        _build_entry(run_a, validator.validate(problem, run_a), dataset="WEISH", repeat_index=0, param_set_index=0),
-        _build_entry(run_b, validator.validate(problem, run_b), dataset="WEISH", repeat_index=1, param_set_index=0),
+        _build_entry(run_a, problem.validate(run_a), dataset="WEISH", repeat_index=0, param_set_index=0),
+        _build_entry(run_b, problem.validate(run_b), dataset="WEISH", repeat_index=1, param_set_index=0),
     ]
 
     summary = summarize(entries, meta=_summary_meta())
@@ -415,11 +405,10 @@ def test_summary_adds_std_worst_and_pdev_for_multiple_valid_mkp_runs():
 
 
 def test_summary_uses_min_direction_for_worst_and_pdev():
-    validator = Validator()
     problem = _build_tsp_problem()
     best_run = SolveResult(
         problem_id="tsp5",
-        solver_id="nn_tsp_v1",
+        solver_id="tsp_solver",
         seed=0,
         best_solution=np.array([0, 1, 3, 2, 4]),
         best_objective=26,
@@ -430,7 +419,7 @@ def test_summary_uses_min_direction_for_worst_and_pdev():
     )
     worse_run = SolveResult(
         problem_id="tsp5",
-        solver_id="nn_tsp_v1",
+        solver_id="tsp_solver",
         seed=1,
         best_solution=np.array([0, 1, 2, 3, 4]),
         best_objective=29,
@@ -440,11 +429,11 @@ def test_summary_uses_min_direction_for_worst_and_pdev():
         runtime=0.0,
     )
     entries = [
-        _build_entry(best_run, validator.validate(problem, best_run), dataset="SMALL", repeat_index=0, param_set_index=0),
-        _build_entry(worse_run, validator.validate(problem, worse_run), dataset="SMALL", repeat_index=1, param_set_index=0),
+        _build_entry(best_run, problem.validate(best_run), dataset="SMALL", repeat_index=0, param_set_index=0),
+        _build_entry(worse_run, problem.validate(worse_run), dataset="SMALL", repeat_index=1, param_set_index=0),
     ]
 
-    summary = summarize(entries, meta=_summary_meta(solver_id="nn_tsp_v1"))
+    summary = summarize(entries, meta=_summary_meta(solver_id="tsp_solver"))
     group = summary.by_problem_solver[0]
 
     assert group.direction == "min"
@@ -453,3 +442,79 @@ def test_summary_uses_min_direction_for_worst_and_pdev():
     assert group.avg_objective == 27.5
     assert np.isclose(group.std_objective, np.sqrt(4.5))
     assert np.isclose(group.pdev, (27.5 - 26.0) / 26.0 * 100.0)
+
+
+def test_multi_objective_runs_are_saved_without_scalar_summary_stats(tmp_path: Path):
+    run = SolveResult(
+        problem_id="multi01",
+        solver_id="multi_solver",
+        seed=42,
+        best_solution=np.array([1.0, 0.5]),
+        best_objective=(10, 2.5),
+        feasible=True,
+        evaluation_count=5,
+        stop_reason="done",
+        runtime=0.1,
+    )
+    report = ValidationReport(
+        is_feasible=True,
+        feasibility_violations=(),
+        objective_valid=True,
+        recomputed_objective=(10, 2.5),
+        objective_mismatch=False,
+        best_known_reached=True,
+        best_known_gap=(-1, -0.5),
+        problem_type="multi",
+        encoding="continuous",
+        direction=("max", "min"),
+        best_known=(9, 3.0),
+    )
+    task = RunTask(
+        problem_id="multi01",
+        dataset="MULTI",
+        problem_type="multi",
+        solver_id="multi_solver",
+        repeat_index=0,
+        seed=42,
+        param_set_index=0,
+    )
+    simulator_result = SimulatorResult(
+        rows=(SimulatorRunRow(task=task, solve_result=run, validation_report=report),),
+        variant_params={("multi_solver", 0): {}},
+    )
+
+    write_simulator_result(simulator_result, experiment_name="exp_multi", output_root=tmp_path)
+
+    with (tmp_path / "exp_multi" / "multi_solver" / "param_0" / "runs.json").open("r", encoding="utf-8") as fh:
+        runs_payload = json.load(fh)
+    assert runs_payload[0]["best_objective"] == [10, 2.5]
+    assert runs_payload[0]["best_known"] == [9, 3.0]
+    assert runs_payload[0]["best_known_gap"] == [-1, -0.5]
+    assert runs_payload[0]["direction"] == ["max", "min"]
+
+    with (tmp_path / "exp_multi" / "multi_solver" / "param_0" / "runs.csv").open(
+        "r",
+        encoding="utf-8",
+        newline="",
+    ) as fh:
+        rows = list(csv.DictReader(fh))
+    assert json.loads(rows[0]["best_objective"]) == [10, 2.5]
+    assert json.loads(rows[0]["direction"]) == ["max", "min"]
+
+    with (tmp_path / "exp_multi" / "multi_solver" / "param_0" / "summary.json").open(
+        "r",
+        encoding="utf-8",
+    ) as fh:
+        summary_payload = json.load(fh)
+    overall = summary_payload["overall"]
+    group = summary_payload["by_problem_solver"][0]
+    assert overall["valid_run_count"] == 1
+    assert overall["avg_objective"] is None
+    assert overall["std_objective"] is None
+    assert overall["best_objective"] is None
+    assert overall["worst_objective"] is None
+    assert overall["pdev"] is None
+    assert group["valid_run_count"] == 1
+    assert group["avg_objective"] is None
+    assert group["best_known_gap_min"] is None
+    assert group["best_known_gap_avg"] is None

@@ -30,7 +30,7 @@ from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
 from .BSCA_numba_v2 import _repair_bsca_row_inplace
-from .BSMA_numba import _expect_mkp_problem_tensors
+from .BSMA_numba_v2 import _expect_mkp_problem_tensors
 
 
 @njit(cache=True)

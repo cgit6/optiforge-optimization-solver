@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from mkp.cli.run import main, validate_execute_args
-from mkp.engine import Engine
+from mkp.cli.run import validate_execute_args
 from mkp.engine.models import ExperimentSpec, SolveResult
 from mkp.engine.repository import ProblemRepository
 from mkp.problem import TSPProblem, buildProblemRegistry, problemBuilders
-from mkp.solver.validator import Validator
 
 
 def _write_tsp(path: Path) -> None:
@@ -68,7 +65,7 @@ def test_tsp_canonical_repository_loads_problem(tmp_path: Path) -> None:
     assert problem.direction == "min"
 
 
-def test_tsp_validator_checks_permutation_and_cost() -> None:
+def test_tsp_problem_validate_checks_permutation_and_cost() -> None:
     problem = TSPProblem(
         problem_id="tsp5",
         dataset="SMALL",
@@ -86,7 +83,7 @@ def test_tsp_validator_checks_permutation_and_cost() -> None:
     )
     result = SolveResult(
         problem_id="tsp5",
-        solver_id="nn_tsp_v1",
+        solver_id="tsp_solver",
         seed=0,
         best_solution=np.array([0, 1, 3, 2, 4]),
         best_objective=26,
@@ -96,7 +93,7 @@ def test_tsp_validator_checks_permutation_and_cost() -> None:
         runtime=0.0,
     )
 
-    report = Validator().validate(problem, result)
+    report = problem.validate(result)
 
     assert report.is_feasible is True
     assert report.objective_valid is True
@@ -126,58 +123,3 @@ def test_compatibility_check_rejects_mkp_solver_for_tsp(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="incompatible"):
         validate_execute_args(spec, problem_root, solver_root)
-
-
-def test_tsp_worker_uses_shared_memory(tmp_path: Path) -> None:
-    problem_root = tmp_path / "problems"
-    solver_root = tmp_path / "solvers"
-    output_root = tmp_path / "out"
-    _write_tsp(problem_root / "tsp" / "SMALL" / "tsp5.yaml")
-    (solver_root / "nn_tsp_v1.yaml").parent.mkdir(parents=True, exist_ok=True)
-    (solver_root / "nn_tsp_v1.yaml").write_text(
-        """
-solver_id: nn_tsp_v1
-solver_class: NearestNeighborTSPSolver
-capabilities:
-  problem_types: [tsp]
-  encodings: [permutation]
-  directions: [min]
-stop_condition:
-  type: max_iterations
-  max_iterations: 1
-  max_seconds: null
-params:
-  - start_city: 0
-""".strip(),
-        encoding="utf-8",
-    )
-
-    result = main(
-        [
-            "--experiment-name",
-            "tsp_worker",
-            "--type",
-            "tsp",
-            "--dataset",
-            "SMALL",
-            "--problems",
-            "tsp5",
-            "--solver",
-            "nn_tsp_v1",
-            "--repeat",
-            "2",
-            "--seed",
-            "7",
-            "--worker",
-            "2",
-        ],
-        problem_root=problem_root,
-        solver_root=solver_root,
-        output_root=output_root,
-    )
-
-    assert len(result.rows) == 2
-    with (output_root / "tsp_worker" / "nn_tsp_v1" / "param_0" / "summary.json").open("r", encoding="utf-8") as fh:
-        summary = json.load(fh)
-    assert summary["by_problem_solver"][0]["problem_type"] == "tsp"
-    assert summary["by_problem_solver"][0]["direction"] == "min"

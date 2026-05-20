@@ -121,7 +121,6 @@ class Experiment:
                             seed=seed,
                             dataset_setting=dataset_setting,
                             evaluation_name=dataset_setting.evaluation.name,
-                            evaluation_config=dataset_setting.evaluation.config,
                             variant_summaries=dataset_result.variant_summaries,
                             simulator_result=dataset_result.simulator_result,
                         )

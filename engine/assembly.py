@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 import numpy as np
 
 from ..solver.registry import SolverBuilder, SolverRegistry
-from ..solver.validator import Validator
 from ..problem import buildProblemRegistry, problemBuilders
 from .models import ExperimentSpec
 from .configs import SolverConfigsSnapshot
@@ -105,14 +104,13 @@ class SimulationBundle:
             problem_bank=self.problem_bank,
             solver_registry=registry,
             solver_configs=self.solver_configs,
-            validator=Validator(),
         )
 
     def new(self) -> Simulator:
         return self.new_simulator()
 
 class Engine:
-    """將 Repository、Registry、Loader、Validator、Writer 與 Simulator 組成一個可跑批次。"""
+    """將 Repository、Registry、Loader、Writer 與 Simulator 組成一個可跑批次。"""
 
     @staticmethod
     def build(

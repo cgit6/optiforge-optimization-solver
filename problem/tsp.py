@@ -3,13 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 
 from .interface import Direction, Problem, normalize_best_known
 from .registry import ProblemShmPack, ProblemTypeSpec
+from .validation import ValidationReport, build_validation_report
 from .yaml import require_fields, validate_identity
+
+if TYPE_CHECKING:
+    from ..engine.models import SolveResult
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -60,6 +64,10 @@ class TSPProblem(Problem):
         if tour.shape != (self.n_cities,):
             return True
         return set(int(x) for x in tour.tolist()) != set(range(self.n_cities))
+
+    def validate(self, solve_result: "SolveResult") -> ValidationReport:
+        tour = np.asarray(solve_result.best_solution, dtype=int)
+        return build_validation_report(self, solve_result, solution=tour)
 
 
 @dataclass(frozen=True)

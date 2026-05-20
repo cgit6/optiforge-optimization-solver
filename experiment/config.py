@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,20 +19,38 @@ _ALLOWED_TOP_LEVEL_KEYS = _REQUIRED_TOP_LEVEL_KEYS | {"worker"}
 _REQUIRED_DATASET_KEYS = frozenset({"experiment-id", "dataset", "problems", "type", "evaluation"})
 _ALLOWED_DATASET_KEYS = _REQUIRED_DATASET_KEYS
 _REQUIRED_EVALUATION_KEYS = frozenset({"name"})
-_ALLOWED_EVALUATION_KEYS = _REQUIRED_EVALUATION_KEYS | {"config"}
+_ALLOWED_EVALUATION_KEYS = _REQUIRED_EVALUATION_KEYS | {"base_line"}
+_REQUIRED_BASELINE_KEYS = frozenset({"name"})
+_ALLOWED_BASELINE_KEYS = _REQUIRED_BASELINE_KEYS | {"Mean", "Pdev"}
+
+
+@dataclass(frozen=True)
+class EvaluationBaseline:
+    name: str
+    mean: float | None = None
+    pdev: float | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("evaluation.base_line.name cannot be empty.")
+        if self.mean is None and self.pdev is None:
+            raise ValueError("evaluation.base_line must contain Mean or Pdev.")
+        object.__setattr__(self, "mean", _validate_optional_float(self.mean, "evaluation.base_line.Mean"))
+        object.__setattr__(self, "pdev", _validate_optional_float(self.pdev, "evaluation.base_line.Pdev"))
 
 
 @dataclass(frozen=True)
 class EvaluationSpec:
     name: str
-    config: dict[str, Any] = field(default_factory=dict)
+    base_line: tuple[EvaluationBaseline, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("evaluation.name cannot be empty.")
-        if not isinstance(self.config, dict):
-            raise ValueError("evaluation.config must be a mapping.")
-        object.__setattr__(self, "config", dict(self.config))
+        base_line = tuple(self.base_line)
+        if any(not isinstance(item, EvaluationBaseline) for item in base_line):
+            raise ValueError("evaluation.base_line must contain EvaluationBaseline entries.")
+        object.__setattr__(self, "base_line", base_line)
 
 
 @dataclass(frozen=True)
@@ -232,14 +250,36 @@ def _parse_evaluation(value: Any, *, context: str = "evaluation") -> EvaluationS
         allowed=_ALLOWED_EVALUATION_KEYS,
         context=context,
     )
-    raw_config = value.get("config", {})
-    if raw_config is None:
-        raw_config = {}
-    if not isinstance(raw_config, dict):
-        raise ValueError(f"{context}.config must be a mapping.")
     return EvaluationSpec(
         name=_parse_non_empty_string(value["name"], f"{context}.name"),
-        config=raw_config,
+        base_line=_parse_base_line(value.get("base_line", []), field_name=f"{context}.base_line"),
+    )
+
+
+def _parse_base_line(value: Any, *, field_name: str) -> tuple[EvaluationBaseline, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list.")
+    return tuple(
+        _parse_baseline_entry(item, field_name=f"{field_name}[{index}]")
+        for index, item in enumerate(value)
+    )
+
+
+def _parse_baseline_entry(value: Any, *, field_name: str) -> EvaluationBaseline:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be a mapping.")
+    _validate_keys(
+        value,
+        required=_REQUIRED_BASELINE_KEYS,
+        allowed=_ALLOWED_BASELINE_KEYS,
+        context=field_name,
+    )
+    if "Mean" not in value and "Pdev" not in value:
+        raise ValueError(f"{field_name} must contain Mean or Pdev.")
+    return EvaluationBaseline(
+        name=_parse_non_empty_string(value["name"], f"{field_name}.name"),
+        mean=_parse_optional_float(value["Mean"], f"{field_name}.Mean") if "Mean" in value else None,
+        pdev=_parse_optional_float(value["Pdev"], f"{field_name}.Pdev") if "Pdev" in value else None,
     )
 
 
@@ -334,6 +374,21 @@ def _parse_non_negative_int(value: Any, field_name: str) -> int:
     if parsed < 0:
         raise ValueError(f"{field_name} must be >= 0.")
     return parsed
+
+
+def _parse_optional_float(value: Any, field_name: str) -> float:
+    parsed = _validate_optional_float(value, field_name)
+    if parsed is None:
+        raise ValueError(f"{field_name} cannot be empty.")
+    return parsed
+
+
+def _validate_optional_float(value: Any, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be numeric.")
+    return float(value)
 
 
 def _parse_int(value: Any, field_name: str) -> int:

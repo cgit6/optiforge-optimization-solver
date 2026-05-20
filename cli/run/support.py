@@ -9,6 +9,7 @@ from ... import engine
 from ...engine.models import ExperimentSpec
 from ...engine.repository import ProblemRepository
 from ...problem import buildProblemRegistry, problemBuilders
+from ...problem.validation import DirectionSpec
 from ...simulator import SimulatorResult
 from ...tools.show import write_simulator_result
 from ...tools.solver_config_loader import SolverConfigLoader
@@ -43,7 +44,7 @@ def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root:
     if len(triples) != 1:
         raise ValueError(
             "A single experiment cannot mix problem_type / encoding / direction: "
-            f"{sorted(triples)}"
+            f"{sorted(repr(triple) for triple in triples)}"
         )
     problem_type, encoding, direction = next(iter(triples))
 
@@ -61,11 +62,18 @@ def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root:
                 f"solver={solver_id} is incompatible: "
                 f"encoding={encoding!r} not in {capabilities['encodings']!r}"
             )
-        if direction not in {str(v) for v in capabilities["directions"]}:
+        required_directions = _direction_atoms(direction)
+        if not required_directions.issubset({str(v) for v in capabilities["directions"]}):
             raise ValueError(
                 f"solver={solver_id} is incompatible: "
                 f"direction={direction!r} not in {capabilities['directions']!r}"
             )
+
+
+def _direction_atoms(direction: DirectionSpec) -> set[str]:
+    if isinstance(direction, tuple):
+        return set(direction)
+    return {direction}
 
 def parser() -> argparse.ArgumentParser:
     """獲取命令行參數，並解析&驗證"""

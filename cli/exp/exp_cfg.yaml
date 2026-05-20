@@ -16,7 +16,17 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Pdev: 0.154
+        - name: BIWOA
+          Pdev: 0.472
+        - name: BMMVO
+          Pdev: 0.861
+        - name: BSCA
+          Pdev: 0.314
+        - name: IBSMA_U1
+          Pdev: 0.105
 
   - experiment-id: weing-expTest
     dataset: WEING
@@ -24,7 +34,10 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Mean: 301482.250
+          Pdev: 0.436
 
   - experiment-id: hp-expTest
     dataset: HP
@@ -32,7 +45,10 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Mean: 3278.500
+          Pdev: 0.718
 
   - experiment-id: pet-expTest
     dataset: PET
@@ -40,7 +56,6 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
 
   - experiment-id: sent-expTest
     dataset: SENT
@@ -48,7 +63,10 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Mean: 8240.500
+          Pdev: 0.082
 
   - experiment-id: pb-expTest
     dataset: PB
@@ -56,7 +74,10 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Mean: 17206.333
+          Pdev: 0.858
 
   - experiment-id: OR5x100-expTest
     dataset: OR5x100
@@ -64,7 +85,13 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Mean: 23882.000
+          Pdev: 0.268
+        - name: BMMVO
+          Mean: 23772.800
+          Pdev: 0.726
 
   - experiment-id: gk-expTest
     dataset: GK
@@ -72,4 +99,19 @@ dataset_settings:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
+      base_line:
+        - name: HLMS
+          Mean: 14362.222
+          Pdev: 0.922
+        - name: BIWOA
+          Mean: 14402.000
+          Pdev: 0.857
+        - name: BMMVO
+          Mean: 14134.667
+          Pdev: 2.438
+        - name: BSCA
+          Mean: 14179.222
+          Pdev: 1.997
+        - name: IBSMA_U1
+          Mean: 14428.233
+          Pdev: 0.624

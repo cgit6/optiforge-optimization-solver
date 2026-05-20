@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .config import DatasetSetting, EvaluationSpec, ExperimentConfig, load_config
+from .config import DatasetSetting, EvaluationBaseline, EvaluationSpec, ExperimentConfig, load_config
 from .evaluation import (
     DatasetEvalDecision,
     DatasetEvalInput,
@@ -32,6 +32,7 @@ __all__ = [
     "DatasetRunResult",
     "DatasetSetting",
     "DatasetVerdict",
+    "EvaluationBaseline",
     "EvaluationSpec",
     "Experiment",
     "ExperimentConfig",

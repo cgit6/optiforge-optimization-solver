@@ -24,35 +24,23 @@ from ..engine.bank import (
 )
 from ..problem.registry import ProblemTypeSpec
 from ..solver.BSMA import BSMASolver
-from ..solver.BSMA_numba import BSMANumbaSolver
-from ..solver.BSMA_numba_v2 import BSMANumbaSolver as BSMANumbaSolverV2
+from ..solver.BSMA_numba_v2 import BSMANumbaSolver
 from ..solver.BSCA import BSCASolver
-from ..solver.BSCA_numba import BSCANumbaSolver
-from ..solver.BSCA_numba_v2 import BSCANumbaSolver as BSCANumbaSolverV2
+from ..solver.BSCA_numba_v2 import BSCANumbaSolver
 from ..solver.BSCASMA import BRLSMASCATestSolver
-from ..solver.BSCASMA_numba import BRLSMASCATestNumbaSolver
-from ..solver.BSCASMA_numba_v2 import BRLSMASCATestNumbaSolver as BRLSMASCATestNumbaSolverV2
-from ..solver.nearest_neighbor_tsp import NearestNeighborTSPSolver
+from ..solver.BSCASMA_numba_v2 import BRLSMASCATestNumbaSolver
 from ..solver.registry import SolverRegistry, StubMaxIterationsSolver
-from ..solver.sma_mkp_modular import SMAMKPModularV1Solver
-from ..solver.sma_tsp_modular import SMATSPModularV1Solver
-from ..solver.validator import ValidationReport, Validator
+from ..problem.validation import ValidationReport
 
 
 
 _PROCESS_SAFE_SOLVERS = {
     "bsma",
     "bsma_numba",
-    "bsma_numba_v2",
     "bsca",
     "bsca_numba",
-    "bsca_numba_v2",
     "brlsmasca",
     "brlsmasca_numba",
-    "brlsmasca_numba_v2",
-    "sma_mkp_modular_v1",
-    "sma_tsp_modular_v1",
-    "nn_tsp_v1",
     "stub_solver",
 }
 
@@ -153,16 +141,10 @@ def _build_process_local_registry() -> SolverRegistry:
     registry.register("stub_solver", lambda: StubMaxIterationsSolver())
     registry.register("bsma", lambda: BSMASolver())
     registry.register("bsma_numba", lambda: BSMANumbaSolver())
-    registry.register("bsma_numba_v2", lambda: BSMANumbaSolverV2())
     registry.register("bsca", lambda: BSCASolver())
     registry.register("bsca_numba", lambda: BSCANumbaSolver())
-    registry.register("bsca_numba_v2", lambda: BSCANumbaSolverV2())
     registry.register("brlsmasca", lambda: BRLSMASCATestSolver())
     registry.register("brlsmasca_numba", lambda: BRLSMASCATestNumbaSolver())
-    registry.register("brlsmasca_numba_v2", lambda: BRLSMASCATestNumbaSolverV2())
-    registry.register("sma_mkp_modular_v1", lambda: SMAMKPModularV1Solver())
-    registry.register("sma_tsp_modular_v1", lambda: SMATSPModularV1Solver())
-    registry.register("nn_tsp_v1", lambda: NearestNeighborTSPSolver())
     return registry
 
 
@@ -198,13 +180,11 @@ class Simulator:
         problem_bank: ProblemBank,
         solver_registry: SolverRegistry,
         solver_configs: SolverConfigsSnapshot,
-        validator: Validator,
     ) -> None:
         self._spec = spec # 實驗規格
         self._problem_bank = problem_bank # 問題庫
         self._solver_registry = solver_registry # 求解器註冊表
         self._solver_configs = solver_configs # engine 預載之 solver YAML
-        self._validator = validator # 驗證器
 
     def close(self) -> None:
         """釋放 `ProblemBank` 的 shared memory（實驗結束後應呼叫）。"""
@@ -220,7 +200,7 @@ class Simulator:
         solver = self._solver_registry.create(task.solver_id)
         solve_result = solver.solve(problem, solver_config, rng)
 
-        validation_report = self._validator.validate(problem, solve_result)
+        validation_report = problem.validate(solve_result)
         return SimulatorRunRow(
             task=task,
             solve_result=solve_result,
@@ -317,7 +297,7 @@ class Simulator:
                 )
             ]
             problem = self._problem_bank.get(task.dataset, task.problem_id, task.problem_type)
-            validation_report = self._validator.validate(problem, solve_result)
+            validation_report = problem.validate(solve_result)
             rows.append(
                 SimulatorRunRow(
                     task=task,

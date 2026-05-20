@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mkp.cli.exp import main as exp_cli_main
-from mkp.experiment import Experiment, ExperimentReport, build, load_config
+from mkp.experiment import EvaluationBaseline, Experiment, ExperimentReport, build, load_config
 
 
 def _write_problem_yaml(path: Path, *, problem_id: str = "p1", dataset: str = "DATA") -> None:
@@ -66,7 +66,7 @@ def _valid_config_text(
     dataset_key: str = "dataset_settings",
     extra_top_level: str = "",
     evaluation_name: str = "literature_mkp",
-    evaluation_config: str = "{}",
+    evaluation_extra: str = "",
     experiment_id: str = "exp1",
     problems: str = "[p1]",
     dataset_extra: str = "",
@@ -85,7 +85,7 @@ repeat: {repeat}
     type: mkp
     evaluation:
       name: {evaluation_name}
-      config: {evaluation_config}
+{evaluation_extra}
 {dataset_extra}
 """.strip()
 
@@ -117,7 +117,22 @@ def test_build_sample_exp_cfg_success() -> None:
     assert first.problem_type == "mkp"
     assert len(first.problem_ids) == 30
     assert first.evaluation.name == "literature_mkp"
-    assert first.evaluation.config == {}
+    assert first.evaluation.base_line == (
+        EvaluationBaseline(name="HLMS", pdev=0.154),
+        EvaluationBaseline(name="BIWOA", pdev=0.472),
+        EvaluationBaseline(name="BMMVO", pdev=0.861),
+        EvaluationBaseline(name="BSCA", pdev=0.314),
+        EvaluationBaseline(name="IBSMA_U1", pdev=0.105),
+    )
+    pet = experiment.cfg.dataset_settings[3]
+    assert pet.dataset == "PET"
+    assert pet.evaluation.base_line == ()
+    gk = experiment.cfg.dataset_settings[-1]
+    assert gk.evaluation.base_line[-1] == EvaluationBaseline(
+        name="IBSMA_U1",
+        mean=14428.233,
+        pdev=0.624,
+    )
 
 
 def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:
@@ -241,7 +256,7 @@ def test_load_config_rejects_missing_experiment_name(tmp_path: Path) -> None:
 def test_load_config_rejects_missing_evaluation_name(tmp_path: Path) -> None:
     exp_path, problem_root, solver_root = _write_valid_project(
         tmp_path,
-        config_text=_valid_config_text().replace("      name: literature_mkp\n", ""),
+        config_text=_valid_config_text().replace("      name: literature_mkp", ""),
     )
 
     with pytest.raises(ValueError, match="evaluation"):
@@ -273,20 +288,136 @@ dataset_settings:
 def test_load_config_rejects_removed_top_level_evaluation_block(tmp_path: Path) -> None:
     exp_path, problem_root, solver_root = _write_valid_project(
         tmp_path,
-        config_text="evaluation:\n  name: literature_mkp\n  config: {}\n" + _valid_config_text(),
+        config_text="evaluation:\n  name: literature_mkp\n" + _valid_config_text(),
     )
 
     with pytest.raises(ValueError, match="unknown key"):
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
-def test_load_config_rejects_non_mapping_evaluation_config(tmp_path: Path) -> None:
+def test_load_config_rejects_evaluation_config_key(tmp_path: Path) -> None:
     exp_path, problem_root, solver_root = _write_valid_project(
         tmp_path,
-        config_text=_valid_config_text(evaluation_config="[1, 2, 3]"),
+        config_text=_valid_config_text().replace(
+            "      name: literature_mkp",
+            "      name: literature_mkp\n      config: {}",
+        ),
     )
 
-    with pytest.raises(ValueError, match="evaluation\\.config"):
+    with pytest.raises(ValueError, match="unknown key"):
+        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_load_config_parses_evaluation_base_line_variants(tmp_path: Path) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text=_valid_config_text(
+            evaluation_extra="""
+      base_line:
+        - name: PdevOnly
+          Pdev: 0.154
+        - name: MeanOnly
+          Mean: 123.5
+        - name: Both
+          Mean: 456
+          Pdev: 1.25
+""",
+        ),
+    )
+
+    cfg = load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+    assert cfg.dataset_settings[0].evaluation.base_line == (
+        EvaluationBaseline(name="PdevOnly", pdev=0.154),
+        EvaluationBaseline(name="MeanOnly", mean=123.5),
+        EvaluationBaseline(name="Both", mean=456.0, pdev=1.25),
+    )
+
+
+@pytest.mark.parametrize(
+    ("evaluation_extra", "error_match"),
+    [
+        (
+            """
+      base_line:
+        - name: EmptyMean
+          Mean:
+""",
+            "Mean",
+        ),
+        (
+            """
+      base_line:
+        - name: EmptyPdev
+          Pdev:
+""",
+            "Pdev",
+        ),
+        (
+            """
+      base_line:
+        - name: BoolMean
+          Mean: true
+""",
+            "numeric",
+        ),
+        (
+            """
+      base_line:
+        - name: BoolPdev
+          Pdev: false
+""",
+            "numeric",
+        ),
+        (
+            """
+      base_line:
+        - Pdev: 0.1
+""",
+            "missing required key",
+        ),
+        (
+            """
+      base_line:
+        - name: NoMetrics
+""",
+            "Mean or Pdev",
+        ),
+        (
+            """
+      base_line: {}
+""",
+            "must be a list",
+        ),
+        (
+            """
+      base_line:
+        - broken
+""",
+            "must be a mapping",
+        ),
+        (
+            """
+      base_line:
+        - name: Unknown
+          Pdev: 0.1
+          Rank: 1
+""",
+            "unknown key",
+        ),
+    ],
+)
+def test_load_config_rejects_invalid_evaluation_base_line(
+    tmp_path: Path,
+    evaluation_extra: str,
+    error_match: str,
+) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text=_valid_config_text(evaluation_extra=evaluation_extra),
+    )
+
+    with pytest.raises(ValueError, match=error_match):
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
@@ -298,7 +429,6 @@ def test_load_config_rejects_duplicate_experiment_id(tmp_path: Path) -> None:
     type: mkp
     evaluation:
       name: literature_mkp
-      config: {}
 """
     exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=settings)
 
@@ -306,7 +436,7 @@ def test_load_config_rejects_duplicate_experiment_id(tmp_path: Path) -> None:
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
-def test_load_config_supports_dataset_specific_evaluation_configs(tmp_path: Path) -> None:
+def test_load_config_rejects_dataset_specific_evaluation_config(tmp_path: Path) -> None:
     config_text = _valid_config_text(
         dataset_extra="""
   - experiment-id: exp2
@@ -316,20 +446,14 @@ def test_load_config_supports_dataset_specific_evaluation_configs(tmp_path: Path
     evaluation:
       name: literature_mkp
       config:
-        target_variant:
-          solver: stub_solver
-          param_set_index: 0
+        unused: true
 """,
     )
     exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=config_text)
     _write_problem_yaml(problem_root / "mkp" / "DATA" / "p2.yaml", problem_id="p2")
 
-    experiment = load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
-
-    assert experiment.dataset_settings[0].evaluation.config == {}
-    assert experiment.dataset_settings[1].evaluation.config == {
-        "target_variant": {"solver": "stub_solver", "param_set_index": 0}
-    }
+    with pytest.raises(ValueError, match="unknown key"):
+        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
 def test_load_config_rejects_missing_problem_yaml(tmp_path: Path) -> None:

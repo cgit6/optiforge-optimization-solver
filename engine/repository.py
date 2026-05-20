@@ -9,6 +9,7 @@ from ruamel.yaml.error import YAMLError
 
 from ..problem import Problem
 from ..problem.registry import ProblemRegistry
+from ..problem.validation import normalize_direction_spec
 
 
 class ProblemRepository:
@@ -83,7 +84,7 @@ class ProblemRepository:
             "dataset": str(data.get("dataset", dataset)),
             "problem_id": str(data.get("problem_id", problem_id)),
             "encoding": str(data.get("encoding", spec.encoding)),
-            "direction": str(data.get("direction", spec.direction)),
+            "direction": normalize_direction_spec(data.get("direction", spec.direction)),
             "path": file_path,
         }
 

@@ -5,6 +5,8 @@ from typing import Any, Mapping, Optional
 
 import numpy as np
 
+from ..problem.validation import ObjectiveValue, normalize_objective_value
+
 
 @dataclass(frozen=True)
 class ExperimentSpec:
@@ -74,7 +76,7 @@ class SolveResult:
     solver_id: str
     seed: int
     best_solution: np.ndarray
-    best_objective: int | float
+    best_objective: ObjectiveValue
     feasible: bool
     evaluation_count: int
     stop_reason: str
@@ -98,8 +100,11 @@ class SolveResult:
             raise ValueError("linprog_runtime must be >= 0.")
         if not self.stop_reason.strip():
             raise ValueError("stop_reason cannot be empty.")
-        if isinstance(self.best_objective, bool):
-            raise ValueError("best_objective must be numeric.")
+        object.__setattr__(
+            self,
+            "best_objective",
+            normalize_objective_value(self.best_objective, name="best_objective"),
+        )
 
         best_solution = np.asarray(self.best_solution)
         if best_solution.ndim != 1:

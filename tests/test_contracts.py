@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from mkp.engine.models import ExperimentSpec, SolveResult, RunTask
-from mkp.problem import ProblemModel
+from mkp.problem import Problem, ProblemModel
 
 
 def test_experiment_spec_valid():
@@ -130,6 +130,41 @@ def test_run_result_valid_and_readonly_solution():
     assert result.best_objective == 123
     assert result.linprog_runtime == 0.01
     assert result.best_solution.flags.writeable is False
+
+
+def test_run_result_accepts_vector_objective():
+    result = SolveResult(
+        problem_id="multi01",
+        solver_id="solver_a",
+        seed=7,
+        best_solution=np.array([1, 0, 1]),
+        best_objective=(123, 4.5),
+        feasible=True,
+        evaluation_count=50,
+        stop_reason="done",
+        runtime=0.25,
+    )
+
+    assert result.best_objective == (123, 4.5)
+
+
+def test_problem_requires_validate_implementation():
+    class MissingValidateProblem(Problem):
+        def fitness(self, solution: np.ndarray):
+            return 0
+
+        def violates_constraints(self, solution: np.ndarray) -> bool:
+            return False
+
+    with pytest.raises(TypeError):
+        MissingValidateProblem(
+            problem_id="p",
+            dataset="D",
+            best_known=None,
+            problem_type="demo",
+            encoding="continuous",
+            direction="min",
+        )
 
 
 @pytest.mark.parametrize(

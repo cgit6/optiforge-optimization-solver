@@ -8,7 +8,7 @@ import math
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..engine.models import SolveResult
-from ..solver.validator import ValidationReport
+from ..problem.validation import DirectionSpec, ObjectiveGap, ObjectiveValue, ValidationReport, is_scalar_objective
 
 if TYPE_CHECKING:
     from ..simulator.core import SimulatorResult
@@ -21,19 +21,19 @@ class ResultEntry:
     problem_type: str
     dataset: str # 題庫
     encoding: str
-    direction: str
+    direction: DirectionSpec
     problem_id: str
     solver_id: str
     param_set_index: int
     repeat_index: int
     seed: int
-    best_objective: int | float
+    best_objective: ObjectiveValue
     feasible: bool
     objective_valid: bool
     objective_mismatch: bool
-    best_known: int | float | None
+    best_known: ObjectiveValue | None
     best_known_reached: bool
-    best_known_gap: int | float | None
+    best_known_gap: ObjectiveGap
     stop_reason: str
     runtime: float
     linprog_runtime: float
@@ -84,13 +84,13 @@ class OverallSummary:
     avg_runtime: float
     avg_evaluation_count: float
     meta: SummaryMeta
-    best_known: int | float | None
+    best_known: ObjectiveValue | None
     avg_objective: int | float | None
     std_objective: float | None
     best_objective: int | float | None
     worst_objective: int | float | None
     pdev: float | None
-    direction: str | None
+    direction: DirectionSpec | None
     excluded_counts: ExcludedCounts
 
 
@@ -99,14 +99,14 @@ class ProblemSolverSummary:
     problem_type: str
     dataset: str
     encoding: str
-    direction: str
+    direction: DirectionSpec
     problem_id: str
     run_count: int
     valid_run_count: int
     feasible_rate: float
     avg_runtime: float
     avg_evaluation_count: float
-    best_known: int | float | None
+    best_known: ObjectiveValue | None
     avg_objective: int | float | None
     std_objective: float | None
     best_objective: int | float | None
@@ -176,7 +176,11 @@ def summarize(entries: list[ResultEntry], *, meta: SummaryMeta) -> SummaryReport
         direction = bucket[0].direction
         best_known_value = _single_value({e.best_known for e in bucket})
         avg_objective = _avg_objective(valid_bucket)
-        best_known_gaps = [e.best_known_gap for e in valid_bucket if e.best_known_gap is not None]
+        best_known_gaps = [
+            e.best_known_gap
+            for e in valid_bucket
+            if e.best_known_gap is not None and is_scalar_objective(e.best_known_gap)
+        ]
         by_problem_solver.append(
             ProblemSolverSummary(
                 problem_type=problem_type,
@@ -271,18 +275,22 @@ def _build_entry(
     )
 
 
-def _best_objective(entries: list[ResultEntry], direction: str | None) -> int | float | None:
+def _best_objective(entries: list[ResultEntry], direction: DirectionSpec | None) -> int | float | None:
     values = [e.best_objective for e in entries]
     if not values:
+        return None
+    if not _has_scalar_objectives(entries) or not isinstance(direction, str):
         return None
     if direction == "min":
         return min(values)
     return max(values)
 
 
-def _worst_objective(entries: list[ResultEntry], direction: str | None) -> int | float | None:
+def _worst_objective(entries: list[ResultEntry], direction: DirectionSpec | None) -> int | float | None:
     values = [e.best_objective for e in entries]
     if not values:
+        return None
+    if not _has_scalar_objectives(entries) or not isinstance(direction, str):
         return None
     if direction == "min":
         return max(values)
@@ -294,11 +302,15 @@ def _worst_objective(entries: list[ResultEntry], direction: str | None) -> int |
 def _avg_objective(entries: list[ResultEntry]) -> float | None:
     if not entries:
         return None
+    if not _has_scalar_objectives(entries):
+        return None
     return sum(float(e.best_objective) for e in entries) / len(entries)
 
 
 def _objective_std(entries: list[ResultEntry]) -> float | None:
     if not entries:
+        return None
+    if not _has_scalar_objectives(entries):
         return None
     if len(entries) == 1:
         return 0.0
@@ -313,10 +325,16 @@ def _objective_std(entries: list[ResultEntry]) -> float | None:
 
 def _percent_deviation(
     avg_objective: int | float | None,
-    best_known: int | float | None,
-    direction: str | None,
+    best_known: ObjectiveValue | None,
+    direction: DirectionSpec | None,
 ) -> float | None:
-    if avg_objective is None or best_known is None or float(best_known) == 0.0:
+    if (
+        avg_objective is None
+        or best_known is None
+        or not is_scalar_objective(best_known)
+        or not isinstance(direction, str)
+        or float(best_known) == 0.0
+    ):
         return None
     if direction == "max":
         return (float(best_known) - float(avg_objective)) / float(best_known) * 100.0
@@ -333,6 +351,10 @@ def _single_value(values: set[T]) -> T | None:
 
 def _is_valid_for_objective_stats(entry: ResultEntry) -> bool:
     return entry.feasible and entry.objective_valid
+
+
+def _has_scalar_objectives(entries: list[ResultEntry]) -> bool:
+    return bool(entries) and all(is_scalar_objective(entry.best_objective) for entry in entries)
 
 
 def _excluded_counts(entries: list[ResultEntry]) -> ExcludedCounts:

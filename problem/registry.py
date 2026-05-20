@@ -5,7 +5,8 @@ from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from .interface import Direction, Problem
+from .interface import Problem
+from .validation import DirectionSpec, normalize_direction_spec
 
 
 class ProblemShmPack(Protocol):
@@ -23,7 +24,7 @@ ProblemShmAttacher = Callable[[ProblemShmPack, list[SharedMemory]], Problem]
 class ProblemTypeSpec:
     problem_type: str
     encoding: str
-    direction: Direction
+    direction: DirectionSpec
     model_type: type[Problem]
     loader: ProblemLoader
     yaml_required_fields: tuple[str, ...]
@@ -44,8 +45,7 @@ class ProblemRegistry:
             raise ValueError(f"Problem type already registered: {spec.problem_type}")
         if not issubclass(spec.model_type, Problem):
             raise TypeError(f"model_type must inherit Problem: {spec.model_type!r}")
-        if spec.direction not in ("max", "min"):
-            raise ValueError("direction must be 'max' or 'min'.")
+        object.__setattr__(spec, "direction", normalize_direction_spec(spec.direction))
         self._specs[spec.problem_type] = spec
 
     def get(self, problem_type: str) -> ProblemTypeSpec:

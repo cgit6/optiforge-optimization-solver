@@ -53,7 +53,6 @@ def _config_text(*, seed: str = "[1, 3]", collects: int = 1, datasets: str | Non
     type: mkp
     evaluation:
       name: custom
-      config: {}
 """
     return f"""
 experiment_name: exp_search
@@ -118,14 +117,12 @@ def test_dataset_fail_restarts_next_seed_from_first_dataset(tmp_path: Path) -> N
     type: mkp
     evaluation:
       name: custom
-      config: {}
   - experiment-id: exp2
     dataset: DATA
     problems: [p2]
     type: mkp
     evaluation:
       name: custom
-      config: {}
 """
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
     calls: list[tuple[int, str]] = []
@@ -176,14 +173,12 @@ def test_experiment_reuses_dataset_simulators_across_seed_range(tmp_path: Path, 
     type: mkp
     evaluation:
       name: custom
-      config: {}
   - experiment-id: exp2
     dataset: DATA
     problems: [p2]
     type: mkp
     evaluation:
       name: custom
-      config: {}
 """
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=2, datasets=datasets)
     experiment.register(
@@ -237,14 +232,12 @@ def test_experiment_prints_dataset_status_lines(tmp_path: Path, capsys) -> None:
     type: mkp
     evaluation:
       name: custom
-      config: {}
   - experiment-id: exp2
     dataset: DATA
     problems: [p2]
     type: mkp
     evaluation:
       name: custom
-      config: {}
 """
     experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 1]", collects=1, datasets=datasets)
 
@@ -270,50 +263,4 @@ def test_experiment_prints_dataset_status_lines(tmp_path: Path, capsys) -> None:
         "[seed 1] (1/2) DATA   通過",
         "[seed 1] (2/2) DATA   進行中",
         "[seed 1] (2/2) DATA   未通過",
-    ]
-
-
-def test_experiment_uses_dataset_specific_evaluation_configs(tmp_path: Path) -> None:
-    datasets = """
-  - experiment-id: exp1
-    dataset: DATA
-    problems: [p1]
-    type: mkp
-    evaluation:
-      name: custom
-      config:
-        expected_seed: 1
-  - experiment-id: exp2
-    dataset: DATA
-    problems: [p2]
-    type: mkp
-    evaluation:
-      name: custom
-      config:
-        expected_seed: 2
-"""
-    experiment, problem_root, solver_root = _project(tmp_path, seed="[1, 2]", collects=1, datasets=datasets)
-    seen: list[tuple[str, dict]] = []
-
-    def evaluator(input_data: DatasetEvalInput) -> DatasetEvalDecision:
-        seen.append((input_data.dataset_setting.experiment_id, dict(input_data.evaluation_config)))
-        passed = input_data.seed == input_data.evaluation_config["expected_seed"]
-        return DatasetEvalDecision(
-            passed=passed,
-            verdict=PASS if passed else FAIL,
-            message="ok" if passed else "mismatch",
-        )
-
-    experiment.register("custom", evaluator)
-    report = experiment.run(
-        problem_root=problem_root,
-        solver_root=solver_root,
-        output_root=tmp_path / "output",
-    )
-
-    assert report.collected_seeds == ()
-    assert seen == [
-        ("exp1", {"expected_seed": 1}),
-        ("exp2", {"expected_seed": 2}),
-        ("exp1", {"expected_seed": 1}),
     ]

@@ -47,6 +47,33 @@ def test_problem_registry_rejects_duplicate_problem_type() -> None:
         raise AssertionError("duplicate problem type was accepted")
 
 
+def test_problem_registry_accepts_vector_direction() -> None:
+    registry = ProblemRegistry()
+    spec = ProblemTypeSpec(
+        problem_type="multi",
+        encoding="continuous",
+        direction=("max", "min"),
+        model_type=MKPProblem,
+        loader=lambda data, dataset, problem_id, path: MKPProblem(
+            problem_id=problem_id,
+            dataset=dataset,
+            items=1,
+            dim=1,
+            best_known=1,
+            values=np.array([1]),
+            weights=np.array([[1]]),
+            capacities=np.array([1]),
+        ),
+        yaml_required_fields=("problem_id",),
+        make_shm_pack=lambda model, shm_blocks: None,  # type: ignore[return-value]
+        attach_shm_pack=lambda pack, shm_blocks: None,  # type: ignore[return-value]
+    )
+
+    registry.register(spec)
+
+    assert registry.get("multi").direction == ("max", "min")
+
+
 def test_problem_registry_rejects_non_problem_model_type() -> None:
     registry = ProblemRegistry()
     with pytest.raises(TypeError, match="model_type must inherit Problem"):

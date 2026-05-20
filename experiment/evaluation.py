@@ -47,7 +47,6 @@ class DatasetEvalInput:
     seed: int
     dataset_setting: DatasetSetting
     evaluation_name: str
-    evaluation_config: dict[str, Any]
     variant_summaries: tuple[VariantSummary, ...]
     simulator_result: SimulatorResult
 
@@ -56,11 +55,8 @@ class DatasetEvalInput:
             raise ValueError("seed must be >= 0.")
         if not self.evaluation_name.strip():
             raise ValueError("evaluation_name cannot be empty.")
-        if not isinstance(self.evaluation_config, dict):
-            raise ValueError("evaluation_config must be a mapping.")
         if not self.variant_summaries:
             raise ValueError("variant_summaries cannot be empty.")
-        object.__setattr__(self, "evaluation_config", dict(self.evaluation_config))
 
 
 @dataclass(frozen=True)

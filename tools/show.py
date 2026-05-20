@@ -84,14 +84,14 @@ def _reset_variant_output_dir(output_dir: Path) -> None:
 
 
 def _entry_to_json_dict(entry: ResultEntry) -> dict[str, Any]:
-    return asdict(entry)
+    return _json_safe(asdict(entry))
 
 
 def _entry_to_csv_dict(entry: ResultEntry) -> dict[str, Any]:
     row = asdict(entry)
     metadata = row.pop("metadata")
     row["metadata_json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
-    return row
+    return {key: _csv_cell(value) for key, value in row.items()}
 
 
 def _write_runs_csv(path: Path, entries: list[ResultEntry]) -> None:
@@ -116,7 +116,7 @@ def _write_summary(output_dir: Path, summary: SummaryReport) -> None:
     summary_csv = output_dir / "summary.csv"
 
     with summary_json.open("w", encoding="utf-8") as fh:
-        json.dump(asdict(summary), fh, ensure_ascii=False, indent=2)
+        json.dump(_json_safe(asdict(summary)), fh, ensure_ascii=False, indent=2)
 
     rows = _summary_to_csv_rows(summary)
 
@@ -186,7 +186,7 @@ def _summary_to_csv_rows(summary: SummaryReport) -> list[dict[str, Any]]:
                 "excluded_runtime_error": group.excluded_counts.runtime_error,
             }
         )
-    return rows
+    return [{key: _csv_cell(value) for key, value in row.items()} for row in rows]
 
 
 def _empty_entry() -> ResultEntry:
@@ -215,3 +215,19 @@ def _empty_entry() -> ResultEntry:
         excluded_reason=None,
         metadata=ResultMetadata(solve={}, validation={}),
     )
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    return value
+
+
+def _csv_cell(value: Any) -> Any:
+    if isinstance(value, (tuple, list, dict)):
+        return json.dumps(_json_safe(value), ensure_ascii=False, sort_keys=True)
+    return value
