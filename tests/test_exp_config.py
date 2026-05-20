@@ -68,7 +68,6 @@ def _valid_config_text(
     evaluation_name: str = "literature_mkp",
     evaluation_config: str = "{}",
     experiment_id: str = "exp1",
-    paper_set: str = "set1",
     problems: str = "[p1]",
     dataset_extra: str = "",
 ) -> str:
@@ -84,7 +83,6 @@ repeat: {repeat}
     dataset: DATA
     problems: {problems}
     type: mkp
-    paper_set: {paper_set}
     evaluation:
       name: {evaluation_name}
       config: {evaluation_config}
@@ -111,24 +109,14 @@ def test_build_sample_exp_cfg_success() -> None:
     assert experiment.cfg.collects == 20
     assert experiment.cfg.repeat == 20
     assert experiment.cfg.worker_count == 10
-    assert experiment.cfg.solver_ids == (
-        "bsma_numba_transfer_literature",
-        "bsca_numba_transfer_literature",
-        "brlsmasca_numba_transfer_literature",
-        "brlsmasca_numba_random50_transfer_literature",
-        "bsma_numba_literature",
-        "bsca_numba_literature",
-        "brlsmasca_numba_literature",
-        "brlsmasca_numba_random50_literature",
-    )
-    assert len(experiment.cfg.dataset_settings) == 12
+    assert experiment.cfg.solver_ids == ("bsma_numba", "bsca_numba", "brlsmasca_numba")
+    assert len(experiment.cfg.dataset_settings) == 8
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "sent-expTest"
-    assert first.dataset == "SENT"
+    assert first.experiment_id == "weish-expTest"
+    assert first.dataset == "WEISH"
     assert first.problem_type == "mkp"
-    assert first.paper_set == "set1"
-    assert len(first.problem_ids) == 2
-    assert first.evaluation.name == "literature_mkp_support_full"
+    assert len(first.problem_ids) == 30
+    assert first.evaluation.name == "literature_mkp"
     assert first.evaluation.config == {}
 
 
@@ -282,16 +270,6 @@ dataset_settings:
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
-def test_load_config_rejects_missing_paper_set(tmp_path: Path) -> None:
-    exp_path, problem_root, solver_root = _write_valid_project(
-        tmp_path,
-        config_text=_valid_config_text().replace("    paper_set: set1\n", ""),
-    )
-
-    with pytest.raises(ValueError, match="paper_set"):
-        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
-
-
 def test_load_config_rejects_removed_top_level_evaluation_block(tmp_path: Path) -> None:
     exp_path, problem_root, solver_root = _write_valid_project(
         tmp_path,
@@ -318,7 +296,6 @@ def test_load_config_rejects_duplicate_experiment_id(tmp_path: Path) -> None:
     dataset: DATA
     problems: [p1]
     type: mkp
-    paper_set: set1
     evaluation:
       name: literature_mkp
       config: {}
@@ -336,7 +313,6 @@ def test_load_config_supports_dataset_specific_evaluation_configs(tmp_path: Path
     dataset: DATA
     problems: [p2]
     type: mkp
-    paper_set: set2
     evaluation:
       name: literature_mkp
       config:
@@ -354,51 +330,6 @@ def test_load_config_supports_dataset_specific_evaluation_configs(tmp_path: Path
     assert experiment.dataset_settings[1].evaluation.config == {
         "target_variant": {"solver": "stub_solver", "param_set_index": 0}
     }
-
-
-def test_load_config_rejects_mixed_evaluations_within_same_paper_set(tmp_path: Path) -> None:
-    config_text = _valid_config_text(
-        dataset_extra="""
-  - experiment-id: exp2
-    dataset: DATA
-    problems: [p2]
-    type: mkp
-    paper_set: set1
-    evaluation:
-      name: literature_mkp
-      config:
-        target_variant:
-          solver: stub_solver
-          param_set_index: 0
-""",
-    )
-    exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=config_text)
-    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p2.yaml", problem_id="p2")
-
-    with pytest.raises(ValueError, match="paper_set"):
-        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
-
-
-def test_load_config_rejects_mixed_global_evaluator_configs_across_datasets(tmp_path: Path) -> None:
-    config_text = _valid_config_text(
-        evaluation_name="literature_mkp_support_full",
-        dataset_extra="""
-  - experiment-id: exp2
-    dataset: DATA
-    problems: [p2]
-    type: mkp
-    paper_set: set2
-    evaluation:
-      name: literature_mkp_support_full
-      config:
-        pdev_tolerance: 0.01
-""",
-    )
-    exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=config_text)
-    _write_problem_yaml(problem_root / "mkp" / "DATA" / "p2.yaml", problem_id="p2")
-
-    with pytest.raises(ValueError, match="global evaluator"):
-        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
 def test_load_config_rejects_missing_problem_yaml(tmp_path: Path) -> None:

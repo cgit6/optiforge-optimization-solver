@@ -79,38 +79,3 @@ def test_cli_exp_main_fails_fast_on_unknown_dataset_evaluator(monkeypatch, tmp_p
         assert "unknown evaluator" in str(exc)
     else:
         raise AssertionError("expected KeyError for unknown evaluator")
-
-
-def test_cli_exp_main_registers_global_evaluator_when_config_uses_full_suite(monkeypatch, tmp_path: Path) -> None:
-    exp_main = importlib.import_module("mkp.cli.exp.main")
-    calls: dict[str, object] = {}
-
-    class FakeExperiment:
-        def __init__(self) -> None:
-            self.cfg = SimpleNamespace(
-                dataset_settings=(
-                    SimpleNamespace(evaluation=SimpleNamespace(name="literature_mkp_support_full")),
-                )
-            )
-
-        def register(self, name, evaluator):
-            calls["register"] = (name, evaluator)
-
-        def register_global(self, name, evaluator):
-            calls["register_global"] = (name, evaluator)
-
-        def run(self, *, problem_root, solver_root, output_root):
-            calls["run"] = (problem_root, solver_root, output_root)
-            return "report"
-
-    monkeypatch.setattr(exp_main, "build", lambda *args, **kwargs: FakeExperiment())
-    monkeypatch.setattr(exp_main, "DEFAULT_CONFIG_PATH", tmp_path / "exp.yaml")
-    monkeypatch.setattr(exp_main, "DEFAULT_PROBLEM_ROOT", tmp_path / "problems")
-    monkeypatch.setattr(exp_main, "DEFAULT_SOLVER_ROOT", tmp_path / "solvers")
-    monkeypatch.setattr(exp_main, "DEFAULT_OUTPUT_ROOT", tmp_path / "output")
-
-    result = exp_main.main()
-
-    assert result == "report"
-    assert calls["register"][0] == "literature_mkp_support_full"
-    assert calls["register_global"][0] == "literature_mkp_support_full"

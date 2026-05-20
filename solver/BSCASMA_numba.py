@@ -32,14 +32,6 @@ from .BSCA_numba import _fitness_row_bsca, _repair_bsca_row_inplace
 from .BSMA_numba import _expect_mkp_problem_tensors
 
 
-_POLICY_MODE_RL_BEST_METHOD = 0
-_POLICY_MODE_RANDOM_FAMILY_50_50 = 1
-_POLICY_MODE_IDS = {
-    "rl_best_method": _POLICY_MODE_RL_BEST_METHOD,
-    "random_family_50_50": _POLICY_MODE_RANDOM_FAMILY_50_50,
-}
-
-
 @njit(cache=True)
 def _sort_bscasma_desc_deterministic_inplace(
     pop_sol: np.ndarray,
@@ -103,18 +95,7 @@ def _update_sma_weight_inplace(W: np.ndarray, pop_fit: np.ndarray, pop_size: int
 
 
 @njit(cache=True)
-def _policy_action(
-    best_method: np.ndarray,
-    i: int,
-    policy_mode_id: int,
-    sma_global_ratio: float,
-    sca_sin_ratio: float,
-) -> int:
-    if policy_mode_id == _POLICY_MODE_RANDOM_FAMILY_50_50:
-        if np.random.uniform(0.0, 1.0) < 0.5:
-            return 0 if np.random.uniform(0.0, 1.0) < sma_global_ratio else 1
-        return 2 if np.random.uniform(0.0, 1.0) < sca_sin_ratio else 3
-
+def _policy_action(best_method: np.ndarray, i: int) -> int:
     r = np.random.uniform(0.0, 1.0)
     if r < 0.9:
         return int(best_method[i])
@@ -279,9 +260,6 @@ def _bscasma_main_loop_numba(
     vb: np.ndarray,
     vc: np.ndarray,
     ctf_id: int,
-    policy_mode_id: int,
-    sma_global_ratio: float,
-    sca_sin_ratio: float,
 ) -> float:
     np.random.seed(rng_seed)
     gbest_fit = pop_fit[0]
@@ -294,7 +272,7 @@ def _bscasma_main_loop_numba(
         r1 = a - a * (float(iter_idx) / mf)
 
         for i in range(pop_size):
-            action = _policy_action(best_method, i, policy_mode_id, sma_global_ratio, sca_sin_ratio)
+            action = _policy_action(best_method, i)
 
             if action == 0:
                 _sma_global_row(pop_sol, i, weights, capacities, cp_list, acc_res, items, dim)
@@ -379,9 +357,6 @@ class BRLSMASCATestNumbaCore:
         max_iter: int,
         prob_arr: tuple[float, ...] | list[float] = (0.04, 0.46, 0.25, 0.25),
         ctf_id: int = 0,
-        policy_mode_id: int = _POLICY_MODE_RL_BEST_METHOD,
-        sma_global_ratio: float = 0.5,
-        sca_sin_ratio: float = 0.5,
     ) -> None:
         self.items = items
         self.dim = dim
@@ -400,9 +375,6 @@ class BRLSMASCATestNumbaCore:
             raise ValueError("z must satisfy 0 < z <= 1")
 
         self.ctf_id = int(ctf_id)
-        self.policy_mode_id = int(policy_mode_id)
-        self.sma_global_ratio = float(sma_global_ratio)
-        self.sca_sin_ratio = float(sca_sin_ratio)
 
         self.pop_size = int(pop_size)
         self.max_iter = int(max_iter)
@@ -547,9 +519,6 @@ class BRLSMASCATestNumbaCore:
             vb,
             vc,
             self.ctf_id,
-            self.policy_mode_id,
-            self.sma_global_ratio,
-            self.sca_sin_ratio,
         )
 
         self.exe_time = np.asarray(exe_time)
@@ -588,8 +557,6 @@ class BRLSMASCATestNumbaSolver:
         prob_arr = tuple(float(x) for x in prob_arr_raw)
         if any(x < 0 for x in prob_arr) or abs(sum(prob_arr) - 1.0) > 1e-9:
             raise ValueError("params.prob_arr must be non-negative and sum to 1.0")
-        policy_mode_raw = raw_params.get("policy_mode", "rl_best_method")
-        policy_mode_id, sma_global_ratio, sca_sin_ratio = _policy_mode_settings(policy_mode_raw, prob_arr)
 
         if pop_size <= 0:
             raise ValueError("params.pop_size must be > 0")
@@ -619,9 +586,6 @@ class BRLSMASCATestNumbaSolver:
             max_iter=int(max_iterations),
             prob_arr=prob_arr,
             ctf_id=ctf_id,
-            policy_mode_id=policy_mode_id,
-            sma_global_ratio=sma_global_ratio,
-            sca_sin_ratio=sca_sin_ratio,
         )
         best_sol, best_fit = core.run()
         algorithm_runtime = time.perf_counter() - t_alg0
@@ -649,34 +613,5 @@ class BRLSMASCATestNumbaSolver:
             metadata={
                 "linprog_runtime": float(core.linprog_runtime),
                 "numba": True,
-                "policy_mode": str(policy_mode_raw),
             },
         )
-
-
-def _policy_mode_settings(
-    policy_mode: Any,
-    prob_arr: tuple[float, float, float, float],
-) -> tuple[int, float, float]:
-    if not isinstance(policy_mode, str):
-        raise ValueError("params.policy_mode must be a string when present")
-    parsed = policy_mode.strip()
-    if parsed not in _POLICY_MODE_IDS:
-        legal = ", ".join(sorted(_POLICY_MODE_IDS))
-        raise ValueError(f"params.policy_mode must be one of: {legal}")
-
-    if parsed == "rl_best_method":
-        return (_POLICY_MODE_IDS[parsed], 0.5, 0.5)
-
-    sma_total = float(prob_arr[0] + prob_arr[1])
-    sca_total = float(prob_arr[2] + prob_arr[3])
-    if sma_total <= 0.0 or sca_total <= 0.0:
-        raise ValueError(
-            "params.prob_arr must allocate positive probability to both SMA and SCA families "
-            "when policy_mode=random_family_50_50"
-        )
-    return (
-        _POLICY_MODE_IDS[parsed],
-        float(prob_arr[0] / sma_total),
-        float(prob_arr[2] / sca_total),
-    )

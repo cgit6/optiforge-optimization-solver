@@ -16,13 +16,10 @@ _REQUIRED_TOP_LEVEL_KEYS = frozenset(
     {"experiment_name", "seed", "collects", "solvers", "repeat", "dataset_settings"}
 )
 _ALLOWED_TOP_LEVEL_KEYS = _REQUIRED_TOP_LEVEL_KEYS | {"worker"}
-_REQUIRED_DATASET_KEYS = frozenset(
-    {"experiment-id", "dataset", "problems", "type", "paper_set", "evaluation"}
-)
+_REQUIRED_DATASET_KEYS = frozenset({"experiment-id", "dataset", "problems", "type", "evaluation"})
 _ALLOWED_DATASET_KEYS = _REQUIRED_DATASET_KEYS
 _REQUIRED_EVALUATION_KEYS = frozenset({"name"})
 _ALLOWED_EVALUATION_KEYS = _REQUIRED_EVALUATION_KEYS | {"config"}
-_GLOBAL_EVALUATOR_NAMES = frozenset({"literature_mkp_support_full"})
 
 
 @dataclass(frozen=True)
@@ -44,7 +41,6 @@ class DatasetSetting:
     dataset: str
     problem_ids: tuple[str, ...]
     problem_type: str
-    paper_set: str
     evaluation: EvaluationSpec
 
     def __post_init__(self) -> None:
@@ -54,8 +50,6 @@ class DatasetSetting:
             raise ValueError("dataset cannot be empty.")
         if not self.problem_type.strip():
             raise ValueError("type cannot be empty.")
-        if not self.paper_set.strip():
-            raise ValueError("paper_set cannot be empty.")
         if not self.problem_ids:
             raise ValueError("problems cannot be empty.")
         if any(not problem_id.strip() for problem_id in self.problem_ids):
@@ -187,7 +181,6 @@ def _parse_dataset_settings(
             raise ValueError(f"dataset_settings[{index}].experiment-id is duplicated: {setting.experiment_id}")
         experiment_ids.add(setting.experiment_id)
         settings.append(setting)
-    _validate_paper_set_evaluations(settings)
     return tuple(settings)
 
 
@@ -206,7 +199,6 @@ def _parse_dataset_setting(
     experiment_id = _parse_non_empty_string(item["experiment-id"], f"{context}.experiment-id")
     dataset = _parse_non_empty_string(item["dataset"], f"{context}.dataset")
     problem_type = _parse_non_empty_string(item["type"], f"{context}.type")
-    paper_set = _parse_non_empty_string(item["paper_set"], f"{context}.paper_set")
     problem_ids = _parse_string_list(item["problems"], f"{context}.problems")
     evaluation = _parse_evaluation(item["evaluation"], context=f"{context}.evaluation")
 
@@ -227,7 +219,6 @@ def _parse_dataset_setting(
         dataset=dataset,
         problem_ids=problem_ids,
         problem_type=problem_type,
-        paper_set=paper_set,
         evaluation=evaluation,
     )
 
@@ -255,34 +246,6 @@ def _parse_evaluation(value: Any, *, context: str = "evaluation") -> EvaluationS
 def _load_solver_configs(solver_ids: tuple[str, ...], solver_root: Path) -> dict[str, tuple[dict[str, Any], ...]]:
     loader = SolverConfigLoader(config_root=solver_root)
     return {solver_id: loader.load_all(solver_id) for solver_id in solver_ids}
-
-
-def _validate_paper_set_evaluations(settings: list[DatasetSetting]) -> None:
-    evaluation_by_paper_set: dict[str, EvaluationSpec] = {}
-    for setting in settings:
-        expected = evaluation_by_paper_set.get(setting.paper_set)
-        if expected is None:
-            evaluation_by_paper_set[setting.paper_set] = setting.evaluation
-            continue
-        if expected != setting.evaluation:
-            raise ValueError(
-                "dataset_settings cannot mix evaluation definitions within the same paper_set: "
-                f"{setting.paper_set!r}"
-            )
-    _validate_global_evaluator_consistency(settings)
-
-
-def _validate_global_evaluator_consistency(settings: list[DatasetSetting]) -> None:
-    matching = [setting for setting in settings if setting.evaluation.name in _GLOBAL_EVALUATOR_NAMES]
-    if not matching:
-        return
-    expected = matching[0].evaluation
-    for setting in settings[1:]:
-        if setting.evaluation != expected:
-            raise ValueError(
-                "dataset_settings must share the same evaluation definition when using a global evaluator: "
-                f"{expected.name!r}"
-            )
 
 
 def _solver_capabilities(
