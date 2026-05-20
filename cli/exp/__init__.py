@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .literature_mkp import literature_mkp_evaluator
+from .mkp import literature_mkp_evaluator
 from .main import main
 
 __all__ = [

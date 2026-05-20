@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...experiment import ExperimentReport, build
-from .literature_mkp import literature_mkp_evaluator
+from .mkp import literature_mkp_evaluator
 
 
 # 這種東西應該放在專案設定中
