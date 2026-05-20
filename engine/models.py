@@ -14,8 +14,8 @@ class ExperimentSpec:
     problem_ids: tuple[str, ...] # 題目 id 清單
     solver_ids: tuple[str, ...] # 求解器
     repeat: int # 重複次數
-    problem_type: str # 優化問題
-    worker_count: int # 併發數
+    problem_type: str = "mkp" # 優化問題
+    worker_count: int = 1 # 併發數
 
     def __post_init__(self) -> None:
         if not self.experiment_name.strip():

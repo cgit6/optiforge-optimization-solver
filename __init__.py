@@ -1,5 +1,14 @@
 """MKP simulation system package."""
 
+if __name__ == "__init__" and not __package__:
+    import os as _os
+
+    __package__ = "mkp"
+    if __spec__ is not None:
+        __spec__.name = "mkp"
+        __spec__.submodule_search_locations = [_os.path.dirname(__file__)]
+    del _os
+
 from .cli.convert import getConverter, listConverters, register
 from .cli.run import executeSimulator
 from .converter import transformToMomery, transformToYaml

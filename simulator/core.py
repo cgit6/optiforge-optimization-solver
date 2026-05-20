@@ -58,7 +58,7 @@ _PROCESS_SAFE_SOLVERS = {
 
 _worker_solver_configs: dict[tuple[str, int], dict[str, Any]] | None = None
 _worker_progress_queue: Any | None = None
-_TASK_SEED_VERSION = "mkp.task-seed.v1"
+_TASK_SEED_VERSION = "mkp.task-seed.v2"
 
 
 @dataclass(frozen=True)
@@ -102,27 +102,21 @@ def _progress_bar(total: int, desc: str, *, enabled: bool = True) -> tqdm:
 
 def _seed_by_task(
     spec: ExperimentSpec,
-    solver_configs: SolverConfigsSnapshot,
     *,
     base_seed: int,
-) -> dict[tuple[str, str, int, int], int]:
-    """依 task identity 派生 seed，避免其他 solver/params 數量改變造成 seed 位移。"""
+) -> dict[tuple[str, int], int]:
+    """依 problem/repeat identity 派生 seed，讓同題同 repeat 的所有算法共用 seed。"""
     base_seed = _validate_base_seed(base_seed)
-    seeds: dict[tuple[str, str, int, int], int] = {}
+    seeds: dict[tuple[str, int], int] = {}
     for problem_id in spec.problem_ids:
-        for solver_id in spec.solver_ids:
-            for param_set_index in solver_configs.param_set_indices(solver_id):
-                solver_config = solver_configs.get(solver_id, param_set_index)
-                for repeat_index in range(spec.repeat):
-                    seeds[(problem_id, solver_id, param_set_index, repeat_index)] = _stable_task_seed(
-                        base_seed=base_seed,
-                        problem_type=spec.problem_type,
-                        dataset=spec.dataset,
-                        problem_id=problem_id,
-                        solver_id=solver_id,
-                        params=solver_config["params"],
-                        repeat_index=repeat_index,
-                    )
+        for repeat_index in range(spec.repeat):
+            seeds[(problem_id, repeat_index)] = _stable_task_seed(
+                base_seed=base_seed,
+                problem_type=spec.problem_type,
+                dataset=spec.dataset,
+                problem_id=problem_id,
+                repeat_index=repeat_index,
+            )
     return seeds
 
 
@@ -139,8 +133,6 @@ def _stable_task_seed(
     problem_type: str,
     dataset: str,
     problem_id: str,
-    solver_id: str,
-    params: dict[str, Any],
     repeat_index: int,
 ) -> int:
     payload = {
@@ -149,13 +141,11 @@ def _stable_task_seed(
         "problem_type": problem_type,
         "dataset": dataset,
         "problem_id": problem_id,
-        "solver_id": solver_id,
-        "params": params,
         "repeat_index": int(repeat_index),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     digest = hashlib.blake2b(raw, digest_size=8).digest()
-    return int.from_bytes(digest, byteorder="little", signed=False)
+    return int.from_bytes(digest, byteorder="little", signed=False) % int(np.iinfo(np.int32).max)
 
 # 
 def _build_process_local_registry() -> SolverRegistry:
@@ -188,6 +178,7 @@ def _run_task_chunk_process(tasks: list[RunTask]) -> list[SolveResult]:
     for task in tasks:
         problem = bank.get(task.dataset, task.problem_id, task.problem_type)
         solver_config = copy.deepcopy(_worker_solver_configs[(task.solver_id, task.param_set_index)])
+        solver_config["run_seed"] = task.seed
         rng = np.random.default_rng(task.seed) # 建立隨機數生成器
         solver = registry.create(task.solver_id) # 建立 solver
         solve_result = solver.solve(problem, solver_config, rng) # 執行 solver
@@ -223,6 +214,7 @@ class Simulator:
     def run_task(self, task: RunTask) -> SimulatorRunRow:
         problem = self._problem_bank.get(task.dataset, task.problem_id, task.problem_type)
         solver_config = self._solver_configs.get(task.solver_id, task.param_set_index)
+        solver_config["run_seed"] = task.seed
         rng = np.random.default_rng(task.seed)
 
         solver = self._solver_registry.create(task.solver_id)
@@ -238,7 +230,7 @@ class Simulator:
     def expand_tasks(self, *, seed: int) -> list[RunTask]:
         """把一份高階的實驗設定 ExperimentSpec，展開成一串可以真的執行的單筆任務 RunTask"""
         spec = self._spec # 實驗規格
-        seeds = _seed_by_task(spec, self._solver_configs, base_seed=seed)
+        seeds = _seed_by_task(spec, base_seed=seed)
         tasks: list[RunTask] = []
 
         for problem_id in spec.problem_ids:
@@ -252,7 +244,7 @@ class Simulator:
                                 problem_type=spec.problem_type,
                                 solver_id=solver_id,
                                 repeat_index=repeat_index,
-                                seed=seeds[(problem_id, solver_id, param_set_index, repeat_index)],
+                                seed=seeds[(problem_id, repeat_index)],
                                 param_set_index=param_set_index,
                             )
                         )
@@ -362,11 +354,8 @@ class Simulator:
         packs = self._problem_bank.export_worker_packs()
         problem_specs = self._problem_bank.export_worker_problem_specs()
         per_chunk_results: list[list[SolveResult] | None] = [None] * len(chunks)
-        # 作業系統
-        if sys.platform == "win32":
-            mp_context = get_context("spawn") # windows 下使用 spawn 模式
-        else:
-            mp_context = get_context("fork") # 其他平台使用 fork 模式
+        # 建立 worker process 時，用 spawn 方式啟動子行程。
+        mp_context = get_context("spawn") 
 
         progress_queue = mp_context.Queue() if show_progress else None
         try:

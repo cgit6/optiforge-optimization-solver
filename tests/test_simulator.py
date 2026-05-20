@@ -19,15 +19,17 @@ from mkp.tools.show import write_simulator_result
 class RecordingSolver:
     def __init__(self) -> None:
         self.first_random: int | None = None
+        self.run_seed: int | None = None
 
     def solve(self, problem, config, rng):
         from mkp.engine.models import SolveResult
 
+        self.run_seed = int(config["run_seed"])
         self.first_random = int(rng.integers(0, 10_000))
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=config["solver_id"],
-            seed=0,
+            seed=self.run_seed,
             best_solution=np.array([1, 1, 1]),
             best_objective=60,
             feasible=True,
@@ -131,6 +133,8 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
 
         assert row.task is task
         assert row.solve_result.problem_id == "weish01"
+        assert row.solve_result.seed == 123
+        assert solver.run_seed == 123
         assert row.validation_report.is_feasible is True
 
         # 透過 show 模組寫出（保留檔案存在性的覆蓋率）

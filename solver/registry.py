@@ -58,10 +58,11 @@ class StubMaxIterationsSolver:
 
         best_solution = np.zeros(problem.items, dtype=int)
         best_objective = 0
+        run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=str(config.get("solver_id", "stub_solver")),
-            seed=int(rng.integers(0, np.iinfo(np.int32).max)),
+            seed=run_seed,
             best_solution=best_solution,
             best_objective=best_objective,
             feasible=True,
