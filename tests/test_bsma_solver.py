@@ -67,7 +67,7 @@ def test_bsma_reproducibility_same_seed_same_result():
     result_a = solver.solve(problem, config, np.random.default_rng(999))
     result_b = solver.solve(problem, config, np.random.default_rng(999))
 
-    assert result_a.seed == result_b.seed
+    assert result_a.run_seed == result_b.run_seed
     assert result_a.best_objective == result_b.best_objective
     assert np.array_equal(result_a.best_solution, result_b.best_solution)
 
@@ -80,7 +80,7 @@ def test_bsma_reproducibility_different_seed_can_differ():
     result_a = solver.solve(problem, config, np.random.default_rng(100))
     result_b = solver.solve(problem, config, np.random.default_rng(200))
 
-    assert result_a.seed != result_b.seed
+    assert result_a.run_seed != result_b.run_seed
 
 
 def test_bsma_stop_condition_max_iterations_reached():

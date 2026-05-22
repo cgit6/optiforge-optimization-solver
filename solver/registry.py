@@ -62,7 +62,7 @@ class StubMaxIterationsSolver:
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=str(config.get("solver_id", "stub_solver")),
-            seed=run_seed,
+            run_seed=run_seed,
             best_solution=best_solution,
             best_objective=best_objective,
             feasible=True,

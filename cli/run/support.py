@@ -6,10 +6,12 @@ import argparse
 from pathlib import Path
 
 from ... import engine
+from ...engine import SimulationBundle
 from ...engine.models import ExperimentSpec
 from ...engine.repository import ProblemRepository
 from ...problem import buildProblemRegistry, problemBuilders
 from ...problem.validation import DirectionSpec
+from ...rng import SeedStrategy
 from ...simulator import SimulatorResult
 from ...tools.show import write_simulator_result
 from ...tools.solver_config_loader import SolverConfigLoader
@@ -114,32 +116,40 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
 
 
 
-def executeSimulator(
+def buildSimulationBundle(
     spec: ExperimentSpec, # 實驗規格
     *,
-    seed: int,
+    seed_strategy: SeedStrategy,
     problem_root: Path,
     solver_root: Path,
-    output_root: Path,
-) -> SimulatorResult:
-    """驗證參數、`engine.build`、建立 `Simulator`，依 worker_count 選串行或併發路徑後輸出結果"""
+) -> SimulationBundle:
+    """驗證 `cli.run` 參數並建立可執行的 `SimulationBundle`。"""
 
-    # 驗證命令行參數合法性
     validate_execute_args(spec, problem_root, solver_root)
-
-    # 建立 SimulationBundle 物件
-    bundle = engine.build(
+    return engine.build(
         spec=spec,
         problem_root=problem_root,
         solver_root=solver_root,
+        seed_strategy=seed_strategy,
     )
+
+
+def executeSimulator(
+    bundle: SimulationBundle,
+    *,
+    base_seed: int,
+    output_root: Path,
+) -> SimulatorResult:
+    """執行已組裝好的 `SimulationBundle`，並將結果交給 show 模組輸出。"""
+
+    spec = bundle.spec
     try:
         sim = bundle.new_simulator()
         # 1. 執行模擬
         if spec.worker_count > 1:
-            simulator_result = sim.run_batch(seed=seed) # 併發執行
+            simulator_result = sim.run_batch(base_seed=base_seed) # 併發執行
         else:
-            simulator_result = sim.run_sequential(seed=seed) # 單一執行
+            simulator_result = sim.run_sequential(base_seed=base_seed) # 單一執行
 
         # 3. 輸出: 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
         write_simulator_result(

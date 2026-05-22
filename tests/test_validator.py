@@ -24,7 +24,7 @@ def _build_run_result(best_solution: np.ndarray, best_objective: int) -> SolveRe
     return SolveResult(
         problem_id="weish01",
         solver_id="stub_solver",
-        seed=42,
+        run_seed=42,
         best_solution=best_solution,
         best_objective=best_objective,
         feasible=True,

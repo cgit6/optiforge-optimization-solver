@@ -218,7 +218,7 @@ class BSCASolver:
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=str(config.get("solver_id", "bsca")),
-            seed=run_seed,
+            run_seed=run_seed,
             best_solution=np.asarray(best_sol, dtype=int),
             best_objective=int(best_fit),
             feasible=True,

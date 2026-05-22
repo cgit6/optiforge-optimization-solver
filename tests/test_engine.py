@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from mkp.engine import Engine, SimulationBundle
 from mkp.engine.models import ExperimentSpec
 from mkp.engine.repository import ProblemRepository
+from mkp.rng import DerivedPerProblemSeedStrategy, make_numpy_rng
 from mkp.tools.show import write_simulator_result
 
 
@@ -71,6 +71,7 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
         spec=spec,
         problem_root=problem_root,
         solver_root=solver_root,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
     )
 
     assert isinstance(bundle, SimulationBundle)
@@ -83,16 +84,39 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     assert bundle.solver_configs.solver_ids() == frozenset(spec.solver_ids)
     assert bundle.solver_configs.param_set_indices("stub_solver") == (0, 1)
     assert bundle.solver_builders
-    assert bundle.default_rng is np.random.default_rng
+    assert isinstance(bundle.seed_strategy, DerivedPerProblemSeedStrategy)
+    assert bundle.rng_factory is make_numpy_rng
     sim = bundle.new_simulator()
     try:
-        result = sim.run_sequential(seed=7)
+        result = sim.run_sequential(base_seed=7)
         assert len(result.rows) == 2
         write_simulator_result(result, experiment_name="exp_engine_1", output_root=output_root)
         assert (output_root / "exp_engine_1" / "stub_solver" / "param_0" / "runs.csv").exists()
         assert (output_root / "exp_engine_1" / "stub_solver" / "param_1" / "runs.csv").exists()
     finally:
         sim.close()
+
+
+def test_engine_build_requires_explicit_seed_strategy(tmp_path: Path) -> None:
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    _write_solver_yaml(solver_root / "stub_solver.yaml")
+
+    spec = ExperimentSpec(
+        experiment_name="exp_engine_missing_strategy",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+    )
+
+    with pytest.raises(TypeError, match="seed_strategy"):
+        Engine.build(
+            spec=spec,
+            problem_root=problem_root,
+            solver_root=solver_root,
+        )
 
 
 def test_engine_build_fails_when_experiment_problem_yaml_is_invalid(tmp_path: Path) -> None:
@@ -116,6 +140,7 @@ def test_engine_build_fails_when_experiment_problem_yaml_is_invalid(tmp_path: Pa
             spec=spec,
             problem_root=problem_root,
             solver_root=solver_root,
+            seed_strategy=DerivedPerProblemSeedStrategy(),
         )
 
 
@@ -139,6 +164,7 @@ def test_engine_build_succeeds_when_unused_catalog_yaml_is_invalid(tmp_path: Pat
         spec=spec,
         problem_root=problem_root,
         solver_root=solver_root,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
     )
     try:
         assert bundle.problem_bank.get("WEISH", "weish01").problem_id == "weish01"
@@ -181,6 +207,7 @@ capacities: [10, 8]
             spec=spec,
             problem_root=problem_root,
             solver_root=solver_root,
+            seed_strategy=DerivedPerProblemSeedStrategy(),
         )
 
 
@@ -203,6 +230,7 @@ def test_engine_build_fails_when_experiment_problem_not_in_catalog(tmp_path: Pat
             spec=spec,
             problem_root=problem_root,
             solver_root=solver_root,
+            seed_strategy=DerivedPerProblemSeedStrategy(),
         )
 
 
@@ -236,11 +264,12 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
         spec=spec,
         problem_root=problem_root,
         solver_root=solver_root,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
     )
     load_calls["n"] = 0
     sim = bundle.new_simulator()
     try:
-        sim.run_batch(seed=42)
+        sim.run_batch(base_seed=42)
         assert load_calls["n"] == 0
     finally:
         sim.close()

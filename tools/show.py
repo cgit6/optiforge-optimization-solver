@@ -199,7 +199,7 @@ def _empty_entry() -> ResultEntry:
         solver_id="",
         param_set_index=0,
         repeat_index=0,
-        seed=0,
+        run_seed=0,
         best_objective=0,
         feasible=False,
         objective_valid=False,

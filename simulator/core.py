@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
 import os
 import sys
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
@@ -11,7 +9,6 @@ from multiprocessing import get_context
 from queue import Empty
 from typing import Any
 
-import numpy as np
 from tqdm import tqdm
 
 from ..engine.models import ExperimentSpec, SolveResult, RunTask
@@ -23,6 +20,7 @@ from ..engine.bank import (
     get_worker_problem_bank,
 )
 from ..problem.registry import ProblemTypeSpec
+from ..rng import RngFactory, SeedContext, SeedStrategy
 from ..solver.BSMA import BSMASolver
 from ..solver.BSMA_numba_v2 import BSMANumbaSolver
 from ..solver.BSCA import BSCASolver
@@ -45,8 +43,8 @@ _PROCESS_SAFE_SOLVERS = {
 }
 
 _worker_solver_configs: dict[tuple[str, int], dict[str, Any]] | None = None
+_worker_rng_factory: RngFactory | None = None
 _worker_progress_queue: Any | None = None
-_TASK_SEED_VERSION = "mkp.task-seed.v2"
 
 
 @dataclass(frozen=True)
@@ -70,11 +68,13 @@ def _configure_curriculum_process_worker(
     packs: tuple[ProblemShmPack, ...],
     problem_specs: tuple[ProblemTypeSpec, ...],
     solver_configs: dict[tuple[str, int], dict[str, Any]],
+    rng_factory: RngFactory,
     progress_queue: Any | None = None,
 ) -> None:
-    global _worker_solver_configs, _worker_progress_queue
+    global _worker_solver_configs, _worker_rng_factory, _worker_progress_queue
     configure_problem_bank_worker(packs, problem_specs)
     _worker_solver_configs = {k: copy.deepcopy(v) for k, v in solver_configs.items()}
+    _worker_rng_factory = rng_factory
     _worker_progress_queue = progress_queue
 
 
@@ -88,54 +88,6 @@ def _progress_bar(total: int, desc: str, *, enabled: bool = True) -> tqdm:
     )
 
 
-def _seed_by_task(
-    spec: ExperimentSpec,
-    *,
-    base_seed: int,
-) -> dict[tuple[str, int], int]:
-    """依 problem/repeat identity 派生 seed，讓同題同 repeat 的所有算法共用 seed。"""
-    base_seed = _validate_base_seed(base_seed)
-    seeds: dict[tuple[str, int], int] = {}
-    for problem_id in spec.problem_ids:
-        for repeat_index in range(spec.repeat):
-            seeds[(problem_id, repeat_index)] = _stable_task_seed(
-                base_seed=base_seed,
-                problem_type=spec.problem_type,
-                dataset=spec.dataset,
-                problem_id=problem_id,
-                repeat_index=repeat_index,
-            )
-    return seeds
-
-
-def _validate_base_seed(seed: int) -> int:
-    seed = int(seed)
-    if seed < 0:
-        raise ValueError("seed must be >= 0.")
-    return seed
-
-
-def _stable_task_seed(
-    *,
-    base_seed: int,
-    problem_type: str,
-    dataset: str,
-    problem_id: str,
-    repeat_index: int,
-) -> int:
-    payload = {
-        "version": _TASK_SEED_VERSION,
-        "base_seed": int(base_seed),
-        "problem_type": problem_type,
-        "dataset": dataset,
-        "problem_id": problem_id,
-        "repeat_index": int(repeat_index),
-    }
-    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    digest = hashlib.blake2b(raw, digest_size=8).digest()
-    return int.from_bytes(digest, byteorder="little", signed=False) % int(np.iinfo(np.int32).max)
-
-# 
 def _build_process_local_registry() -> SolverRegistry:
     registry = SolverRegistry()
     registry.register("stub_solver", lambda: StubMaxIterationsSolver())
@@ -154,14 +106,16 @@ def _run_task_chunk_process(tasks: list[RunTask]) -> list[SolveResult]:
     bank = get_worker_problem_bank() # 取得 worker 問題庫
     if _worker_solver_configs is None:
         raise RuntimeError("curriculum worker solver_configs is not configured")
+    if _worker_rng_factory is None:
+        raise RuntimeError("curriculum worker rng_factory is not configured")
     registry = _build_process_local_registry()
     solve_results: list[SolveResult] = []
 
     for task in tasks:
         problem = bank.get(task.dataset, task.problem_id, task.problem_type)
         solver_config = copy.deepcopy(_worker_solver_configs[(task.solver_id, task.param_set_index)])
-        solver_config["run_seed"] = task.seed
-        rng = np.random.default_rng(task.seed) # 建立隨機數生成器
+        solver_config["run_seed"] = task.task_seed
+        rng = _worker_rng_factory(task.task_seed)
         solver = registry.create(task.solver_id) # 建立 solver
         solve_result = solver.solve(problem, solver_config, rng) # 執行 solver
         solve_results.append(solve_result)
@@ -180,11 +134,15 @@ class Simulator:
         problem_bank: ProblemBank,
         solver_registry: SolverRegistry,
         solver_configs: SolverConfigsSnapshot,
+        seed_strategy: SeedStrategy,
+        rng_factory: RngFactory,
     ) -> None:
         self._spec = spec # 實驗規格
         self._problem_bank = problem_bank # 問題庫
         self._solver_registry = solver_registry # 求解器註冊表
         self._solver_configs = solver_configs # engine 預載之 solver YAML
+        self._seed_strategy = seed_strategy # task seed 派生策略
+        self._rng_factory = rng_factory # 每次 run 的 RNG 工廠
 
     def close(self) -> None:
         """釋放 `ProblemBank` 的 shared memory（實驗結束後應呼叫）。"""
@@ -194,8 +152,8 @@ class Simulator:
     def run_task(self, task: RunTask) -> SimulatorRunRow:
         problem = self._problem_bank.get(task.dataset, task.problem_id, task.problem_type)
         solver_config = self._solver_configs.get(task.solver_id, task.param_set_index)
-        solver_config["run_seed"] = task.seed
-        rng = np.random.default_rng(task.seed)
+        solver_config["run_seed"] = task.task_seed
+        rng = self._rng_factory(task.task_seed)
 
         solver = self._solver_registry.create(task.solver_id)
         solve_result = solver.solve(problem, solver_config, rng)
@@ -207,10 +165,18 @@ class Simulator:
             validation_report=validation_report,
         )
 
-    def expand_tasks(self, *, seed: int) -> list[RunTask]:
+    def expand_tasks(self, *, base_seed: int) -> list[RunTask]:
         """把一份高階的實驗設定 ExperimentSpec，展開成一串可以真的執行的單筆任務 RunTask"""
         spec = self._spec # 實驗規格
-        seeds = _seed_by_task(spec, base_seed=seed)
+        task_seeds = self._seed_strategy.build_task_seeds(
+            SeedContext(
+                problem_type=spec.problem_type,
+                dataset=spec.dataset,
+                problem_ids=spec.problem_ids,
+                repeat=spec.repeat,
+            ),
+            base_seed=base_seed,
+        )
         tasks: list[RunTask] = []
 
         for problem_id in spec.problem_ids:
@@ -224,7 +190,7 @@ class Simulator:
                                 problem_type=spec.problem_type,
                                 solver_id=solver_id,
                                 repeat_index=repeat_index,
-                                seed=seeds[(problem_id, repeat_index)],
+                                task_seed=task_seeds[(problem_id, repeat_index)],
                                 param_set_index=param_set_index,
                             )
                         )
@@ -239,10 +205,10 @@ class Simulator:
             for param_set_index in self._solver_configs.param_set_indices(solver_id)
         }
 
-    def run_sequential(self, *, seed: int, show_progress: bool = True) -> SimulatorResult:
+    def run_sequential(self, *, base_seed: int, show_progress: bool = True) -> SimulatorResult:
         """在主執行緒依 `expand_tasks` 順序逐筆呼叫 `run_task`（多題或多 repeat 時仍是一筆接一筆）。"""
         spec = self._spec
-        tasks = self.expand_tasks(seed=seed) 
+        tasks = self.expand_tasks(base_seed=base_seed)
         rows: list[SimulatorRunRow] = []
 
         # 進度條顯示
@@ -307,7 +273,7 @@ class Simulator:
             )
         return rows
 
-    def run_batch(self, *, seed: int, show_progress: bool = True) -> SimulatorResult:
+    def run_batch(self, *, base_seed: int, show_progress: bool = True) -> SimulatorResult:
         """以 `worker_count` 個 process workers 並行執行展開後的任務。"""
         spec = self._spec
         if not self._can_use_process_workers():
@@ -323,7 +289,7 @@ class Simulator:
                 parts.append(f"solver 設定快照缺少：{missing}（請以相同 spec 呼叫 engine.build）。")
             raise RuntimeError(" ".join(parts))
 
-        tasks = self.expand_tasks(seed=seed)
+        tasks = self.expand_tasks(base_seed=base_seed)
         max_workers = min(spec.worker_count, len(tasks), os.cpu_count() or 1)
         chunks: list[list[RunTask]] = [[] for _ in range(max_workers)]
         for index, task in enumerate(tasks):
@@ -349,7 +315,7 @@ class Simulator:
                     max_workers=max_workers, # 併發數量
                     mp_context=mp_context,
                     initializer=_configure_curriculum_process_worker,
-                    initargs=(packs, problem_specs, worker_cfgs, progress_queue),
+                    initargs=(packs, problem_specs, worker_cfgs, self._rng_factory, progress_queue),
                 ) as pool:
                     future_to_index = {
                         pool.submit(_run_task_chunk_process, chunk): idx

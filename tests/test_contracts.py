@@ -82,10 +82,10 @@ def test_run_task_valid():
         dataset="WEISH",
         solver_id="solver_a",
         repeat_index=0,
-        seed=999,
+        task_seed=999,
         param_set_index=0,
     )
-    assert task.seed == 999
+    assert task.task_seed == 999
 
 
 @pytest.mark.parametrize(
@@ -95,7 +95,7 @@ def test_run_task_valid():
         {"dataset": ""},
         {"solver_id": ""},
         {"repeat_index": -1},
-        {"seed": -1},
+        {"task_seed": -1},
         {"param_set_index": -1},
     ],
 )
@@ -105,7 +105,7 @@ def test_run_task_invalid(kwargs):
         dataset="WEISH",
         solver_id="solver_a",
         repeat_index=0,
-        seed=1,
+        task_seed=1,
         param_set_index=0,
     )
     base.update(kwargs)
@@ -117,7 +117,7 @@ def test_run_result_valid_and_readonly_solution():
     result = SolveResult(
         problem_id="weish01",
         solver_id="solver_a",
-        seed=7,
+        run_seed=7,
         best_solution=np.array([1, 0, 1]),
         best_objective=123,
         feasible=True,
@@ -136,7 +136,7 @@ def test_run_result_accepts_vector_objective():
     result = SolveResult(
         problem_id="multi01",
         solver_id="solver_a",
-        seed=7,
+        run_seed=7,
         best_solution=np.array([1, 0, 1]),
         best_objective=(123, 4.5),
         feasible=True,
@@ -172,7 +172,7 @@ def test_problem_requires_validate_implementation():
     [
         {"problem_id": ""},
         {"solver_id": ""},
-        {"seed": -1},
+        {"run_seed": -1},
         {"evaluation_count": -1},
         {"runtime": -0.1},
         {"linprog_runtime": -0.01},
@@ -183,7 +183,7 @@ def test_run_result_invalid(kwargs):
     base = dict(
         problem_id="weish01",
         solver_id="solver_a",
-        seed=7,
+        run_seed=7,
         best_solution=np.array([1, 0, 1]),
         best_objective=123,
         feasible=True,

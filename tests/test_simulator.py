@@ -10,6 +10,7 @@ from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.problem import buildProblemRegistry, problemBuilders
+from mkp.rng import DerivedPerProblemSeedStrategy, make_numpy_rng
 from mkp.simulator import Simulator, SimulatorResult
 from mkp.solver.registry import SolverRegistry
 from mkp.tools.show import write_simulator_result
@@ -28,7 +29,7 @@ class RecordingSolver:
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=config["solver_id"],
-            seed=self.run_seed,
+            run_seed=self.run_seed,
             best_solution=np.array([1, 1, 1]),
             best_objective=60,
             feasible=True,
@@ -38,6 +39,10 @@ class RecordingSolver:
             linprog_runtime=0.0,
             error=None,
         )
+
+
+def _offset_rng_factory(seed: int) -> np.random.Generator:
+    return np.random.default_rng(seed + 1)
 
 
 def _write_problem_yaml(path: Path) -> None:
@@ -80,7 +85,13 @@ params:
     )
 
 
-def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim") -> tuple[Simulator, Path]:
+def _build_simulator(
+    tmp_path: Path,
+    solver,
+    *,
+    experiment_name: str = "exp_sim",
+    rng_factory=make_numpy_rng,
+) -> tuple[Simulator, Path]:
     """回傳 (Simulator, output_root)；輸出檔由呼叫端透過 write_simulator_result 觸發。"""
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
@@ -108,6 +119,8 @@ def _build_simulator(tmp_path: Path, solver, *, experiment_name: str = "exp_sim"
             problem_bank=bank,
             solver_registry=registry,
             solver_configs=solver_configs,
+            seed_strategy=DerivedPerProblemSeedStrategy(),
+            rng_factory=rng_factory,
         ),
         output_root,
     )
@@ -122,7 +135,7 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
             dataset="WEISH",
             solver_id="stub_solver",
             repeat_index=0,
-            seed=123,
+            task_seed=123,
             param_set_index=0,
         )
 
@@ -130,7 +143,7 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
 
         assert row.task is task
         assert row.solve_result.problem_id == "weish01"
-        assert row.solve_result.seed == 123
+        assert row.solve_result.run_seed == 123
         assert solver.run_seed == 123
         assert row.validation_report.is_feasible is True
 
@@ -158,7 +171,7 @@ def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
         dataset="WEISH",
         solver_id="stub_solver",
         repeat_index=0,
-        seed=777,
+        task_seed=777,
         param_set_index=0,
     )
     try:
@@ -176,6 +189,31 @@ def test_run_task_rng_seed_is_reproducible(tmp_path: Path):
     assert solver1.first_random == solver2.first_random
 
 
+def test_run_task_uses_injected_rng_factory(tmp_path: Path):
+    solver = RecordingSolver()
+    simulator, _ = _build_simulator(
+        tmp_path,
+        solver,
+        experiment_name="exp_custom_rng",
+        rng_factory=_offset_rng_factory,
+    )
+    task = RunTask(
+        problem_id="weish01",
+        dataset="WEISH",
+        solver_id="stub_solver",
+        repeat_index=0,
+        task_seed=321,
+        param_set_index=0,
+    )
+    try:
+        simulator.run_task(task)
+    finally:
+        simulator.close()
+
+    expected_first_random = int(_offset_rng_factory(task.task_seed).integers(0, 10_000))
+    assert solver.first_random == expected_first_random
+
+
 def test_run_task_fail_fast_when_problem_load_fails(tmp_path: Path):
     solver = RecordingSolver()
     simulator, _ = _build_simulator(tmp_path, solver)
@@ -185,7 +223,7 @@ def test_run_task_fail_fast_when_problem_load_fails(tmp_path: Path):
             dataset="WEISH",
             solver_id="stub_solver",
             repeat_index=0,
-            seed=1,
+            task_seed=1,
             param_set_index=0,
         )
 

@@ -10,6 +10,7 @@ from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
 from mkp.problem import buildProblemRegistry, problemBuilders
+from mkp.rng import DerivedPerProblemSeedStrategy, make_numpy_rng
 from mkp.simulator import Simulator
 from mkp.solver.registry import SolverRegistry
 from mkp.tools.show import write_simulator_result
@@ -20,11 +21,13 @@ class CountingSolver:
 
     def solve(self, problem, config, rng):
         CountingSolver.calls += 1
-        run_seed = int(config.get("run_seed", rng.integers(0, np.iinfo(np.int32).max)))
+        run_seed_value = config.get("run_seed")
+        run_seed = int(run_seed_value) if run_seed_value is not None else int(rng.integers(0, np.iinfo(np.int32).max))
+        first_random = int(rng.integers(0, np.iinfo(np.int32).max))
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=config["solver_id"],
-            seed=run_seed,
+            run_seed=run_seed,
             best_solution=np.array([1, 1, 1]),
             best_objective=60,
             feasible=True,
@@ -33,7 +36,12 @@ class CountingSolver:
             runtime=0.1,
             linprog_runtime=0.0,
             error=None,
+            metadata={"first_random": first_random},
         )
+
+
+def _offset_rng_factory(seed: int) -> np.random.Generator:
+    return np.random.default_rng(seed + 1)
 
 
 def _write_problem_yaml(path: Path, *, problem_id: str | None = None, dataset: str = "WEISH") -> None:
@@ -116,6 +124,8 @@ def _build_simulator(tmp_path: Path) -> tuple[Simulator, Path]:
             problem_bank=bank,
             solver_registry=registry,
             solver_configs=solver_configs,
+            seed_strategy=DerivedPerProblemSeedStrategy(),
+            rng_factory=make_numpy_rng,
         ),
         output_root,
     )
@@ -124,7 +134,7 @@ def _build_simulator(tmp_path: Path) -> tuple[Simulator, Path]:
 def test_expand_tasks_count_and_fields():
     simulator, _ = _build_simulator(Path("/tmp/sim_expand_1"))
     try:
-        tasks = simulator.expand_tasks(seed=1234)
+        tasks = simulator.expand_tasks(base_seed=1234)
 
         assert len(tasks) == 3
         assert tasks[0].problem_id == "weish01"
@@ -140,11 +150,11 @@ def test_expand_tasks_count_and_fields():
 def test_rng_seed_reproducibility_and_independence():
     simulator, _ = _build_simulator(Path("/tmp/sim_expand_2"))
     try:
-        tasks_a = simulator.expand_tasks(seed=1234)
-        tasks_b = simulator.expand_tasks(seed=1234)
+        tasks_a = simulator.expand_tasks(base_seed=1234)
+        tasks_b = simulator.expand_tasks(base_seed=1234)
 
-        assert [t.seed for t in tasks_a] == [t.seed for t in tasks_b]
-        assert len(set(t.seed for t in tasks_a)) == len(tasks_a)
+        assert [t.task_seed for t in tasks_a] == [t.task_seed for t in tasks_b]
+        assert len(set(t.task_seed for t in tasks_a)) == len(tasks_a)
     finally:
         simulator.close()
 
@@ -188,7 +198,7 @@ params:
 
 
 def _seed_map(tasks: list[RunTask]) -> dict[tuple[str, str, int, int], int]:
-    return {(t.problem_id, t.solver_id, t.param_set_index, t.repeat_index): t.seed for t in tasks}
+    return {(t.problem_id, t.solver_id, t.param_set_index, t.repeat_index): t.task_seed for t in tasks}
 
 
 def _build_seed_simulator(
@@ -232,6 +242,8 @@ def _build_seed_simulator(
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=SolverConfigsSnapshot.build(spec, solver_root),
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+        rng_factory=make_numpy_rng,
     )
 
 
@@ -250,7 +262,7 @@ def _find_seed(
             and task.param_set_index == param_set_index
             and task.repeat_index == repeat_index
         ):
-            return task.seed
+            return task.task_seed
     raise AssertionError(
         f"seed not found: {problem_id=} {solver_id=} {param_set_index=} {repeat_index=}"
     )
@@ -281,9 +293,11 @@ def test_expand_tasks_order_and_seed_keys_preserve_variants(tmp_path: Path):
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+        rng_factory=make_numpy_rng,
     )
     try:
-        tasks = simulator.expand_tasks(seed=999)
+        tasks = simulator.expand_tasks(base_seed=999)
 
         assert len(tasks) == 2 * 2 * 1 * 2
         first = tasks[0]
@@ -347,9 +361,9 @@ def test_task_seed_is_independent_of_other_solvers_and_solver_order(tmp_path: Pa
         solver_params={"s_b": solver_params["s_b"]},
     )
     try:
-        seed_ab = _find_seed(sim_ab.expand_tasks(seed=999), solver_id="s_b", param_set_index=0)
-        seed_ba = _find_seed(sim_ba.expand_tasks(seed=999), solver_id="s_b", param_set_index=0)
-        seed_b = _find_seed(sim_b.expand_tasks(seed=999), solver_id="s_b", param_set_index=0)
+        seed_ab = _find_seed(sim_ab.expand_tasks(base_seed=999), solver_id="s_b", param_set_index=0)
+        seed_ba = _find_seed(sim_ba.expand_tasks(base_seed=999), solver_id="s_b", param_set_index=0)
+        seed_b = _find_seed(sim_b.expand_tasks(base_seed=999), solver_id="s_b", param_set_index=0)
 
         assert seed_ab == seed_ba == seed_b
     finally:
@@ -387,9 +401,9 @@ def test_task_seed_is_independent_of_param_order_and_count(tmp_path: Path) -> No
         solver_params={"s_a": ("{pop_size: 20, z: 0.02}",)},
     )
     try:
-        full_tasks = sim_full.expand_tasks(seed=999)
-        reordered_tasks = sim_reordered.expand_tasks(seed=999)
-        reduced_tasks = sim_reduced.expand_tasks(seed=999)
+        full_tasks = sim_full.expand_tasks(base_seed=999)
+        reordered_tasks = sim_reordered.expand_tasks(base_seed=999)
+        reduced_tasks = sim_reduced.expand_tasks(base_seed=999)
 
         expected_seed = _find_seed(full_tasks, solver_id="s_a", param_set_index=0)
 
@@ -418,8 +432,8 @@ def test_task_seed_changes_when_base_seed_or_repeat_changes(tmp_path: Path) -> N
         solver_params=solver_params,
     )
     try:
-        tasks_seed_1 = sim_seed_1.expand_tasks(seed=1)
-        tasks_seed_2 = sim_seed_2.expand_tasks(seed=2)
+        tasks_seed_1 = sim_seed_1.expand_tasks(base_seed=1)
+        tasks_seed_2 = sim_seed_2.expand_tasks(base_seed=2)
 
         assert _find_seed(tasks_seed_1, solver_id="s_a", param_set_index=0, repeat_index=0) != _find_seed(
             tasks_seed_2,
@@ -453,8 +467,8 @@ def test_task_seed_changes_when_dataset_changes(tmp_path: Path) -> None:
         dataset="ALT",
     )
     try:
-        seed_weish = _find_seed(sim_weish.expand_tasks(seed=999), solver_id="s_a", param_set_index=0)
-        seed_alt = _find_seed(sim_alt.expand_tasks(seed=999), solver_id="s_a", param_set_index=0)
+        seed_weish = _find_seed(sim_weish.expand_tasks(base_seed=999), solver_id="s_a", param_set_index=0)
+        seed_alt = _find_seed(sim_alt.expand_tasks(base_seed=999), solver_id="s_a", param_set_index=0)
 
         assert seed_weish != seed_alt
     finally:
@@ -484,19 +498,19 @@ def test_task_seed_is_independent_of_problem_order_and_subset(tmp_path: Path) ->
     )
     try:
         seed_ordered = _find_seed(
-            sim_ordered.expand_tasks(seed=999),
+            sim_ordered.expand_tasks(base_seed=999),
             problem_id="p2",
             solver_id="s_a",
             param_set_index=0,
         )
         seed_reordered = _find_seed(
-            sim_reordered.expand_tasks(seed=999),
+            sim_reordered.expand_tasks(base_seed=999),
             problem_id="p2",
             solver_id="s_a",
             param_set_index=0,
         )
         seed_subset = _find_seed(
-            sim_subset.expand_tasks(seed=999),
+            sim_subset.expand_tasks(base_seed=999),
             problem_id="p2",
             solver_id="s_a",
             param_set_index=0,
@@ -535,12 +549,14 @@ def test_run_batch_uses_process_pool(tmp_path: Path):
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+        rng_factory=make_numpy_rng,
     )
 
     try:
-        result = simulator.run_batch(seed=100)
+        result = simulator.run_batch(base_seed=100)
         assert len(result.rows) == n
-        assert all(row.solve_result.seed == row.task.seed for row in result.rows)
+        assert all(row.solve_result.run_seed == row.task.task_seed for row in result.rows)
 
         write_simulator_result(result, experiment_name="exp_par", output_root=output_root)
         summary_json = output_root / "exp_par" / "stub_solver" / "param_0" / "summary.json"
@@ -573,17 +589,72 @@ def test_run_batch_matches_sequential_seed_assignment(tmp_path: Path):
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+        rng_factory=make_numpy_rng,
     )
 
     try:
-        sequential = simulator.run_sequential(seed=100, show_progress=False)
-        batch = simulator.run_batch(seed=100, show_progress=False)
+        sequential = simulator.run_sequential(base_seed=100, show_progress=False)
+        batch = simulator.run_batch(base_seed=100, show_progress=False)
 
-        sequential_seeds = [(row.task.seed, row.solve_result.seed) for row in sequential.rows]
-        batch_seeds = [(row.task.seed, row.solve_result.seed) for row in batch.rows]
+        sequential_seeds = [(row.task.task_seed, row.solve_result.run_seed) for row in sequential.rows]
+        batch_seeds = [(row.task.task_seed, row.solve_result.run_seed) for row in batch.rows]
         assert sequential_seeds == batch_seeds
     finally:
         simulator.close()
+
+
+def test_batch_worker_uses_injected_rng_factory(tmp_path: Path, monkeypatch) -> None:
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml", problem_id="weish01")
+    _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
+
+    bank_spec = ExperimentSpec(
+        experiment_name="exp_par_rng",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver",),
+        repeat=1,
+        worker_count=2,
+    )
+    bank = _build_problem_bank(problem_root, bank_spec)
+    registry = SolverRegistry()
+    registry.register("stub_solver", lambda: CountingSolver())
+    solver_configs = SolverConfigsSnapshot.build(bank_spec, solver_root)
+    simulator = Simulator(
+        spec=bank_spec,
+        problem_bank=bank,
+        solver_registry=registry,
+        solver_configs=solver_configs,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+        rng_factory=_offset_rng_factory,
+    )
+
+    simulator_core = __import__("mkp.simulator.core", fromlist=["Simulator"])
+    original_builder = simulator_core._build_process_local_registry
+
+    def custom_builder() -> SolverRegistry:
+        local_registry = SolverRegistry()
+        local_registry.register("stub_solver", lambda: CountingSolver())
+        return local_registry
+
+    monkeypatch.setattr(simulator_core, "_build_process_local_registry", custom_builder)
+    try:
+        tasks = simulator.expand_tasks(base_seed=100)
+        simulator_core._configure_curriculum_process_worker(
+            bank.export_worker_packs(),
+            bank.export_worker_problem_specs(),
+            solver_configs.to_worker_init_dict(),
+            _offset_rng_factory,
+        )
+        results = simulator_core._run_task_chunk_process([tasks[0]])
+    finally:
+        monkeypatch.setattr(simulator_core, "_build_process_local_registry", original_builder)
+        simulator.close()
+
+    expected_first_random = int(_offset_rng_factory(tasks[0].task_seed).integers(0, np.iinfo(np.int32).max))
+    assert results[0].metadata["first_random"] == expected_first_random
 
 
 def test_run_batch_fail_fast_on_problem_load_error(tmp_path: Path):
@@ -643,6 +714,8 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
         problem_bank=bank,
         solver_registry=registry,
         solver_configs=solver_configs,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+        rng_factory=make_numpy_rng,
     )
     try:
         task = RunTask(
@@ -650,7 +723,7 @@ def test_run_task_key_error_when_solver_not_in_snapshot(tmp_path: Path) -> None:
             dataset="WEISH",
             solver_id="other_solver",
             repeat_index=0,
-            seed=1,
+            task_seed=1,
             param_set_index=0,
         )
         with pytest.raises(KeyError):
@@ -663,7 +736,7 @@ def test_run_batch_writes_summary_files(tmp_path: Path):
     simulator, output_root = _build_simulator(tmp_path)
 
     try:
-        result = simulator.run_sequential(seed=1)
+        result = simulator.run_sequential(base_seed=1)
 
         assert len(result.rows) == 3
         write_simulator_result(result, experiment_name="exp_batch", output_root=output_root)

@@ -20,6 +20,7 @@ from .evaluation import (
 )
 from ..engine.assembly import Engine
 from ..engine.models import ExperimentSpec
+from ..rng import DerivedPerProblemSeedStrategy
 from ..simulator.core import Simulator
 from ..tools.show import write_simulator_result
 from ..tools.stat import ResultEntry, SummaryMeta, SummaryReport, result_entries, summarize
@@ -206,7 +207,12 @@ class Experiment:
             worker_count=self.cfg.worker_count,
             problem_type=dataset_setting.problem_type,
         )
-        bundle = Engine.build(spec=spec, problem_root=Path(problem_root), solver_root=Path(solver_root))
+        bundle = Engine.build(
+            spec=spec,
+            problem_root=Path(problem_root),
+            solver_root=Path(solver_root),
+            seed_strategy=DerivedPerProblemSeedStrategy(),
+        )
         return bundle.new_simulator()
 
     def _run_dataset_seed(
@@ -217,9 +223,9 @@ class Experiment:
         simulator: Simulator,
     ) -> DatasetRunResult:
         simulator_result = (
-            simulator.run_sequential(seed=seed, show_progress=False)
+            simulator.run_sequential(base_seed=seed, show_progress=False)
             if self.cfg.worker_count == 1
-            else simulator.run_batch(seed=seed, show_progress=False)
+            else simulator.run_batch(base_seed=seed, show_progress=False)
         )
         return DatasetRunResult(
             seed=seed,

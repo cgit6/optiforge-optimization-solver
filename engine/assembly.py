@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, cast
-
-import numpy as np
+from typing import TYPE_CHECKING, Any
 
 from ..solver.registry import SolverBuilder, SolverRegistry
 from ..problem import buildProblemRegistry, problemBuilders
+from ..rng import RngFactory, SeedStrategy, make_numpy_rng
 from .models import ExperimentSpec
 from .configs import SolverConfigsSnapshot
 from .bank import (
@@ -27,8 +25,6 @@ from .builders import solverBuilders
 if TYPE_CHECKING:
     from ..simulator.core import Simulator
 
-DefaultRngFactory = Callable[..., np.random.Generator]
-
 
 
 # 這邊有個需要特別判斷的事情，就是收入的題庫範圍
@@ -37,6 +33,8 @@ def build(
     spec: ExperimentSpec, # 實驗規格
     problem_root: Path, # 題庫資料夾的路徑
     solver_root: Path, # 算法的參數設定
+    seed_strategy: SeedStrategy,
+    rng_factory: RngFactory = make_numpy_rng,
     # solver_builders: dict[str, SolverBuilder],
 ) -> SimulationBundle:
     """掃描與驗證題庫、建 ProblemBank 與 bundle；不在此建立 `Simulator`。"""
@@ -68,7 +66,8 @@ def build(
         problem_bank=problem_bank, # 題目緩存
         solver_configs=solver_configs, # 求解器參數設定
         solver_builders=builders, # 求解器註冊清單
-        default_rng=cast(DefaultRngFactory, np.random.default_rng),
+        seed_strategy=seed_strategy, # task_seed 產生器
+        rng_factory=rng_factory,
         solver_root=Path(solver_root),
         # 實驗模組物件
     )
@@ -84,7 +83,8 @@ class SimulationBundle:
     problem_bank: ProblemBank # 題目清單
     solver_configs: SolverConfigsSnapshot # 算法的設定
     solver_builders: dict[str, SolverBuilder] # 建構算法函數的函數
-    default_rng: DefaultRngFactory # RNG 工廠函數
+    seed_strategy: SeedStrategy # task seed 派生策略
+    rng_factory: RngFactory # RNG 工廠函數
     solver_root: Path # 求解器根路徑
     exp_cfg: Any | None = None # 實驗模組的設定(選填，如果執行 cil.exp 的時候會把 exp_cfg.yaml 的設定保存至此地)
 
@@ -104,8 +104,10 @@ class SimulationBundle:
             problem_bank=self.problem_bank,
             solver_registry=registry,
             solver_configs=self.solver_configs,
+            seed_strategy=self.seed_strategy,
+            rng_factory=self.rng_factory,
         )
-
+    # 這方法的意義是什麼應該只需要保留 new 或是 new_simulator 擇一
     def new(self) -> Simulator:
         return self.new_simulator()
 
@@ -118,9 +120,13 @@ class Engine:
         spec: ExperimentSpec,
         problem_root: Path,
         solver_root: Path,
+        seed_strategy: SeedStrategy,
+        rng_factory: RngFactory = make_numpy_rng,
     ) -> SimulationBundle:
         return build(
             spec=spec,
             problem_root=problem_root,
             solver_root=solver_root,
+            seed_strategy=seed_strategy,
+            rng_factory=rng_factory,
         )

@@ -49,7 +49,7 @@ class RunTask:
     dataset: str
     solver_id: str
     repeat_index: int
-    seed: int
+    task_seed: int
     param_set_index: int
     problem_type: str = "mkp"
 
@@ -64,8 +64,8 @@ class RunTask:
             raise ValueError("solver_id cannot be empty.")
         if self.repeat_index < 0:
             raise ValueError("repeat_index must be >= 0.")
-        if self.seed < 0:
-            raise ValueError("seed must be >= 0.")
+        if self.task_seed < 0:
+            raise ValueError("task_seed must be >= 0.")
         if self.param_set_index < 0:
             raise ValueError("param_set_index must be >= 0.")
 
@@ -74,7 +74,7 @@ class RunTask:
 class SolveResult:
     problem_id: str
     solver_id: str
-    seed: int
+    run_seed: int
     best_solution: np.ndarray
     best_objective: ObjectiveValue
     feasible: bool
@@ -90,8 +90,8 @@ class SolveResult:
             raise ValueError("problem_id cannot be empty.")
         if not self.solver_id.strip():
             raise ValueError("solver_id cannot be empty.")
-        if self.seed < 0:
-            raise ValueError("seed must be >= 0.")
+        if self.run_seed < 0:
+            raise ValueError("run_seed must be >= 0.")
         if self.evaluation_count < 0:
             raise ValueError("evaluation_count must be >= 0.")
         if self.runtime < 0:

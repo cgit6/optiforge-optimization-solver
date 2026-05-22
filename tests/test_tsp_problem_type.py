@@ -84,7 +84,7 @@ def test_tsp_problem_validate_checks_permutation_and_cost() -> None:
     result = SolveResult(
         problem_id="tsp5",
         solver_id="tsp_solver",
-        seed=0,
+        run_seed=0,
         best_solution=np.array([0, 1, 3, 2, 4]),
         best_objective=26,
         feasible=True,

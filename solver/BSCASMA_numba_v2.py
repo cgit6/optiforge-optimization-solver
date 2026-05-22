@@ -613,7 +613,7 @@ class BRLSMASCATestNumbaSolver:
         return SolveResult(
             problem_id=problem.problem_id,
             solver_id=str(config.get("solver_id", "brlsmasca_numba")),
-            seed=run_seed,
+            run_seed=run_seed,
             best_solution=np.asarray(best_sol, dtype=np.int64),
             best_objective=int(best_fit),
             feasible=True,

@@ -58,7 +58,7 @@ def _build_solve_result(
     return SolveResult(
         problem_id="weish01",
         solver_id=solver_id,
-        seed=42,
+        run_seed=42,
         best_solution=solution,
         best_objective=objective,
         feasible=feasible,
@@ -104,7 +104,7 @@ def _make_row(
         dataset="WEISH",
         solver_id=solve_result.solver_id,
         repeat_index=repeat_index,
-        seed=solve_result.seed,
+        task_seed=solve_result.run_seed,
         param_set_index=param_set_index,
     )
     return SimulatorRunRow(task=task, solve_result=solve_result, validation_report=validation_report)
@@ -137,6 +137,7 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert rows[0]["solver_id"] == "stub_solver"
     assert rows[0]["param_set_index"] == "0"
     assert rows[0]["repeat_index"] == "0"
+    assert rows[0]["run_seed"] == "42"
     assert rows[0]["best_objective"] == "60"
     assert rows[0]["linprog_runtime"] == "0.0"
     assert json.loads(rows[0]["metadata_json"]) == {"solve": {}, "validation": {}}
@@ -149,6 +150,7 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert payload["problem_id"] == "weish01"
     assert payload["param_set_index"] == 0
     assert payload["repeat_index"] == 0
+    assert payload["run_seed"] == 42
     assert payload["linprog_runtime"] == 0.0
     assert payload["feasible"] is True
     assert payload["objective_valid"] is True
@@ -409,7 +411,7 @@ def test_summary_uses_min_direction_for_worst_and_pdev():
     best_run = SolveResult(
         problem_id="tsp5",
         solver_id="tsp_solver",
-        seed=0,
+        run_seed=0,
         best_solution=np.array([0, 1, 3, 2, 4]),
         best_objective=26,
         feasible=True,
@@ -420,7 +422,7 @@ def test_summary_uses_min_direction_for_worst_and_pdev():
     worse_run = SolveResult(
         problem_id="tsp5",
         solver_id="tsp_solver",
-        seed=1,
+        run_seed=1,
         best_solution=np.array([0, 1, 2, 3, 4]),
         best_objective=29,
         feasible=True,
@@ -448,7 +450,7 @@ def test_multi_objective_runs_are_saved_without_scalar_summary_stats(tmp_path: P
     run = SolveResult(
         problem_id="multi01",
         solver_id="multi_solver",
-        seed=42,
+        run_seed=42,
         best_solution=np.array([1.0, 0.5]),
         best_objective=(10, 2.5),
         feasible=True,
@@ -475,7 +477,7 @@ def test_multi_objective_runs_are_saved_without_scalar_summary_stats(tmp_path: P
         problem_type="multi",
         solver_id="multi_solver",
         repeat_index=0,
-        seed=42,
+        task_seed=42,
         param_set_index=0,
     )
     simulator_result = SimulatorResult(

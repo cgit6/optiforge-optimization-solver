@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from .assembly import DefaultRngFactory, Engine, SimulationBundle, build
+from .assembly import Engine, SimulationBundle, build
 from .configs import SolverConfigsSnapshot
 
 __all__ = [
-    "DefaultRngFactory",
     "Engine",
     "SimulationBundle",
     "SolverConfigsSnapshot",

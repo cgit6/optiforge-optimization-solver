@@ -26,7 +26,7 @@ class ResultEntry:
     solver_id: str
     param_set_index: int
     repeat_index: int
-    seed: int
+    run_seed: int
     best_objective: ObjectiveValue
     feasible: bool
     objective_valid: bool
@@ -257,7 +257,7 @@ def _build_entry(
         solver_id=solve_result.solver_id,
         param_set_index=param_set_index,
         repeat_index=repeat_index,
-        seed=solve_result.seed,
+        run_seed=solve_result.run_seed,
         best_objective=solve_result.best_objective,
         feasible=validation_report.is_feasible,
         objective_valid=validation_report.objective_valid,
