@@ -164,7 +164,8 @@ def test_streaming_scheduler_collects_per_problem_and_discards_failed_rounds(tmp
     runs_path = tmp_path / "output" / "exp_search" / "exp1" / "p1" / "stub_solver" / "param_0" / "runs.json"
     rows = json.loads(runs_path.read_text(encoding="utf-8"))
     assert [row["repeat_index"] for row in rows] == [1, 3]
-    assert (tmp_path / "output" / "exp_search" / "summary.json").exists()
+    summary = json.loads((tmp_path / "output" / "exp_search" / "summary.json").read_text(encoding="utf-8"))
+    assert "evaluation_history" not in summary["problems"][0]
 
 
 def test_problem_stops_after_collects_is_reached_and_discards_prefetched_rounds(tmp_path: Path) -> None:

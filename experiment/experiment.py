@@ -9,12 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import DatasetSetting, ExperimentConfig, ProblemSetting, load_config
-from .evaluation import (
-    RoundEvalDecision,
-    RoundEvalInput,
-    RoundEvaluator,
-    VariantSummary,
-)
+from .evaluation import RoundEvalDecision, RoundEvalInput, RoundEvaluator, VariantSummary
 from ..engine.assembly import Engine
 from ..engine.models import ExperimentSpec, RunTask
 from ..machine import Machine, MachinePool, MachinePoolSession, MachineResult, SimulatorRunRow
@@ -30,23 +25,6 @@ _EVALUATORS: dict[str, RoundEvaluator] = {}
 
 
 @dataclass(frozen=True)
-class EvaluatorDecisionReport:
-    name: str
-    passed: bool
-    verdict: str
-    message: str
-    details: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class RoundCollectionAttempt:
-    repeat_index: int
-    accepted: bool
-    collected_count: int
-    decisions: tuple[EvaluatorDecisionReport, ...]
-
-
-@dataclass(frozen=True)
 class ProblemCollectionReport:
     dataset_experiment_id: str
     dataset: str
@@ -57,7 +35,6 @@ class ProblemCollectionReport:
     attempted_repeats: int
     collected_repeat_indices: tuple[int, ...]
     collected_run_seeds: tuple[int, ...]
-    evaluation_history: tuple[RoundCollectionAttempt, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -178,7 +155,6 @@ class Experiment:
         }
         collected_repeat_indices: list[int] = []
         collected_run_seeds: list[int] = []
-        evaluation_history: list[RoundCollectionAttempt] = []
         attempted_repeats = 0
         window_size = _repeat_window_size(self.cfg.worker_count, len(machines))
         problem_id = problem_setting.problem_id
@@ -232,23 +208,6 @@ class Experiment:
                     problem_id=problem_id,
                     collected_count=len(collected_repeat_indices),
                 )
-                evaluation_history.append(
-                    RoundCollectionAttempt(
-                        repeat_index=candidate_repeat_index,
-                        accepted=accepted,
-                        collected_count=len(collected_repeat_indices),
-                        decisions=tuple(
-                            EvaluatorDecisionReport(
-                                name=evaluation.name,
-                                passed=decision.passed,
-                                verdict=decision.verdict,
-                                message=decision.message,
-                                details=decision.details,
-                            )
-                            for evaluation, decision in zip(problem_setting.evaluations, decisions)
-                        ),
-                    )
-                )
                 progress.record_evaluation()
 
             repeat_index += len(repeat_indices)
@@ -293,7 +252,6 @@ class Experiment:
             attempted_repeats=attempted_repeats,
             collected_repeat_indices=tuple(collected_repeat_indices),
             collected_run_seeds=tuple(collected_run_seeds),
-            evaluation_history=tuple(evaluation_history),
         )
 
 

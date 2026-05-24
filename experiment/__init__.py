@@ -25,11 +25,9 @@ from .evaluation import (
     VariantSummary,
 )
 from .experiment import (
-    EvaluatorDecisionReport,
     Experiment,
     ExperimentReport,
     ProblemCollectionReport,
-    RoundCollectionAttempt,
     build,
     executeExperiment,
     register,
@@ -44,7 +42,6 @@ __all__ = [
     "DatasetVerdict",
     "EvaluationBaseline",
     "EvaluationSpec",
-    "EvaluatorDecisionReport",
     "Experiment",
     "ExperimentConfig",
     "ExperimentReport",
@@ -55,7 +52,6 @@ __all__ = [
     "RoundEvalDecision",
     "RoundEvalInput",
     "RoundEvaluator",
-    "RoundCollectionAttempt",
     "SolverSelection",
     "VariantSummary",
     "build",
