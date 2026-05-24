@@ -308,7 +308,27 @@ def test_experiment_prints_collection_status_lines(tmp_path: Path, capsys) -> No
     )
 
     captured = capsys.readouterr()
-    assert "step1: collect" in captured.err
+    assert captured.err.count("step1: collect") == 1
     assert "[exp1] p1: 0/1 p2: 0/1 | remaining: 2" in captured.err
-    assert "[exp1] p1: 1/1 p2: 0/1 | remaining: 1" in captured.err
-    assert "[exp1] p1: 1/1 p2: 1/1 | remaining: 0" in captured.err
+    assert "[exp1] p1: 1/1 p2: 0/1 | remaining: 1" not in captured.err
+    assert "[exp1] p1: 1/1 p2: 1/1 | remaining: 0" not in captured.err
+
+
+def test_experiment_prints_collection_status_every_50_evaluations(tmp_path: Path, capsys) -> None:
+    experiment, problem_root, solver_root = _project(tmp_path, collects=55, repeat=55)
+    register(
+        "custom",
+        lambda _input: RoundEvalDecision(passed=True, verdict=PASS),
+    )
+
+    experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    captured = capsys.readouterr()
+    assert captured.err.count("step1: collect") == 1
+    assert "[exp1] p1: 0/55 | remaining: 55" in captured.err
+    assert "[exp1] p1: 50/55 | remaining: 5" in captured.err
+    assert "[exp1] p1: 55/55 | remaining: 0" not in captured.err

@@ -116,7 +116,7 @@ def test_build_sample_exp_cfg_success() -> None:
     assert isinstance(experiment, Experiment)
     assert experiment.cfg.experiment_name == "mkp_test_now"
     assert experiment.cfg.collects == 20
-    assert experiment.cfg.repeat == 20
+    assert experiment.cfg.repeat == 1000000
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
     assert experiment.cfg.solver_ids == ("bsma_numba", "bsca_numba", "brlsmasca_numba")
     assert experiment.cfg.solver_variants == (

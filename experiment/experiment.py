@@ -24,6 +24,7 @@ from ..tools.show import write_simulator_result
 from ..tools.stat import SummaryMeta, machine_result_entries, summarize
 
 EXP_BASE_SEED = 0
+COLLECTION_PROGRESS_INTERVAL = 50
 
 _EVALUATORS: dict[str, RoundEvaluator] = {}
 
@@ -80,6 +81,7 @@ class Experiment:
         self.collected_results.clear()
 
         progress = _CollectionProgress(self.cfg)
+        print("step1: collect", file=sys.stderr, flush=True)
         progress.emit()
 
         problem_reports: list[ProblemCollectionReport] = []
@@ -101,7 +103,7 @@ class Experiment:
             finally:
                 if simulators:
                     simulators[0].close()
-
+        print("step2: report")
         report = ExperimentReport(
             experiment_name=self.cfg.experiment_name,
             output_dir=str(experiment_output_dir),
@@ -247,7 +249,7 @@ class Experiment:
                         ),
                     )
                 )
-                progress.emit()
+                progress.record_evaluation()
 
             repeat_index += len(repeat_indices)
 
@@ -532,6 +534,12 @@ class _CollectionProgress:
             for dataset_setting in self.cfg.dataset_settings
             for problem_setting in dataset_setting.problem_settings
         }
+        self._evaluated_round_count = 0
+
+    def record_evaluation(self) -> None:
+        self._evaluated_round_count += 1
+        if self._evaluated_round_count % COLLECTION_PROGRESS_INTERVAL == 0:
+            self.emit()
 
     def set_count(
         self,
