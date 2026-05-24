@@ -70,6 +70,7 @@ def test_create_experiment_spec_uses_new_cli_defaults() -> None:
     assert spec.solver_ids == ("stub_solver",)
     assert spec.repeat == 20
     assert args.seed == 55688
+    assert spec.base_seed == 55688
     assert spec.worker_count == 1
 
 
@@ -121,7 +122,8 @@ def test_app_cli_success_runs_all_solver_params(tmp_path: Path):
     ]
 
     result = main(argv, problem_root=problem_root, solver_root=solver_root, output_root=output_root)
-    assert len(result.rows) == 2
+    assert len(result.machine_results) == 2
+    assert len(result.iter_rows()) == 2
     assert (output_root / "exp_cli_1" / "stub_solver" / "param_0" / "runs.csv").exists()
     assert (output_root / "exp_cli_1" / "stub_solver" / "param_1" / "runs.csv").exists()
 
@@ -153,7 +155,8 @@ def test_app_cli_worker_runs_batch(tmp_path: Path):
     ]
 
     result = main(argv, problem_root=problem_root, solver_root=solver_root, output_root=output_root)
-    assert len(result.rows) == 1
+    assert len(result.machine_results) == 1
+    assert len(result.iter_rows()) == 1
     assert (output_root / "exp_cli_worker" / "stub_solver" / "param_0" / "runs.csv").exists()
     assert (output_root / "exp_cli_worker" / "stub_solver" / "param_0" / "runs.json").exists()
 

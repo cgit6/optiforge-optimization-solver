@@ -5,14 +5,14 @@ from __future__ import annotations
 import csv
 import json
 import shutil
-from collections import defaultdict
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
-from .stat import ResultEntry, ResultMetadata, SummaryMeta, SummaryReport, result_entries, summarize
+from .stat import ResultEntry, ResultMetadata, SummaryMeta, SummaryReport, machine_result_entries, summarize
 
 if TYPE_CHECKING:
+    from ..machine import MachineResult
     from ..simulator.core import SimulatorResult
 
 def write_simulator_result(
@@ -24,17 +24,16 @@ def write_simulator_result(
 ) -> tuple[Path, ...]:
     if not experiment_name.strip():
         raise ValueError("experiment_name cannot be empty")
-    # 1. 資料轉換
-    entries = result_entries(simulator_result)
-    # 2. 分組
-    grouped: dict[tuple[str, int], list[ResultEntry]] = defaultdict(list)
-    for entry in entries:
-        grouped[(entry.solver_id, entry.param_set_index)].append(entry)
 
     written_dirs: list[Path] = []
 
-    # 3. 寫檔案
-    for (solver_id, param_set_index), bucket in sorted(grouped.items()):
+    for machine_result in sorted(
+        simulator_result.machine_results,
+        key=lambda result: (result.solver_id, result.param_set_index),
+    ):
+        solver_id = machine_result.solver_id
+        param_set_index = machine_result.param_set_index
+        bucket = machine_result_entries(machine_result)
         output_dir = Path(output_root) / experiment_name / solver_id / f"param_{param_set_index}"
         _reset_variant_output_dir(output_dir)
 
@@ -45,9 +44,7 @@ def write_simulator_result(
             summarize(
                 bucket,
                 meta=_summary_meta(
-                    simulator_result,
-                    solver_id,
-                    param_set_index,
+                    machine_result,
                     variant_metadata=variant_metadata,
                 ),
             ),
@@ -57,22 +54,15 @@ def write_simulator_result(
 
 
 def _summary_meta(
-    simulator_result: "SimulatorResult",
-    solver_id: str,
-    param_set_index: int,
+    machine_result: "MachineResult",
     *,
     variant_metadata: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
 ) -> SummaryMeta:
-    key = (solver_id, param_set_index)
-    if key not in simulator_result.variant_params:
-        raise KeyError(
-            f"variant params not found for summary: solver_id={solver_id!r}, "
-            f"param_set_index={param_set_index!r}"
-        )
+    key = (machine_result.solver_id, machine_result.param_set_index)
     return SummaryMeta(
-        solver_id=solver_id,
-        param_set_index=param_set_index,
-        params=simulator_result.variant_params[key],
+        solver_id=machine_result.solver_id,
+        param_set_index=machine_result.param_set_index,
+        params=machine_result.params,
         experiment=dict((variant_metadata or {}).get(key, {})),
     )
 

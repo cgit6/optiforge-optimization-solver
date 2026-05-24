@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections import defaultdict
 from dataclasses import asdict
 import json
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 
 from mkp.engine.models import SolveResult, RunTask
 from mkp.problem import ProblemModel, TSPProblem, ValidationReport
+from mkp.machine import MachineResult
 from mkp.simulator import SimulatorResult, SimulatorRunRow
 from mkp.tools.show import write_simulator_result
 from mkp.tools.stat import SummaryMeta, SummaryReport, result_entries, summarize
@@ -88,8 +90,20 @@ def _simulator_result(
     *,
     params_by_variant: dict[tuple[str, int], dict] | None = None,
 ) -> SimulatorResult:
-    variant_params = params_by_variant or {("stub_solver", 0): {}}
-    return SimulatorResult(rows=rows, variant_params=variant_params)
+    params_by_variant = params_by_variant or {("stub_solver", 0): {}}
+    grouped: dict[tuple[str, int], list[SimulatorRunRow]] = defaultdict(list)
+    for row in rows:
+        grouped[(row.task.solver_id, row.task.param_set_index)].append(row)
+    machine_results = tuple(
+        MachineResult(
+            solver_id=solver_id,
+            param_set_index=param_set_index,
+            params=params_by_variant.get((solver_id, param_set_index), {}),
+            rows=tuple(bucket),
+        )
+        for (solver_id, param_set_index), bucket in sorted(grouped.items())
+    )
+    return SimulatorResult(machine_results=machine_results)
 
 
 def _make_row(
@@ -159,6 +173,26 @@ def test_write_simulator_result_writes_single_run_with_standard_fields(tmp_path:
     assert payload["best_known_gap"] == -10
     assert payload["metadata"] == {"solve": {}, "validation": {}}
     assert "metadata_json" not in payload
+
+
+def test_simulator_result_indexes_by_variant_and_run() -> None:
+    problem = _build_problem()
+    run_a = _build_solve_result(np.array([1, 1, 1]), 60)
+    run_b = _build_solve_result(np.array([1, 0, 1]), 40)
+    result = _simulator_result(
+        (
+            _make_row(run_a, problem.validate(run_a), repeat_index=0, param_set_index=0),
+            _make_row(run_b, problem.validate(run_b), repeat_index=0, param_set_index=1),
+        ),
+        params_by_variant={
+            ("stub_solver", 0): {"z": 0.08},
+            ("stub_solver", 1): {"z": 0.03},
+        },
+    )
+
+    assert result.by_variant[("stub_solver", 0)].params == {"z": 0.08}
+    assert result.by_variant[("stub_solver", 1)].params == {"z": 0.03}
+    assert [row.task.param_set_index for row in result.by_run("weish01", 0)] == [0, 1]
 
 
 def test_summary_aggregation_and_exclusion_rules(tmp_path: Path):
@@ -480,9 +514,16 @@ def test_multi_objective_runs_are_saved_without_scalar_summary_stats(tmp_path: P
         task_seed=42,
         param_set_index=0,
     )
+    row = SimulatorRunRow(task=task, solve_result=run, validation_report=report)
     simulator_result = SimulatorResult(
-        rows=(SimulatorRunRow(task=task, solve_result=run, validation_report=report),),
-        variant_params={("multi_solver", 0): {}},
+        machine_results=(
+            MachineResult(
+                solver_id="multi_solver",
+                param_set_index=0,
+                params={},
+                rows=(row,),
+            ),
+        )
     )
 
     write_simulator_result(simulator_result, experiment_name="exp_multi", output_root=tmp_path)

@@ -28,6 +28,5 @@ def main(
     # 執行模擬
     return executeSimulator(
         bundle=bundle,
-        base_seed=args.seed, # 自定義 seed
         output_root=Path(output_root),
     )

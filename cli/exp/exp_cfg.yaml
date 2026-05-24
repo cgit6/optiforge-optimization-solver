@@ -1,119 +1,164 @@
-
 # 實驗設定
-experiment_name: literature_mkp_seed_search
-seed: [1, 1000000] # 隨機種子範圍
-collects: 20 # 收集幾組符合期望的結果
-worker: 10 # 併發數
-solvers: [bsma_numba, bsca_numba, brlsmasca_numba] # 要執行的演算法
-repeat: 20 # 重複次數
+experiment_name: mkp_test_now
+collects: 20
+repeat: 1000000
+
+# 要執行的演算法，以及算法參數索引值
+solvers:
+  - solver: bsma_numba
+    param_idx: [0]
+  - solver: bsca_numba
+    param_idx: [0]
+  - solver: brlsmasca_numba
+    param_idx: [0]
 
 # 題庫設定
-# 實驗會依序執行
+# 實驗會依序執行 dataset，再依序執行 problem。
 dataset_settings:
   - experiment-id: weish
     dataset: WEISH
-    problems: [weish01, weish02, weish03, weish04, weish05, weish06, weish07, weish08, weish09, weish10, weish11, weish12, weish13, weish14, weish15, weish16, weish17, weish18, weish19, weish20, weish21, weish22, weish23, weish24, weish25, weish26, weish27, weish28, weish29, weish30]
     type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Pdev: 0.154
-        - name: BIWOA
-          Pdev: 0.472
-        - name: BMMVO
-          Pdev: 0.861
-        - name: BSCA
-          Pdev: 0.314
-        - name: IBSMA_U1
-          Pdev: 0.105
-
-  - experiment-id: weing
-    dataset: WEING
-    problems: [weing1, weing2, weing3, weing4, weing5, weing6, weing7, weing8]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Mean: 301482.250
-          Pdev: 0.436
-
-  - experiment-id: hp
-    dataset: HP
-    problems: [hp1, hp2]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Mean: 3278.500
-          Pdev: 0.718
-
-  - experiment-id: pet
-    dataset: PET
-    problems: [pet2, pet3, pet4, pet5, pet6, pet7]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-
-  - experiment-id: sent
-    dataset: SENT
-    problems: [sent01, sent02]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Mean: 8240.500
-          Pdev: 0.082
-
-  - experiment-id: pb
-    dataset: PB
-    problems: [pb1, pb2, pb4, pb5, pb6, pb7]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Mean: 17206.333
-          Pdev: 0.858
-
-  # 這就是 CB 題庫，目前還少了幾組
-  - experiment-id: OR5x100
-    dataset: OR5x100
-    problems: [OR5x100-0.25_1, OR5x100-0.25_2, OR5x100-0.25_3, OR5x100-0.25_4, OR5x100-0.25_5]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Mean: 23882.000
-          Pdev: 0.268
-        - name: BMMVO
-          Mean: 23772.800
-          Pdev: 0.726
-
-  - experiment-id: gk
-    dataset: GK
-    problems: [mk_gk01, mk_gk02, mk_gk03, mk_gk04, mk_gk05, mk_gk06, mk_gk07, mk_gk08, mk_gk09]
-    type: mkp
-    evaluation:
-      name: literature_mkp
-      base_line:
-        - name: HLMS
-          Mean: 14362.222
-          Pdev: 0.922
-        - name: BIWOA
-          Mean: 14402.000
-          Pdev: 0.857
-        - name: BMMVO
-          Mean: 14134.667
-          Pdev: 2.438
-        - name: BSCA
-          Mean: 14179.222
-          Pdev: 1.997
-        - name: IBSMA_U1
-          Mean: 14428.233
-          Pdev: 0.624
-
+    problems:
+      - problem: weish01
+        evaluation: [mkp_base, mkp_base2]
+        base_line:
+          - name: HLMS
+            Pdev: 0.180
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.090
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish02
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.020
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish03
+        evaluation: [mkp_base, mkp_base2]
+        base_line:
+          - name: HLMS
+            Pdev: 0.190
+          - name: BIWOA
+            Pdev: 3.970
+          - name: BMMVO
+            Pdev: 3.050
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish04
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.090
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish05
+        evaluation: [mkp_base, mkp_base2]
+        base_line:
+          - name: HLMS
+            Pdev: 0.000
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish06
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.090
+          - name: BIWOA
+            Pdev: 0.120
+          - name: BMMVO
+            Pdev: 0.140
+          - name: BSCA
+            Pdev: 0.140
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish07
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.030
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish08
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.010
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.030
+          - name: BSCA
+            Pdev: 0.010
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish09
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.000
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000
+      - problem: weish10
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.040
+          - name: BIWOA
+            Pdev: 0.310
+          - name: BMMVO
+            Pdev: 0.560
+          - name: BSCA
+            Pdev: 0.560
+          - name: IBSMA_U1
+            Pdev: 0.505
+      - problem: weish11
+        evaluation: [mkp_base]
+        base_line:
+          - name: HLMS
+            Pdev: 0.000
+          - name: BIWOA
+            Pdev: 0.000
+          - name: BMMVO
+            Pdev: 0.000
+          - name: BSCA
+            Pdev: 0.000
+          - name: IBSMA_U1
+            Pdev: 0.000

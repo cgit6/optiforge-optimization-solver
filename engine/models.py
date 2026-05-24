@@ -18,6 +18,7 @@ class ExperimentSpec:
     repeat: int # 重複次數
     problem_type: str = "mkp" # 優化問題
     worker_count: int = 1 # 併發數
+    base_seed: int | None = None # 這次模擬執行使用的 immutable base seed；執行 Simulator 前需設定
 
     def __post_init__(self) -> None:
         if not self.experiment_name.strip():
@@ -42,15 +43,20 @@ class ExperimentSpec:
             raise ValueError("problem_ids cannot contain duplicate value.")
         if len(set(self.solver_ids)) != len(self.solver_ids):
             raise ValueError("solver_ids cannot contain duplicate value.")
+        if self.base_seed is not None:
+            base_seed = int(self.base_seed)
+            if base_seed < 0:
+                raise ValueError("base_seed must be >= 0.")
+            object.__setattr__(self, "base_seed", base_seed)
 
 @dataclass(frozen=True)
 class RunTask:
-    problem_id: str
-    dataset: str
-    solver_id: str
-    repeat_index: int
-    task_seed: int
-    param_set_index: int
+    problem_id: str # 題目
+    dataset: str # 題庫
+    solver_id: str # 求解器
+    repeat_index: int # 重複第幾次
+    task_seed: int # seed
+    param_set_index: int # 參數設定
     problem_type: str = "mkp"
 
     def __post_init__(self) -> None:

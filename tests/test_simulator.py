@@ -9,6 +9,7 @@ from mkp.engine.models import ExperimentSpec, RunTask
 from mkp.engine.bank import ProblemBank
 from mkp.engine.repository import ProblemRepository
 from mkp.engine.configs import SolverConfigsSnapshot
+from mkp.machine import MachineResult
 from mkp.problem import buildProblemRegistry, problemBuilders
 from mkp.rng import DerivedPerProblemSeedStrategy, make_numpy_rng
 from mkp.simulator import Simulator, SimulatorResult
@@ -149,8 +150,14 @@ def test_run_task_success_writes_result_and_returns_validation(tmp_path: Path):
 
         # 透過 show 模組寫出（保留檔案存在性的覆蓋率）
         simulator_result = SimulatorResult(
-            rows=(row,),
-            variant_params={("stub_solver", 0): {}},
+            machine_results=(
+                MachineResult(
+                    solver_id="stub_solver",
+                    param_set_index=0,
+                    params={},
+                    rows=(row,),
+                ),
+            )
         )
         write_simulator_result(
             simulator_result,

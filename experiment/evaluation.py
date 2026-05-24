@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
-from .config import DatasetSetting
+from .config import DatasetSetting, EvaluationSpec, ProblemSetting
 from ..simulator.core import SimulatorResult
 from ..tools.stat import SummaryReport
 
@@ -29,38 +29,34 @@ class VariantSummary:
 
 
 @dataclass(frozen=True)
-class DatasetRunResult:
-    seed: int
+class RoundEvalInput:
     dataset_setting: DatasetSetting
-    simulator_result: SimulatorResult
-    variant_summaries: tuple[VariantSummary, ...]
-
-    def __post_init__(self) -> None:
-        if self.seed < 0:
-            raise ValueError("seed must be >= 0.")
-        if not self.variant_summaries:
-            raise ValueError("variant_summaries cannot be empty.")
-
-
-@dataclass(frozen=True)
-class DatasetEvalInput:
-    seed: int
-    dataset_setting: DatasetSetting
+    problem_setting: ProblemSetting
+    problem_id: str
+    repeat_index: int
+    evaluation: EvaluationSpec
     evaluation_name: str
     variant_summaries: tuple[VariantSummary, ...]
     simulator_result: SimulatorResult
+    collected_result: SimulatorResult
+    candidate_result: SimulatorResult
+    projected_result: SimulatorResult
 
     def __post_init__(self) -> None:
-        if self.seed < 0:
-            raise ValueError("seed must be >= 0.")
+        if not self.problem_id.strip():
+            raise ValueError("problem_id cannot be empty.")
+        if self.repeat_index < 0:
+            raise ValueError("repeat_index must be >= 0.")
         if not self.evaluation_name.strip():
             raise ValueError("evaluation_name cannot be empty.")
+        if self.evaluation_name != self.evaluation.name:
+            raise ValueError("evaluation_name must match evaluation.name.")
         if not self.variant_summaries:
             raise ValueError("variant_summaries cannot be empty.")
 
 
 @dataclass(frozen=True)
-class DatasetEvalDecision:
+class RoundEvalDecision:
     passed: bool
     verdict: DatasetVerdict
     message: str = ""
@@ -74,4 +70,9 @@ class DatasetEvalDecision:
         object.__setattr__(self, "details", dict(self.details))
 
 
-DatasetEvaluator = Callable[[DatasetEvalInput], DatasetEvalDecision]
+RoundEvaluator = Callable[[RoundEvalInput], RoundEvalDecision]
+
+# Backward-compatible names with the new single-round semantics.
+DatasetEvalInput = RoundEvalInput
+DatasetEvalDecision = RoundEvalDecision
+DatasetEvaluator = RoundEvaluator

@@ -31,11 +31,11 @@ capacities: [10, 8]
     )
 
 
-def _write_solver_yaml(path: Path) -> None:
+def _write_solver_yaml(path: Path, *, solver_id: str = "stub_solver") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        """
-solver_id: stub_solver
+        f"""
+solver_id: {solver_id}
 solver_class: StubMaxIterationsSolver
 capabilities:
   problem_types: [mkp]
@@ -45,8 +45,8 @@ stop_condition:
   type: max_iterations
   max_iterations: 10
 params:
-  - {}
-  - {pop_size: 20}
+  - {{}}
+  - {{pop_size: 20}}
 """.strip(),
         encoding="utf-8",
     )
@@ -65,6 +65,7 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
         problem_ids=("weish01",),
         solver_ids=("stub_solver",),
         repeat=1,
+        base_seed=7,
     )
 
     bundle = Engine.build(
@@ -88,13 +89,44 @@ def test_engine_build_returns_bundle_with_runnable_simulator(tmp_path: Path) -> 
     assert bundle.rng_factory is make_numpy_rng
     sim = bundle.new_simulator()
     try:
-        result = sim.run_sequential(base_seed=7)
-        assert len(result.rows) == 2
+        result = sim.run_sequential()
+        assert len(result.machine_results) == 2
+        assert len(result.iter_rows()) == 2
         write_simulator_result(result, experiment_name="exp_engine_1", output_root=output_root)
         assert (output_root / "exp_engine_1" / "stub_solver" / "param_0" / "runs.csv").exists()
         assert (output_root / "exp_engine_1" / "stub_solver" / "param_1" / "runs.csv").exists()
     finally:
         sim.close()
+
+
+def test_bundle_new_simulators_splits_multi_solver_spec(tmp_path: Path) -> None:
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    _write_solver_yaml(solver_root / "stub_solver.yaml", solver_id="stub_solver")
+    _write_solver_yaml(solver_root / "bsca.yaml", solver_id="bsca")
+
+    spec = ExperimentSpec(
+        experiment_name="exp_engine_multi",
+        dataset="WEISH",
+        problem_ids=("weish01",),
+        solver_ids=("stub_solver", "bsca"),
+        repeat=1,
+        base_seed=7,
+    )
+    bundle = Engine.build(
+        spec=spec,
+        problem_root=problem_root,
+        solver_root=solver_root,
+        seed_strategy=DerivedPerProblemSeedStrategy(),
+    )
+    try:
+        simulators = bundle.new_simulators()
+
+        assert tuple(sim.spec.solver_ids for sim in simulators) == (("stub_solver",), ("bsca",))
+        assert all(len(sim.expand_tasks()) == 2 for sim in simulators)
+    finally:
+        bundle.problem_bank.close()
 
 
 def test_engine_build_requires_explicit_seed_strategy(tmp_path: Path) -> None:
@@ -249,6 +281,7 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
         solver_ids=("stub_solver",),
         repeat=2,
         worker_count=2,
+        base_seed=42,
     )
 
     load_calls = {"n": 0}
@@ -269,7 +302,7 @@ def test_worker_curriculum_does_not_call_problem_repository_load_after_engine_bu
     load_calls["n"] = 0
     sim = bundle.new_simulator()
     try:
-        sim.run_batch(base_seed=42)
+        sim.run_batch()
         assert load_calls["n"] == 0
     finally:
         sim.close()

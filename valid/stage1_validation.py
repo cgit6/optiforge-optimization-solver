@@ -81,7 +81,11 @@ def run_refactor_once(
         str(seed),
     ]
     results = app_entry(argv, problem_root=problem_root, solver_root=solver_root, output_root=output_root)
-    if hasattr(results, "rows"):
+    if hasattr(results, "iter_rows"):
+        row = results.iter_rows()[0]
+        run_result = row.solve_result
+        validation_report = row.validation_report
+    elif hasattr(results, "rows"):
         row = results.rows[0]
         run_result = row.solve_result
         validation_report = row.validation_report

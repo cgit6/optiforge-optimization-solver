@@ -1,7 +1,17 @@
 from __future__ import annotations
 
-from mkp.cli.exp.literature_mkp import literature_mkp_evaluator
-from mkp.experiment import DatasetEvalInput, DatasetSetting, EvaluationSpec, FAIL, PASS, VariantSummary
+from mkp.cli.exp.mkp_base import mkp_base_evaluator
+from mkp.cli.exp.mkp_base2 import mkp_base2_evaluator
+from mkp.experiment import (
+    DatasetSetting,
+    EvaluationBaseline,
+    EvaluationSpec,
+    FAIL,
+    PASS,
+    ProblemSetting,
+    RoundEvalInput,
+    VariantSummary,
+)
 from mkp.simulator import SimulatorResult
 from mkp.tools.stat import ExcludedCounts, OverallSummary, ProblemSolverSummary, SummaryMeta, SummaryReport
 
@@ -65,36 +75,80 @@ def _variant_summary(
 
 def _input(
     *,
+    evaluation: EvaluationSpec | None = None,
     variants: tuple[VariantSummary, ...] | None = None,
-) -> DatasetEvalInput:
-    return DatasetEvalInput(
-        seed=7,
-        dataset_setting=DatasetSetting(
-            "exp1",
-            "DATA",
-            ("p1",),
-            "mkp",
-            EvaluationSpec(name="literature_mkp"),
-        ),
-        evaluation_name="literature_mkp",
+) -> RoundEvalInput:
+    eval_spec = evaluation or EvaluationSpec(
+        name="mkp_base",
+        base_line=(EvaluationBaseline(name="baseline", pdev=2.0),),
+    )
+    problem_setting = ProblemSetting(problem_id="p1", evaluations=(eval_spec,))
+    dataset_setting = DatasetSetting(
+        experiment_id="exp1",
+        dataset="DATA",
+        problem_settings=(problem_setting,),
+        problem_type="mkp",
+    )
+    result = SimulatorResult(machine_results=())
+    return RoundEvalInput(
+        dataset_setting=dataset_setting,
+        problem_setting=problem_setting,
+        problem_id="p1",
+        repeat_index=0,
+        evaluation=eval_spec,
+        evaluation_name=eval_spec.name,
         variant_summaries=variants
         or (
             _variant_summary(solver_id="solver_a", param_set_index=0, params={"z": 0.08}, pdev=1.0),
             _variant_summary(solver_id="solver_b", param_set_index=1, params={"a": 1.5}, pdev=2.0),
         ),
-        simulator_result=SimulatorResult(rows=(), variant_params={("solver_a", 0): {"z": 0.08}}),
+        simulator_result=result,
+        collected_result=result,
+        candidate_result=result,
+        projected_result=result,
     )
 
 
-def test_literature_evaluator_passes_valid_summaries() -> None:
-    decision = literature_mkp_evaluator(_input())
+def test_mkp_base_passes_when_all_variants_beat_best_baseline() -> None:
+    decision = mkp_base_evaluator(_input())
 
     assert decision.passed is True
     assert decision.verdict == PASS
-    assert "variant_pdevs" in decision.details
+    assert decision.details["threshold_pdev"] == 2.0
 
 
-def test_literature_evaluator_fails_on_invalid_summary() -> None:
+def test_mkp_base_fails_when_any_variant_is_worse_than_best_baseline() -> None:
+    decision = mkp_base_evaluator(
+        _input(
+            variants=(
+                _variant_summary(solver_id="solver_a", param_set_index=0, params={}, pdev=1.0),
+                _variant_summary(solver_id="solver_b", param_set_index=0, params={}, pdev=2.1),
+            )
+        )
+    )
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+    assert decision.details["worse_variants"][0]["variant"] == "solver_b/param_0"
+
+
+def test_mkp_base_zero_pdev_baseline_is_strict() -> None:
+    decision = mkp_base_evaluator(
+        _input(
+            evaluation=EvaluationSpec(
+                name="mkp_base",
+                base_line=(EvaluationBaseline(name="zero", pdev=0.0),),
+            ),
+            variants=(
+                _variant_summary(solver_id="solver_a", param_set_index=0, params={}, pdev=0.1),
+            ),
+        )
+    )
+
+    assert decision.passed is False
+
+
+def test_mkp_base_fails_on_invalid_summary() -> None:
     bad_variant = _variant_summary(
         solver_id="solver_a",
         param_set_index=0,
@@ -102,15 +156,39 @@ def test_literature_evaluator_fails_on_invalid_summary() -> None:
         pdev=1.0,
         valid_run_count=1,
     )
-    decision = literature_mkp_evaluator(
+    decision = mkp_base_evaluator(_input(variants=(bad_variant,)))
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+    assert decision.details["failures"][0]["solver_id"] == "solver_a"
+
+
+def test_mkp_base2_passes_when_brlsmasca_is_best_or_tied() -> None:
+    decision = mkp_base2_evaluator(
         _input(
+            evaluation=EvaluationSpec(name="mkp_base2"),
             variants=(
-                bad_variant,
-                _variant_summary(solver_id="solver_b", param_set_index=1, params={"a": 1.5}, pdev=2.0),
-            )
+                _variant_summary(solver_id="bsma_numba", param_set_index=0, params={}, pdev=1.1),
+                _variant_summary(solver_id="brlsmasca_numba", param_set_index=0, params={}, pdev=1.1),
+            ),
+        )
+    )
+
+    assert decision.passed is True
+    assert decision.verdict == PASS
+
+
+def test_mkp_base2_fails_when_brlsmasca_is_not_best() -> None:
+    decision = mkp_base2_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_base2"),
+            variants=(
+                _variant_summary(solver_id="bsma_numba", param_set_index=0, params={}, pdev=1.0),
+                _variant_summary(solver_id="brlsmasca_numba", param_set_index=0, params={}, pdev=1.1),
+            ),
         )
     )
 
     assert decision.passed is False
     assert decision.verdict == FAIL
-    assert decision.details["failures"][0]["solver_id"] == "solver_a"
+    assert decision.details["worse_targets"][0]["target"] == "brlsmasca_numba/param_0"

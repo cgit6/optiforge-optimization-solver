@@ -112,6 +112,7 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
         solver_ids=solver_ids, # 求解器ID
         repeat=args.repeat, # 獨立實驗次數
         worker_count=args.worker_count, # worker 數
+        base_seed=args.seed, # 單次 cli.run 執行的固定 base seed
     )
 
 
@@ -137,7 +138,6 @@ def buildSimulationBundle(
 def executeSimulator(
     bundle: SimulationBundle,
     *,
-    base_seed: int,
     output_root: Path,
 ) -> SimulatorResult:
     """執行已組裝好的 `SimulationBundle`，並將結果交給 show 模組輸出。"""
@@ -147,9 +147,9 @@ def executeSimulator(
         sim = bundle.new_simulator()
         # 1. 執行模擬
         if spec.worker_count > 1:
-            simulator_result = sim.run_batch(base_seed=base_seed) # 併發執行
+            simulator_result = sim.run_batch() # 併發執行
         else:
-            simulator_result = sim.run_sequential(base_seed=base_seed) # 單一執行
+            simulator_result = sim.run_sequential() # 單一執行
 
         # 3. 輸出: 將整批模擬結果與已計算好的統計交給 show 模組寫入文件
         write_simulator_result(

@@ -1,47 +1,65 @@
-"""Experiment domain package: generic config, evaluation, and seed-search execution."""
+"""Experiment domain package: streaming round collection execution."""
 
 from __future__ import annotations
 
-from .config import DatasetSetting, EvaluationBaseline, EvaluationSpec, ExperimentConfig, load_config
+from .config import (
+    DEFAULT_WORKER_COUNT,
+    DatasetSetting,
+    EvaluationBaseline,
+    EvaluationSpec,
+    ExperimentConfig,
+    ProblemSetting,
+    SolverSelection,
+    load_config,
+)
 from .evaluation import (
     DatasetEvalDecision,
     DatasetEvalInput,
     DatasetEvaluator,
-    DatasetRunResult,
     DatasetVerdict,
     FAIL,
     PASS,
+    RoundEvalDecision,
+    RoundEvalInput,
+    RoundEvaluator,
     VariantSummary,
 )
 from .experiment import (
-    CollectedSeed,
-    DatasetEvaluationRecord,
+    EvaluatorDecisionReport,
     Experiment,
     ExperimentReport,
-    SeedAttempt,
+    ProblemCollectionReport,
+    RoundCollectionAttempt,
     build,
     executeExperiment,
+    register,
 )
 
 __all__ = [
-    "CollectedSeed",
+    "DEFAULT_WORKER_COUNT",
     "DatasetEvalDecision",
     "DatasetEvalInput",
-    "DatasetEvaluationRecord",
     "DatasetEvaluator",
-    "DatasetRunResult",
     "DatasetSetting",
     "DatasetVerdict",
     "EvaluationBaseline",
     "EvaluationSpec",
+    "EvaluatorDecisionReport",
     "Experiment",
     "ExperimentConfig",
     "ExperimentReport",
     "FAIL",
     "PASS",
-    "SeedAttempt",
+    "ProblemSetting",
+    "ProblemCollectionReport",
+    "RoundEvalDecision",
+    "RoundEvalInput",
+    "RoundEvaluator",
+    "RoundCollectionAttempt",
+    "SolverSelection",
     "VariantSummary",
     "build",
     "executeExperiment",
     "load_config",
+    "register",
 ]

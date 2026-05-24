@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -86,19 +86,20 @@ class SimulationBundle:
     seed_strategy: SeedStrategy # task seed 派生策略
     rng_factory: RngFactory # RNG 工廠函數
     solver_root: Path # 求解器根路徑
-    exp_cfg: Any | None = None # 實驗模組的設定(選填，如果執行 cil.exp 的時候會把 exp_cfg.yaml 的設定保存至此地)
+    exp_cfg: Any = None # 實驗模組的設定(選填，如果執行 cil.exp 的時候會把 exp_cfg.yaml 的設定保存至此地)
 
     def new_simulator(self) -> Simulator:
         """以目前 bundle 的題庫設定建立 `Simulator`；輸出由 caller 透過 stat 模組處理。
 
         呼叫端應以 :meth:`Simulator.run_sequential` 或 :meth:`Simulator.run_batch` 執行；
-        seed 由 run 方法輸入，因此同一個 bundle 可用不同 seed 重複執行。
+        seed 由 `spec.base_seed` 提供，模擬期間不可變。
         """
+        if len(self.spec.solver_ids) != 1:
+            raise ValueError("new_simulator requires exactly one solver; use new_simulators for multi-solver specs.")
         from ..simulator.core import Simulator
 
-        registry = SolverRegistry()
-        for sid, builder in self.solver_builders.items():
-            registry.register(sid, builder)
+        registry = self._new_solver_registry()
+
         return Simulator(
             spec=self.spec,
             problem_bank=self.problem_bank,
@@ -107,6 +108,33 @@ class SimulationBundle:
             seed_strategy=self.seed_strategy,
             rng_factory=self.rng_factory,
         )
+
+    def new_simulators(self) -> tuple[Simulator, ...]:
+        """依 solver_id 拆成多個 single-solver Simulator，並共享同一份 bundle 資源。"""
+        from ..simulator.core import Simulator
+
+        simulators: list[Simulator] = []
+        for solver_id in self.spec.solver_ids:
+            # 拆成單一 solver 的實驗規格
+            single_solver_spec = replace(self.spec, solver_ids=(solver_id,))
+            simulators.append(
+                Simulator(
+                    spec=single_solver_spec,
+                    problem_bank=self.problem_bank,
+                    solver_registry=self._new_solver_registry(),
+                    solver_configs=self.solver_configs,
+                    seed_strategy=self.seed_strategy,
+                    rng_factory=self.rng_factory,
+                )
+            )
+        return tuple(simulators)
+
+    def _new_solver_registry(self) -> SolverRegistry:
+        registry = SolverRegistry()
+        for sid, builder in self.solver_builders.items():
+            registry.register(sid, builder)
+        return registry
+
     # 這方法的意義是什麼應該只需要保留 new 或是 new_simulator 擇一
     def new(self) -> Simulator:
         return self.new_simulator()

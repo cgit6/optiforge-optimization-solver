@@ -1,203 +1,122 @@
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import sys
-from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .config import DatasetSetting, ExperimentConfig, load_config
+from .config import DatasetSetting, ExperimentConfig, ProblemSetting, load_config
 from .evaluation import (
-    DatasetEvalDecision,
-    DatasetEvalInput,
-    DatasetEvaluator,
-    DatasetRunResult,
-    FAIL,
-    PASS,
+    RoundEvalDecision,
+    RoundEvalInput,
+    RoundEvaluator,
     VariantSummary,
 )
 from ..engine.assembly import Engine
-from ..engine.models import ExperimentSpec
+from ..engine.models import ExperimentSpec, RunTask
+from ..machine import Machine, MachinePool, MachinePoolSession, MachineResult, SimulatorRunRow
 from ..rng import DerivedPerProblemSeedStrategy
-from ..simulator.core import Simulator
+from ..simulator.core import Simulator, SimulatorResult
 from ..tools.show import write_simulator_result
-from ..tools.stat import ResultEntry, SummaryMeta, SummaryReport, result_entries, summarize
+from ..tools.stat import SummaryMeta, machine_result_entries, summarize
+
+EXP_BASE_SEED = 0
+
+_EVALUATORS: dict[str, RoundEvaluator] = {}
 
 
 @dataclass(frozen=True)
-class DatasetEvaluationRecord:
-    dataset_setting: DatasetSetting
-    decision: DatasetEvalDecision
-
-
-@dataclass(frozen=True)
-class SeedAttempt:
-    seed: int
+class EvaluatorDecisionReport:
+    name: str
+    passed: bool
     verdict: str
-    collected: bool
-    dataset_evaluations: tuple[DatasetEvaluationRecord, ...]
-    message: str = ""
+    message: str
+    details: dict[str, Any]
 
 
 @dataclass(frozen=True)
-class CollectedSeed:
-    collect_index: int
-    seed: int
+class RoundCollectionAttempt:
+    repeat_index: int
+    accepted: bool
+    collected_count: int
+    decisions: tuple[EvaluatorDecisionReport, ...]
+
+
+@dataclass(frozen=True)
+class ProblemCollectionReport:
+    dataset_experiment_id: str
+    dataset: str
+    problem_id: str
     output_dir: str
-    dataset_evaluations: tuple[DatasetEvaluationRecord, ...]
+    status: str
+    collected_count: int
+    attempted_repeats: int
+    collected_repeat_indices: tuple[int, ...]
+    collected_run_seeds: tuple[int, ...]
+    evaluation_history: tuple[RoundCollectionAttempt, ...] = ()
 
 
 @dataclass(frozen=True)
 class ExperimentReport:
     experiment_name: str
     output_dir: str
-    collected_seeds: tuple[int, ...]
-    attempts: tuple[SeedAttempt, ...]
-    collected: tuple[CollectedSeed, ...] = ()
+    problems: tuple[ProblemCollectionReport, ...]
 
 
 @dataclass
 class Experiment:
-    cfg: ExperimentConfig # 實驗設定
-    evaluators: dict[str, DatasetEvaluator] = field(default_factory=dict) # 評估函數的註冊清單
-    collected_results: list[CollectedSeed] = field(default_factory=list) # 符合條件的實驗 seed
-
-    def register(self, name: str, evaluator: DatasetEvaluator) -> None:
-        if not name.strip():
-            raise ValueError("evaluator name cannot be empty.")
-        self.evaluators[name] = evaluator
+    cfg: ExperimentConfig
+    collected_results: list[ProblemCollectionReport] = field(default_factory=list)
 
     def run(self, *, problem_root: Path, solver_root: Path, output_root: Path) -> ExperimentReport:
-        dataset_evaluators = self._dataset_evaluators()
-        # 輸出位置
+        _assert_configured_evaluators_registered(self.cfg)
         experiment_output_dir = Path(output_root) / self.cfg.experiment_name
         if experiment_output_dir.exists():
             shutil.rmtree(experiment_output_dir)
         experiment_output_dir.mkdir(parents=True, exist_ok=True)
         self.collected_results.clear()
 
-        # 緩存，但是不應該再這，應該是實驗模組的屬性值然後共用
-        attempts: list[SeedAttempt] = []
-        collected: list[CollectedSeed] = []
-        start, end = self.cfg.seed_range
-        simulators: dict[str, Simulator] = {}
-        dataset_total = len(self.cfg.dataset_settings)
-        dataset_name_width = max(len(setting.dataset) for setting in self.cfg.dataset_settings)
+        progress = _CollectionProgress(self.cfg)
+        progress.emit()
 
-        try:
-            for dataset_setting in self.cfg.dataset_settings:
-                simulators[dataset_setting.experiment_id] = self._build_dataset_simulator(
+        problem_reports: list[ProblemCollectionReport] = []
+        for dataset_setting in self.cfg.dataset_settings:
+            simulators = self._build_dataset_simulators(
+                dataset_setting,
+                problem_root=problem_root,
+                solver_root=solver_root,
+            )
+            try:
+                dataset_reports = self._run_dataset(
                     dataset_setting,
-                    problem_root=problem_root,
-                    solver_root=solver_root,
-                )
-
-            # 執行實驗
-            for seed in range(start, end + 1):
-                if len(collected) >= self.cfg.collects:
-                    break
-
-                dataset_results: list[DatasetRunResult] = []
-                dataset_evaluations: list[DatasetEvaluationRecord] = []
-                seed_failed = False
-
-                for dataset_index, dataset_setting in enumerate(self.cfg.dataset_settings, start=1):
-                    _emit_dataset_status(
-                        seed=seed,
-                        dataset_index=dataset_index,
-                        dataset_total=dataset_total,
-                        dataset_name_width=dataset_name_width,
-                        dataset_setting=dataset_setting,
-                        status="進行中",
-                    )
-                    dataset_result = self._run_dataset_seed(
-                        dataset_setting,
-                        seed=seed,
-                        simulator=simulators[dataset_setting.experiment_id],
-                    )
-                    decision = dataset_evaluators[dataset_setting.experiment_id](
-                        DatasetEvalInput(
-                            seed=seed,
-                            dataset_setting=dataset_setting,
-                            evaluation_name=dataset_setting.evaluation.name,
-                            variant_summaries=dataset_result.variant_summaries,
-                            simulator_result=dataset_result.simulator_result,
-                        )
-                    )
-                    dataset_evaluations.append(
-                        DatasetEvaluationRecord(
-                            dataset_setting=dataset_setting,
-                            decision=decision,
-                        )
-                    )
-                    _emit_dataset_status(
-                        seed=seed,
-                        dataset_index=dataset_index,
-                        dataset_total=dataset_total,
-                        dataset_name_width=dataset_name_width,
-                        dataset_setting=dataset_setting,
-                        status="通過" if decision.passed else "未通過",
-                    )
-                    if not decision.passed:
-                        seed_failed = True
-                        break
-                    dataset_results.append(dataset_result)
-
-                attempt_verdict = FAIL if seed_failed else PASS
-                attempts.append(
-                    SeedAttempt(
-                        seed=seed,
-                        verdict=attempt_verdict,
-                        collected=not seed_failed,
-                        dataset_evaluations=tuple(dataset_evaluations),
-                        message=_attempt_message(dataset_evaluations, collected=not seed_failed),
-                    )
-                )
-
-                if seed_failed:
-                    continue
-
-                collect_index = len(collected) + 1
-                collect_dir = experiment_output_dir / f"collect_{collect_index:04d}"
-                self._write_collect(
-                    collect_dir=collect_dir,
-                    collect_index=collect_index,
-                    seed=seed,
-                    dataset_results=dataset_results,
-                    dataset_evaluations=dataset_evaluations,
+                    simulators=simulators,
                     output_root=Path(output_root),
+                    progress=progress,
                 )
-                collected_seed = CollectedSeed(
-                    collect_index=collect_index,
-                    seed=seed,
-                    output_dir=str(collect_dir),
-                    dataset_evaluations=tuple(dataset_evaluations),
-                )
-                collected.append(collected_seed)
-                self.collected_results.append(collected_seed)
-        finally:
-            for simulator in simulators.values():
-                simulator.close()
+                problem_reports.extend(dataset_reports)
+                self.collected_results.extend(dataset_reports)
+            finally:
+                if simulators:
+                    simulators[0].close()
 
         report = ExperimentReport(
             experiment_name=self.cfg.experiment_name,
             output_dir=str(experiment_output_dir),
-            collected_seeds=tuple(item.seed for item in collected),
-            attempts=tuple(attempts),
-            collected=tuple(collected),
+            problems=tuple(problem_reports),
         )
         _write_json(experiment_output_dir / "summary.json", asdict(report))
         return report
 
-    def _build_dataset_simulator(
+    def _build_dataset_simulators(
         self,
         dataset_setting: DatasetSetting,
         *,
         problem_root: Path | str,
         solver_root: Path | str,
-    ) -> Simulator:
+    ) -> tuple[Simulator, ...]:
         spec = ExperimentSpec(
             experiment_name=f"{self.cfg.experiment_name}_{dataset_setting.experiment_id}",
             dataset=dataset_setting.dataset,
@@ -206,6 +125,7 @@ class Experiment:
             repeat=self.cfg.repeat,
             worker_count=self.cfg.worker_count,
             problem_type=dataset_setting.problem_type,
+            base_seed=EXP_BASE_SEED,
         )
         bundle = Engine.build(
             spec=spec,
@@ -213,73 +133,178 @@ class Experiment:
             solver_root=Path(solver_root),
             seed_strategy=DerivedPerProblemSeedStrategy(),
         )
-        return bundle.new_simulator()
+        return bundle.new_simulators()
 
-    def _run_dataset_seed(
+    def _run_dataset(
         self,
         dataset_setting: DatasetSetting,
         *,
-        seed: int,
-        simulator: Simulator,
-    ) -> DatasetRunResult:
-        simulator_result = (
-            simulator.run_sequential(base_seed=seed, show_progress=False)
-            if self.cfg.worker_count == 1
-            else simulator.run_batch(base_seed=seed, show_progress=False)
-        )
-        return DatasetRunResult(
-            seed=seed,
-            dataset_setting=dataset_setting,
-            simulator_result=simulator_result,
-            variant_summaries=_variant_summaries(simulator_result),
-        )
-
-    def _write_collect(
-        self,
-        *,
-        collect_dir: Path,
-        collect_index: int,
-        seed: int,
-        dataset_results: list[DatasetRunResult],
-        dataset_evaluations: list[DatasetEvaluationRecord],
+        simulators: tuple[Simulator, ...],
         output_root: Path,
-    ) -> None:
-        collect_dir.mkdir(parents=True, exist_ok=True)
-        for dataset_result in dataset_results:
-            metadata = {
-                key: {
-                    "seed": seed,
-                    "collect_index": collect_index,
-                    "dataset_experiment_id": dataset_result.dataset_setting.experiment_id,
-                }
-                for key in dataset_result.simulator_result.variant_params
-            }
-            write_simulator_result(
-                dataset_result.simulator_result,
-                experiment_name=(
-                    f"{self.cfg.experiment_name}/collect_{collect_index:04d}/"
-                    f"{dataset_result.dataset_setting.experiment_id}"
-                ),
-                output_root=output_root,
-                variant_metadata=metadata,
+        progress: _CollectionProgress,
+    ) -> list[ProblemCollectionReport]:
+        machines = _selected_machines(simulators, self.cfg.solver_variants)
+        reports: list[ProblemCollectionReport] = []
+        pool = MachinePool(machines, worker_count=self.cfg.worker_count)
+        with pool.session() as session:
+            for problem_setting in dataset_setting.problem_settings:
+                reports.append(
+                    self._run_problem(
+                        dataset_setting,
+                        problem_setting=problem_setting,
+                        machines=machines,
+                        session=session,
+                        output_root=output_root,
+                        progress=progress,
+                    )
+                )
+        return reports
+
+    def _run_problem(
+        self,
+        dataset_setting: DatasetSetting,
+        *,
+        problem_setting: ProblemSetting,
+        machines: tuple[Machine, ...],
+        session: MachinePoolSession,
+        output_root: Path,
+        progress: _CollectionProgress,
+    ) -> ProblemCollectionReport:
+        rows_by_variant: dict[tuple[str, int], list[SimulatorRunRow]] = {
+            (machine.solver_id, machine.param_set_index): []
+            for machine in machines
+        }
+        collected_repeat_indices: list[int] = []
+        collected_run_seeds: list[int] = []
+        evaluation_history: list[RoundCollectionAttempt] = []
+        attempted_repeats = 0
+        window_size = _repeat_window_size(self.cfg.worker_count, len(machines))
+        problem_id = problem_setting.problem_id
+        repeat_index = 0
+
+        while repeat_index < self.cfg.repeat and len(collected_repeat_indices) < self.cfg.collects:
+            repeat_indices = tuple(
+                range(repeat_index, min(self.cfg.repeat, repeat_index + window_size))
             )
-        _write_json(
-            collect_dir / "collect_summary.json",
-            {
-                "collect_index": collect_index,
-                "seed": seed,
-                "dataset_evaluations": [asdict(record) for record in dataset_evaluations],
-            },
+            tasks = _window_tasks(machines, problem_id=problem_id, repeat_indices=repeat_indices)
+            window_result = SimulatorResult(machine_results=session.run_tasks(tasks))
+
+            for candidate_repeat_index in repeat_indices:
+                if len(collected_repeat_indices) >= self.cfg.collects:
+                    break
+                attempted_repeats = candidate_repeat_index + 1
+                round_result = _result_for_repeat(
+                    machines,
+                    window_result=window_result,
+                    problem_id=problem_id,
+                    repeat_index=candidate_repeat_index,
+                )
+                projected_rows_by_variant = _copy_rows_by_variant(rows_by_variant)
+                _append_round_rows(projected_rows_by_variant, round_result)
+                projected_result = SimulatorResult(
+                    machine_results=_machine_results_from_rows(machines, projected_rows_by_variant)
+                )
+                collected_result = SimulatorResult(
+                    machine_results=_machine_results_from_rows(machines, rows_by_variant)
+                )
+
+                decisions = _evaluate_candidate_round(
+                    dataset_setting=dataset_setting,
+                    problem_setting=problem_setting,
+                    problem_id=problem_id,
+                    repeat_index=candidate_repeat_index,
+                    round_result=round_result,
+                    collected_result=collected_result,
+                    projected_result=projected_result,
+                )
+                accepted = all(decision.passed for decision in decisions)
+                if accepted:
+                    _append_round_rows(rows_by_variant, round_result)
+                    collected_repeat_indices.append(candidate_repeat_index)
+                    collected_run_seeds.append(
+                        _shared_round_seed(round_result, problem_id, candidate_repeat_index)
+                    )
+
+                progress.set_count(
+                    dataset_setting=dataset_setting,
+                    problem_id=problem_id,
+                    collected_count=len(collected_repeat_indices),
+                )
+                evaluation_history.append(
+                    RoundCollectionAttempt(
+                        repeat_index=candidate_repeat_index,
+                        accepted=accepted,
+                        collected_count=len(collected_repeat_indices),
+                        decisions=tuple(
+                            EvaluatorDecisionReport(
+                                name=evaluation.name,
+                                passed=decision.passed,
+                                verdict=decision.verdict,
+                                message=decision.message,
+                                details=decision.details,
+                            )
+                            for evaluation, decision in zip(problem_setting.evaluations, decisions)
+                        ),
+                    )
+                )
+                progress.emit()
+
+            repeat_index += len(repeat_indices)
+
+        if len(collected_repeat_indices) < self.cfg.collects:
+            raise RuntimeError(
+                "experiment collection failed: "
+                f"dataset={dataset_setting.experiment_id!r} problem_id={problem_id!r} "
+                f"collected={len(collected_repeat_indices)} required={self.cfg.collects} "
+                f"repeat_limit={self.cfg.repeat}"
+            )
+
+        result = SimulatorResult(
+            machine_results=_machine_results_from_rows(machines, rows_by_variant)
+        )
+        experiment_name = f"{self.cfg.experiment_name}/{dataset_setting.experiment_id}/{problem_id}"
+        metadata = {
+            (machine_result.solver_id, machine_result.param_set_index): {
+                "base_seed": EXP_BASE_SEED,
+                "dataset_experiment_id": dataset_setting.experiment_id,
+                "problem_id": problem_id,
+                "collected_count": len(collected_repeat_indices),
+                "collected_repeat_indices": tuple(collected_repeat_indices),
+                "collected_run_seeds": tuple(collected_run_seeds),
+                "evaluations": problem_setting.evaluation_names,
+            }
+            for machine_result in result.machine_results
+        }
+        write_simulator_result(
+            result,
+            experiment_name=experiment_name,
+            output_root=output_root,
+            variant_metadata=metadata,
+        )
+        return ProblemCollectionReport(
+            dataset_experiment_id=dataset_setting.experiment_id,
+            dataset=dataset_setting.dataset,
+            problem_id=problem_id,
+            output_dir=str(Path(output_root) / experiment_name),
+            status="completed",
+            collected_count=len(collected_repeat_indices),
+            attempted_repeats=attempted_repeats,
+            collected_repeat_indices=tuple(collected_repeat_indices),
+            collected_run_seeds=tuple(collected_run_seeds),
+            evaluation_history=tuple(evaluation_history),
         )
 
-    def _dataset_evaluators(self) -> dict[str, DatasetEvaluator]:
-        evaluators: dict[str, DatasetEvaluator] = {}
-        for dataset_setting in self.cfg.dataset_settings:
-            evaluation_name = dataset_setting.evaluation.name
-            if evaluation_name not in self.evaluators:
-                raise KeyError(f"unknown evaluator: {evaluation_name}")
-            evaluators[dataset_setting.experiment_id] = self.evaluators[evaluation_name]
-        return evaluators
+
+def register(name: str, evaluator: RoundEvaluator) -> None:
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("evaluator name cannot be empty.")
+    if not callable(evaluator):
+        raise TypeError("evaluator must be callable.")
+    _EVALUATORS[name.strip()] = evaluator
+
+
+def _clear_registered_evaluators_for_tests() -> None:
+    _EVALUATORS.clear()
 
 
 def build(
@@ -288,16 +313,11 @@ def build(
     problem_root: Path = Path("configs/problems"),
     solver_root: Path = Path("configs/solvers"),
 ) -> Experiment:
-    
-    # 這邊應該先檢查路徑中的資料是否存在
-    
-    # 讀實驗設定
     cfg = load_config(
-        exp_path, 
+        exp_path,
         problem_root=problem_root,
         solver_root=solver_root,
     )
-    # 返回實驗實例
     return Experiment(cfg=cfg)
 
 
@@ -315,26 +335,186 @@ def executeExperiment(
     )
 
 
-def _variant_summaries(simulator_result: Any) -> tuple[VariantSummary, ...]:
-    entries = result_entries(simulator_result)
-    grouped: dict[tuple[str, int], list[ResultEntry]] = defaultdict(list)
-    for entry in entries:
-        grouped[(entry.solver_id, entry.param_set_index)].append(entry)
+def _assert_configured_evaluators_registered(cfg: ExperimentConfig) -> None:
+    missing = sorted(
+        {
+            evaluation.name
+            for dataset_setting in cfg.dataset_settings
+            for problem_setting in dataset_setting.problem_settings
+            for evaluation in problem_setting.evaluations
+            if evaluation.name not in _EVALUATORS
+        }
+    )
+    if missing:
+        raise KeyError(f"unknown evaluator: {missing!r}")
 
+
+def _evaluate_candidate_round(
+    *,
+    dataset_setting: DatasetSetting,
+    problem_setting: ProblemSetting,
+    problem_id: str,
+    repeat_index: int,
+    round_result: SimulatorResult,
+    collected_result: SimulatorResult,
+    projected_result: SimulatorResult,
+) -> tuple[RoundEvalDecision, ...]:
+    projected_summaries = _variant_summaries(projected_result)
+    decisions: list[RoundEvalDecision] = []
+    for evaluation in problem_setting.evaluations:
+        evaluator = _EVALUATORS[evaluation.name]
+        decisions.append(
+            evaluator(
+                RoundEvalInput(
+                    dataset_setting=dataset_setting,
+                    problem_setting=problem_setting,
+                    problem_id=problem_id,
+                    repeat_index=repeat_index,
+                    evaluation=evaluation,
+                    evaluation_name=evaluation.name,
+                    variant_summaries=projected_summaries,
+                    simulator_result=round_result,
+                    collected_result=collected_result,
+                    candidate_result=round_result,
+                    projected_result=projected_result,
+                )
+            )
+        )
+    return tuple(decisions)
+
+
+def _selected_machines(
+    simulators: tuple[Simulator, ...],
+    solver_variants: tuple[tuple[str, int], ...],
+) -> tuple[Machine, ...]:
+    by_variant = {
+        (machine.solver_id, machine.param_set_index): machine
+        for simulator in simulators
+        for machine in simulator.machines
+    }
+    machines: list[Machine] = []
+    for variant in solver_variants:
+        if variant not in by_variant:
+            raise KeyError(f"selected solver variant is not available: {variant!r}")
+        machines.append(by_variant[variant])
+    return tuple(machines)
+
+
+def _repeat_window_size(worker_count: int, variant_count: int) -> int:
+    if variant_count <= 0:
+        raise ValueError("variant_count must be > 0.")
+    return max(1, math.ceil(worker_count / variant_count))
+
+
+def _window_tasks(
+    machines: tuple[Machine, ...],
+    *,
+    problem_id: str,
+    repeat_indices: tuple[int, ...],
+) -> list[RunTask]:
+    return [
+        machine.expand_task(
+            problem_id=problem_id,
+            repeat_index=repeat_index,
+            base_seed=EXP_BASE_SEED,
+        )
+        for repeat_index in repeat_indices
+        for machine in machines
+    ]
+
+
+def _result_for_repeat(
+    machines: tuple[Machine, ...],
+    *,
+    window_result: SimulatorResult,
+    problem_id: str,
+    repeat_index: int,
+) -> SimulatorResult:
+    window_by_variant = window_result.by_variant
+    return SimulatorResult(
+        machine_results=tuple(
+            MachineResult(
+                solver_id=machine.solver_id,
+                param_set_index=machine.param_set_index,
+                params=machine.params,
+                rows=tuple(
+                    row
+                    for row in window_by_variant[(machine.solver_id, machine.param_set_index)].rows
+                    if row.task.problem_id == problem_id
+                    and row.task.repeat_index == repeat_index
+                ),
+            )
+            for machine in machines
+        )
+    )
+
+
+def _copy_rows_by_variant(
+    rows_by_variant: dict[tuple[str, int], list[SimulatorRunRow]],
+) -> dict[tuple[str, int], list[SimulatorRunRow]]:
+    return {key: list(rows) for key, rows in rows_by_variant.items()}
+
+
+def _append_round_rows(
+    rows_by_variant: dict[tuple[str, int], list[SimulatorRunRow]],
+    round_result: SimulatorResult,
+) -> None:
+    for machine_result in round_result.machine_results:
+        rows_by_variant[(machine_result.solver_id, machine_result.param_set_index)].extend(
+            machine_result.rows
+        )
+
+
+def _machine_results_from_rows(
+    machines: tuple[Machine, ...],
+    rows_by_variant: dict[tuple[str, int], list[SimulatorRunRow]],
+) -> tuple[MachineResult, ...]:
+    return tuple(
+        MachineResult(
+            solver_id=machine.solver_id,
+            param_set_index=machine.param_set_index,
+            params=machine.params,
+            rows=tuple(rows_by_variant[(machine.solver_id, machine.param_set_index)]),
+        )
+        for machine in machines
+    )
+
+
+def _shared_round_seed(
+    round_result: SimulatorResult,
+    problem_id: str,
+    repeat_index: int,
+) -> int:
+    rows = round_result.by_run(problem_id, repeat_index)
+    if not rows:
+        raise RuntimeError(f"round produced no rows: problem_id={problem_id!r}, repeat_index={repeat_index!r}")
+    seeds = {row.task.task_seed for row in rows}
+    if len(seeds) != 1:
+        raise RuntimeError(
+            "round tasks must share one seed: "
+            f"problem_id={problem_id!r} repeat_index={repeat_index!r} seeds={sorted(seeds)!r}"
+        )
+    return next(iter(seeds))
+
+
+def _variant_summaries(simulator_result: SimulatorResult) -> tuple[VariantSummary, ...]:
     variants: list[VariantSummary] = []
-    for solver_id, param_set_index in sorted(grouped):
-        key = (solver_id, param_set_index)
+    for machine_result in sorted(
+        simulator_result.machine_results,
+        key=lambda result: (result.solver_id, result.param_set_index),
+    ):
+        entries = machine_result_entries(machine_result)
         variants.append(
             VariantSummary(
-                solver_id=solver_id,
-                param_set_index=param_set_index,
-                params=simulator_result.variant_params[key],
+                solver_id=machine_result.solver_id,
+                param_set_index=machine_result.param_set_index,
+                params=machine_result.params,
                 summary=summarize(
-                    grouped[key],
+                    entries,
                     meta=SummaryMeta(
-                        solver_id=solver_id,
-                        param_set_index=param_set_index,
-                        params=simulator_result.variant_params[key],
+                        solver_id=machine_result.solver_id,
+                        param_set_index=machine_result.param_set_index,
+                        params=machine_result.params,
                     ),
                 ),
             )
@@ -342,38 +522,43 @@ def _variant_summaries(simulator_result: Any) -> tuple[VariantSummary, ...]:
     return tuple(variants)
 
 
-def _attempt_message(
-    dataset_evaluations: list[DatasetEvaluationRecord],
-    *,
-    collected: bool,
-) -> str:
-    if collected:
-        return "seed collected"
-    if not dataset_evaluations:
-        return "seed failed"
-    failed = dataset_evaluations[-1]
-    return (
-        f"{failed.dataset_setting.experiment_id}: {failed.decision.message}"
-        if failed.decision.message
-        else f"{failed.dataset_setting.experiment_id}: dataset failed"
-    )
+@dataclass
+class _CollectionProgress:
+    cfg: ExperimentConfig
 
+    def __post_init__(self) -> None:
+        self._counts = {
+            (dataset_setting.experiment_id, problem_setting.problem_id): 0
+            for dataset_setting in self.cfg.dataset_settings
+            for problem_setting in dataset_setting.problem_settings
+        }
 
-def _emit_dataset_status(
-    *,
-    seed: int,
-    dataset_index: int,
-    dataset_total: int,
-    dataset_name_width: int,
-    dataset_setting: DatasetSetting,
-    status: str,
-) -> None:
-    print(
-        f"[seed {seed}] ({dataset_index}/{dataset_total}) "
-        f"{dataset_setting.dataset:<{dataset_name_width}}   {status}",
-        file=sys.stderr,
-        flush=True,
-    )
+    def set_count(
+        self,
+        *,
+        dataset_setting: DatasetSetting,
+        problem_id: str,
+        collected_count: int,
+    ) -> None:
+        self._counts[(dataset_setting.experiment_id, problem_id)] = collected_count
+
+    @property
+    def remaining(self) -> int:
+        return sum(max(0, self.cfg.collects - count) for count in self._counts.values())
+
+    def emit(self) -> None:
+        lines = []
+        for index, dataset_setting in enumerate(self.cfg.dataset_settings):
+            parts = [
+                f"{problem_setting.problem_id}: "
+                f"{self._counts[(dataset_setting.experiment_id, problem_setting.problem_id)]}/{self.cfg.collects}"
+                for problem_setting in dataset_setting.problem_settings
+            ]
+            line = f"[{dataset_setting.experiment_id}] " + " ".join(parts)
+            if index == len(self.cfg.dataset_settings) - 1:
+                line += f" | remaining: {self.remaining}"
+            lines.append(line)
+        print("\n".join(lines), file=sys.stderr, flush=True)
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

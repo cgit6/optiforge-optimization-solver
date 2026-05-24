@@ -14,6 +14,7 @@ from .cli.run import executeSimulator
 from .converter import transformToMomery, transformToYaml
 from .engine import Engine, SimulationBundle, SolverConfigsSnapshot, build
 from .engine.models import ExperimentSpec, SolveResult, RunTask
+from .machine import Machine, MachinePool, MachinePoolSession, MachineResult
 from .engine.repository import ProblemRepository
 from .problem import Problem, MKPProblem, ProblemModel, ProblemRegistry, ProblemTypeSpec, TSPProblem, ValidationReport
 from .simulator import Simulator, SimulatorResult, SimulatorRunRow
@@ -51,6 +52,10 @@ __all__ = [
     "BSMACore",
     "BSMASolver",
     "main",
+    "Machine",
+    "MachinePool",
+    "MachinePoolSession",
+    "MachineResult",
     "ProblemModel",
     "Problem",
     "MKPProblem",

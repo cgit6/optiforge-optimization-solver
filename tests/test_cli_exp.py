@@ -2,32 +2,25 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from types import SimpleNamespace
 
 
-def test_cli_exp_main_builds_and_runs_experiment(monkeypatch, tmp_path: Path) -> None:
+def test_cli_exp_main_registers_bundled_evaluators_builds_and_runs(monkeypatch, tmp_path: Path) -> None:
     exp_main = importlib.import_module("mkp.cli.exp.main")
-    calls: dict[str, object] = {}
+    calls: dict[str, object] = {"register": []}
 
     class FakeExperiment:
-        def __init__(self) -> None:
-            self.cfg = SimpleNamespace(
-                dataset_settings=(
-                    SimpleNamespace(evaluation=SimpleNamespace(name="literature_mkp")),
-                )
-            )
-
-        def register(self, name, evaluator):
-            calls["register"] = (name, evaluator)
-
         def run(self, *, problem_root, solver_root, output_root):
             calls["run"] = (problem_root, solver_root, output_root)
             return "report"
+
+    def fake_register(name, evaluator):
+        calls["register"].append((name, evaluator))
 
     def fake_build(exp_path, *, problem_root, solver_root):
         calls["build"] = (exp_path, problem_root, solver_root)
         return FakeExperiment()
 
+    monkeypatch.setattr(exp_main, "register", fake_register)
     monkeypatch.setattr(exp_main, "build", fake_build)
     monkeypatch.setattr(exp_main, "DEFAULT_CONFIG_PATH", tmp_path / "exp.yaml")
     monkeypatch.setattr(exp_main, "DEFAULT_PROBLEM_ROOT", tmp_path / "problems")
@@ -42,40 +35,9 @@ def test_cli_exp_main_builds_and_runs_experiment(monkeypatch, tmp_path: Path) ->
         tmp_path / "problems",
         tmp_path / "solvers",
     )
-    assert calls["register"][0] == "literature_mkp"
+    assert [name for name, _ in calls["register"]] == ["mkp_base", "mkp_base2"]
     assert calls["run"] == (
         tmp_path / "problems",
         tmp_path / "solvers",
         tmp_path / "output",
     )
-
-
-def test_cli_exp_main_fails_fast_on_unknown_dataset_evaluator(monkeypatch, tmp_path: Path) -> None:
-    exp_main = importlib.import_module("mkp.cli.exp.main")
-
-    class FakeExperiment:
-        def __init__(self) -> None:
-            self.cfg = SimpleNamespace(
-                dataset_settings=(
-                    SimpleNamespace(evaluation=SimpleNamespace(name="unknown_eval")),
-                )
-            )
-
-        def register(self, name, evaluator):
-            raise AssertionError("register should not be called for unknown evaluator")
-
-        def run(self, *, problem_root, solver_root, output_root):
-            raise AssertionError("run should not be called for unknown evaluator")
-
-    monkeypatch.setattr(exp_main, "build", lambda *args, **kwargs: FakeExperiment())
-    monkeypatch.setattr(exp_main, "DEFAULT_CONFIG_PATH", tmp_path / "exp.yaml")
-    monkeypatch.setattr(exp_main, "DEFAULT_PROBLEM_ROOT", tmp_path / "problems")
-    monkeypatch.setattr(exp_main, "DEFAULT_SOLVER_ROOT", tmp_path / "solvers")
-    monkeypatch.setattr(exp_main, "DEFAULT_OUTPUT_ROOT", tmp_path / "output")
-
-    try:
-        exp_main.main()
-    except KeyError as exc:
-        assert "unknown evaluator" in str(exc)
-    else:
-        raise AssertionError("expected KeyError for unknown evaluator")

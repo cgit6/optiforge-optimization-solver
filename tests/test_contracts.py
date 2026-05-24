@@ -17,6 +17,7 @@ def test_experiment_spec_valid():
     assert spec.repeat == 3
     assert spec.problem_ids == ("weish01", "weish02")
     assert spec.worker_count == 2
+    assert spec.base_seed is None
 
 
 @pytest.mark.parametrize(
@@ -30,6 +31,7 @@ def test_experiment_spec_valid():
         {"solver_ids": ("solver_a", "solver_a")},
         {"repeat": 0},
         {"worker_count": 0},
+        {"base_seed": -1},
     ],
 )
 def test_experiment_spec_invalid(kwargs):

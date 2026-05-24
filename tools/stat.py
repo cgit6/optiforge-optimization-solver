@@ -11,6 +11,7 @@ from ..engine.models import SolveResult
 from ..problem.validation import DirectionSpec, ObjectiveGap, ObjectiveValue, ValidationReport, is_scalar_objective
 
 if TYPE_CHECKING:
+    from ..machine import MachineResult
     from ..simulator.core import SimulatorResult
 
 T = TypeVar("T")
@@ -125,6 +126,13 @@ class SummaryReport:
 
 
 def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
+    entries: list[ResultEntry] = []
+    for machine_result in simulator_result.machine_results:
+        entries.extend(machine_result_entries(machine_result))
+    return entries
+
+
+def machine_result_entries(machine_result: "MachineResult") -> list[ResultEntry]:
     return [
         _build_entry(
             row.solve_result,
@@ -133,7 +141,7 @@ def result_entries(simulator_result: "SimulatorResult") -> list[ResultEntry]:
             repeat_index=row.task.repeat_index,
             param_set_index=row.task.param_set_index,
         )
-        for row in simulator_result.rows
+        for row in machine_result.rows
     ]
 
 
