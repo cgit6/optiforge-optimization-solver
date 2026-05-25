@@ -10,8 +10,11 @@ from mkp.experiment import (
     EvaluationBaseline,
     Experiment,
     ExperimentReport,
+    PASS,
+    RoundEvalDecision,
     build,
     load_config,
+    register,
 )
 from mkp.tools.solver_config_loader import SolverConfigLoader
 
@@ -115,7 +118,7 @@ def test_build_sample_exp_cfg_success() -> None:
     experiment = build(Path("cli/exp/exp_cfg.yaml"))
 
     assert isinstance(experiment, Experiment)
-    assert experiment.cfg.experiment_name == "mkp_final_compare"
+    assert experiment.cfg.experiment_name == "mkp_transfer_param"
     assert experiment.cfg.collects == 20
     assert experiment.cfg.repeat == 300000000000
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
@@ -123,30 +126,60 @@ def test_build_sample_exp_cfg_success() -> None:
         "bsma_numba",
         "bsca_numba",
         "brlsmasca_rl_numba",
-        "brlsmasca_test_numba",
     )
-    assert experiment.cfg.solver_variants == (
+    assert len(experiment.cfg.solver_variants) == 45
+    assert experiment.cfg.solver_variants[:3] == (
+        ("bsma_numba", 0),
         ("bsma_numba", 1),
-        ("bsca_numba", 0),
-        ("brlsmasca_rl_numba", 5),
-        ("brlsmasca_test_numba", 2),
+        ("bsma_numba", 2),
     )
-    assert len(experiment.cfg.dataset_settings) == 12
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 87
+    assert experiment.cfg.solver_variants[-3:] == (
+        ("brlsmasca_rl_numba", 24),
+        ("brlsmasca_rl_numba", 25),
+        ("brlsmasca_rl_numba", 26),
+    )
+    assert len(experiment.cfg.dataset_settings) == 6
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 8
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "set1_sent"
-    assert first.dataset == "SENT"
+    assert first.experiment_id == "param_pb"
+    assert first.dataset == "PB"
     assert first.problem_type == "mkp"
-    assert len(first.problem_settings) == 2
-    assert first.problem_ids == ("sent01", "sent02")
-    assert first.problem_settings[0].evaluation_names == ("mkp_base", "mkp_base2")
-    assert first.problem_settings[0].evaluations[0].base_line == (
-        EvaluationBaseline(name="HLMS", pdev=0.129),
+    assert len(first.problem_settings) == 1
+    assert first.problem_ids == ("pb4",)
+    assert first.problem_settings[0].evaluation_names == (
+        "mkp_transfer_paired_strict",
+        "mkp_target_combo_best",
     )
-    weish = experiment.cfg.dataset_settings[4]
-    assert weish.experiment_id == "set2_weish"
-    assert weish.dataset == "WEISH"
-    assert len(weish.problem_settings) == 30
+    assert tuple(
+        problem.problem_id
+        for setting in experiment.cfg.dataset_settings
+        for problem in setting.problem_settings
+    ) == (
+        "pb4",
+        "weing5",
+        "weish16",
+        "weish26",
+        "OR5x500-0.25_3",
+        "OR10x500-0.25_2",
+        "mk_gk04",
+        "mk_gk09",
+    )
+    evaluation_by_problem = {
+        problem.problem_id: problem.evaluation_names
+        for setting in experiment.cfg.dataset_settings
+        for problem in setting.problem_settings
+    }
+    assert evaluation_by_problem["weish16"] == (
+        "mkp_transfer_core_strict",
+        "mkp_transfer_bsca_margin_005",
+        "mkp_target_combo_core_strict",
+        "mkp_target_combo_bsca_margin_005",
+    )
+    assert all(
+        evaluation_names == ("mkp_transfer_paired_strict", "mkp_target_combo_best")
+        for problem_id, evaluation_names in evaluation_by_problem.items()
+        if problem_id != "weish16"
+    )
 
     loader = SolverConfigLoader()
     bsma_cfg = loader.load("bsma_numba", param_set_index=1)
@@ -176,21 +209,12 @@ def test_build_sample_exp_cfg_success() -> None:
     }
     assert rl_cfg["stop_condition"]["max_iterations"] == 5000
 
-    test_cfg = loader.load("brlsmasca_test_numba", param_set_index=2)
-    assert test_cfg["params"] == {
-        "pop_size": 20,
-        "a": 2.5,
-        "prob_arr": [0.04, 0.46, 0.25, 0.25],
-        "ctf": "tanh_abs",
-    }
-    assert test_cfg["stop_condition"]["max_iterations"] == 5000
-
 
 def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:
     exp_path, problem_root, solver_root = _write_valid_project(
         tmp_path,
         config_text=_valid_config_text(
-            evaluation="[mkp_base]",
+            evaluation="[always_pass]",
             problem_extra="""
         base_line:
           - name: Easy
@@ -198,6 +222,7 @@ def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:
 """,
         ),
     )
+    register("always_pass", lambda _input: RoundEvalDecision(passed=True, verdict=PASS))
 
     exp_main_module = __import__("mkp.cli.exp.main", fromlist=["main"])
     original_config = exp_main_module.DEFAULT_CONFIG_PATH

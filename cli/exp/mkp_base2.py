@@ -6,6 +6,7 @@ from typing import Any
 from ...experiment import FAIL, PASS, RoundEvalDecision, RoundEvalInput, VariantSummary
 
 TARGET_SOLVER_ID = "brlsmasca_rl_numba"
+PDEV_MARGIN_005 = 0.05
 
 
 def mkp_base2_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
@@ -67,6 +68,72 @@ def mkp_base2_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
         details={
             "target_pdevs": target_pdevs,
             "competitor_pdevs": competitor_pdevs,
+        },
+    )
+
+
+def mkp_base2_margin_005_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    summary_failures = _summary_failures(input_data.variant_summaries)
+    if summary_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Some projected variant summaries are invalid.",
+            details={"failures": summary_failures},
+        )
+
+    variant_pdevs = _variant_pdevs(input_data.variant_summaries)
+    target_pdevs = {
+        variant_key: pdev
+        for variant_key, pdev in variant_pdevs.items()
+        if variant_key.startswith(f"{TARGET_SOLVER_ID}/")
+    }
+    if not target_pdevs:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message=f"{TARGET_SOLVER_ID} is not present in projected variant summaries.",
+            details={"variant_pdevs": variant_pdevs},
+        )
+
+    best_pdev = min(variant_pdevs.values())
+    threshold_pdev = best_pdev + PDEV_MARGIN_005
+    worse_targets = [
+        {
+            "target": target_variant,
+            "target_pdev": target_pdev,
+            "best_pdev": best_pdev,
+            "threshold_pdev": threshold_pdev,
+            "margin_pdev": PDEV_MARGIN_005,
+        }
+        for target_variant, target_pdev in target_pdevs.items()
+        if not _lte(target_pdev, threshold_pdev)
+    ]
+    if worse_targets:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message=f"{TARGET_SOLVER_ID} is more than {PDEV_MARGIN_005} Pdev from the best projected variant.",
+            details={
+                "best_pdev": best_pdev,
+                "threshold_pdev": threshold_pdev,
+                "margin_pdev": PDEV_MARGIN_005,
+                "target_pdevs": target_pdevs,
+                "variant_pdevs": variant_pdevs,
+                "worse_targets": worse_targets,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message=f"{TARGET_SOLVER_ID} is within {PDEV_MARGIN_005} Pdev of the best projected variant.",
+        details={
+            "best_pdev": best_pdev,
+            "threshold_pdev": threshold_pdev,
+            "margin_pdev": PDEV_MARGIN_005,
+            "target_pdevs": target_pdevs,
+            "variant_pdevs": variant_pdevs,
         },
     )
 

@@ -40,12 +40,12 @@ weish30: seeds 1001~1020
 ```
 
 seed 使用方式2:
+
 ```
 weish01: seeds 1001~1020
 weish02: seeds 2001~2020
 weish03: seeds 3001~3020
 ```
-
 
 [問題3] 模擬物件分工還是不夠明確。目前的結構是 Bundle 會創建一個 Simulator 物件，這個物件會執行`多算法x多設定` 組合的模擬結果，並把結果全部存到 `SimulatorResult` 中。目前需要把這些東西都分開並且分開統計。
 [目標] 系統可以分開模擬並統計一個題庫下，多組算法+多組設定。串性或併發模擬。
@@ -83,27 +83,25 @@ Simulator 物件 result pool 結果保存:
 
 Machine 模組需要放到一個獨立的 machine 資料夾中，成為一個工作分明，文件結構清晰的獨立模組。
 
-
 [問題4] cil.run 算法數量支援保持 一個題庫、一個 solver、多組算法設定串行或是併發模擬、只是底層系統需要支援單一題庫、多 solver、多參數設定 串行或併發模擬。
 [目標] 上面改好之後，重新檢視 cil.run 的執行在流程上是否確保受到限制(一個題庫、一個 solver、多組算法設定串行或是併發模擬)
 [方案] 用 cil.run 模組的 cil 參數合法性驗證去擋。
 
 [問題5] 根據目前修改的結果評估是否有能力可以提取 同一個題庫同一個題目同一次 repeat 下當前所有 solver 的所有 參數組合的求解結果
-[目標] 我需要知道某一題相同 run seed 下範圍內的所有算法參數組合的表現 
+[目標] 我需要知道某一題相同 run seed 下範圍內的所有算法參數組合的表現
 [方案] 先根據 問題3、問題4 修改方案評估如果這樣修改，那在 cil.exp 模組重構之後有沒有辦法拿到這樣的資料。如果不行或是會增加複雜度可能上面得方案要修改要修改。
 
-
-[問題6] 結果緩存、統計方式、輸出格式 
+[問題6] 結果緩存、統計方式、輸出格式
 [目標] 根據前面提到
 [方案]
+
 1. 目前統計方式改成新增一筆資料就更新一次統計結果而不是全部跑完才一起更新
 2. 串行模擬統計方式變成每執行完一題模擬則呼叫 Record 函數用於更新統計狀態。
 3. 併發模擬的統計方式保持模擬完成之後再一次處理模擬，但因為統計模組需要改成 input 是吃一筆新增的資料然後更新統計值的方式，所以可能也會有相對應的改變。這個需要重新檢查或評估。
 
-
 [問題7] cil.exp 收集 seed。
 [目標] cil.exp 可以透過所有算法組合不斷 repeat 找到符合預期的 結果(比如說 bsma 適應值 >= bsca 等) 逐題收集所需要的 seed 數量，比如說 20 個符合條件的 seed  
-[方案] 更新 exp_cfg.yaml 格式、更新 expriment 處理流程。目前大概的想法是所有的算法會根據設定的 題庫/題目設定去逐題收集符合預期的 seed ，收集滿了才執行下一題，如果超過 repeat 上限則終止 cil.exp 的運行並返回錯誤原因 
+[方案] 更新 exp_cfg.yaml 格式、更新 expriment 處理流程。目前大概的想法是所有的算法會根據設定的 題庫/題目設定去逐題收集符合預期的 seed ，收集滿了才執行下一題，如果超過 repeat 上限則終止 cil.exp 的運行並返回錯誤原因
 
 cil.run 流程不能動，前面修改好的東西也不能動，在解決這個問題的時候只能動 cil.exp 和 expriment 模組。
 
@@ -121,38 +119,40 @@ cil.run 流程不能動，前面修改好的東西也不能動，在解決這個
 
 1. 移除 `worker` 系統統一預設 10 就好。
 2. 算法沒辦法設定要使用哪幾組算法參數組合做實驗，這個問題我站時還沒想到解決方案，目前粗步構想是 solver 值改成用 yaml 清單，大概如下:
-    ```yaml
 
-    # 要執行的演算法，以及算法參數索引值
-    solvers: 
-    - solver: bsma_numba 
-        param_idx: 0
-    - solver: bsca_numba 
-        param_idx: 0
-    - solver: brlsmasca_numba 
-        param_idx: 0
-    ```
+   ```yaml
+
+   # 要執行的演算法，以及算法參數索引值
+   solvers:
+   - solver: bsma_numba
+       param_idx: 0
+   - solver: bsca_numba
+       param_idx: 0
+   - solver: brlsmasca_numba
+       param_idx: 0
+   ```
+
 3. base_line 的定義方式也要重新修改，不應該是題庫的統計值應該要是題目的競爭算法的統計值(PDev) 每一題一個統計值。 base line 可以 1 組也可以多組也可以沒有
 
 ```yaml
-    problems: 
-      - problems: weish01 
-        evaluation: [mkp_base, mkp_base2]
-        base_line: 
-          - name: HLMS
-            Pdev: 0.154
-          - name: BIWOA
-            Pdev: 0.472
-          - name: BMMVO
-            Pdev: 0.861
-          - name: BSCA
-            Pdev: 0.314
-          - name: IBSMA_U1
-            Pdev: 0.105 
+problems:
+  - problems: weish01
+    evaluation: [mkp_base, mkp_base2]
+    base_line:
+      - name: HLMS
+        Pdev: 0.154
+      - name: BIWOA
+        Pdev: 0.472
+      - name: BMMVO
+        Pdev: 0.861
+      - name: BSCA
+        Pdev: 0.314
+      - name: IBSMA_U1
+        Pdev: 0.105
 ```
 
 4. evaluation 是一個清單，它可以是一個也可以是多個。
- 
+
 我已經把我構想的新構想的格式寫在 exp_cfg.yaml 做為範例了。 然後 base line 的數據你可以根據 note/apx.md 做參考設定出每一個 競爭算法每一題 合理的 Pdev 出來。
 
 [問題10] 目前 cil.exp 的 mkp.py 評估方式有點過時，重寫評估邏輯。然後把 literature_mkp.py 移除這東西是多餘的。
@@ -171,6 +171,7 @@ cil.run 流程不能動，前面修改好的東西也不能動，在解決這個
 [問題11] 在終端機要顯示目前預計要收那些題目預計收多少筆已經收多少筆，總共要收多少筆。以下給範例以目前 exp_cfg.yaml 只有 Weish01~11 的情況下，終端機在每一次 repeat 模擬完成之後評估一次，評估完一次會更新狀態，更新後就會打印在終端機會更新目前收集的結果
 
 一開始狀態
+
 ```
 step1: collect
 [Weish] weish01: 0/20 weish02: 0/20 weish03: 0/20 weish04: 0/20 weish05: 0/20 weish06: 0/20 weish07: 0/20 weish08: 0/20 weish09: 0/20 weish10: 0/20 weish11: 0/20 | remaining: 220
@@ -191,7 +192,3 @@ step1: collect
 [GK] gk_01: 0/20 gk_02: 0/20 | remaining: 235
 
 ```
-
-[問題12] cil.run 要可以支援定義直接給 run seed 陣列然後執行模擬。
-
-[問題13] 測試 GK 題庫跑看看樹拒絕果是否合理

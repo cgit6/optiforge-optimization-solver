@@ -1,0 +1,766 @@
+from __future__ import annotations
+
+import math
+from itertools import product
+from typing import Any
+
+from ...experiment import FAIL, PASS, RoundEvalDecision, RoundEvalInput, VariantSummary
+
+EXPECTED_COMBO_COUNT = 45
+PDEV_TOLERANCE = 0.0
+BSCA_MARGIN_PDEV = 0.05
+BSCA_TRANSFER_MAX_AVG_RANK = 2.0
+EXPECTED_CTFS = ("tanh_abs", "sigmoid_s0", "abs_pow_16")
+
+ALGORITHM_BY_SOLVER_ID = {
+    "bsma_numba": "bsma",
+    "bsca_numba": "bsca",
+    "brlsmasca_rl_numba": "bscasma",
+}
+EXPECTED_ALGORITHM_COUNTS = {
+    "bsma": 9,
+    "bsca": 9,
+    "bscasma": 27,
+}
+CORE_ALGORITHMS = ("bsma", "bscasma")
+PAIR_KEYS = {
+    "bsma": ("z",),
+    "bsca": ("a",),
+    "bscasma": ("z", "a"),
+}
+EXPECTED_PAIRS = {
+    "bsma": ({"z": 0.01}, {"z": 0.08}, {"z": 0.15}),
+    "bsca": ({"a": 1.5}, {"a": 2.0}, {"a": 2.5}),
+    "bscasma": tuple(
+        {"z": z, "a": a}
+        for z, a in product((0.01, 0.08, 0.15), (1.5, 2.0, 2.5))
+    ),
+}
+TARGET_COMBOS = {
+    "bsma": {"ctf": "tanh_abs", "z": 0.08},
+    "bsca": {"ctf": "tanh_abs", "a": 1.5},
+    "bscasma": {"ctf": "tanh_abs", "z": 0.08, "a": 2.5},
+}
+
+
+def mkp_transfer_paired_strict_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    pair_checks = _check_pair_completeness(combos)
+    pair_failures = [check for check in pair_checks if not check["passed"]]
+    if integrity_failures or pair_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "failures": integrity_failures + pair_failures,
+            },
+        )
+
+    transfer_checks = _check_transfer_paired(combos)
+    failures = [check for check in transfer_checks if not check["passed"]]
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="tanh_abs is not the strict paired-average best transfer function.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "transfer_checks": transfer_checks,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="tanh_abs is the strict paired-average best transfer function.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "integrity_checks": integrity_checks,
+            "pair_checks": pair_checks,
+            "transfer_checks": transfer_checks,
+        },
+    )
+
+
+def mkp_target_combo_best_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_checks = _check_target_combos(combos)
+    failures = [check for check in target_checks if not check["passed"]]
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Target parameter combos are not strict best within their algorithms.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "integrity_checks": integrity_checks,
+                "target_checks": target_checks,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Target parameter combos are strict best within their algorithms.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "integrity_checks": integrity_checks,
+            "target_checks": target_checks,
+        },
+    )
+
+
+def mkp_transfer_core_strict_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    pair_checks = _check_pair_completeness(combos)
+    pair_failures = [check for check in pair_checks if not check["passed"]]
+    if integrity_failures or pair_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "core_algorithms": CORE_ALGORITHMS,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "failures": integrity_failures + pair_failures,
+            },
+        )
+
+    transfer_checks = _check_transfer_paired(combos)
+    core_transfer_checks = [
+        check for check in transfer_checks if check["algorithm"] in CORE_ALGORITHMS
+    ]
+    failures = [check for check in core_transfer_checks if not check["passed"]]
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Core transfer checks failed.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "core_algorithms": CORE_ALGORITHMS,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "transfer_checks": transfer_checks,
+                "core_transfer_checks": core_transfer_checks,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Core transfer checks passed.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "core_algorithms": CORE_ALGORITHMS,
+            "integrity_checks": integrity_checks,
+            "pair_checks": pair_checks,
+            "transfer_checks": transfer_checks,
+            "core_transfer_checks": core_transfer_checks,
+        },
+    )
+
+
+def mkp_transfer_bsca_margin_005_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    pair_checks = _check_pair_completeness(combos)
+    pair_failures = [check for check in pair_checks if not check["passed"]]
+    if integrity_failures or pair_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "failures": integrity_failures + pair_failures,
+            },
+        )
+
+    transfer_checks = _check_transfer_paired(combos)
+    bsca_margin_check = _bsca_transfer_margin_check(transfer_checks)
+    if not bsca_margin_check["passed"]:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="BSCA transfer check exceeded allowed margin.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "transfer_checks": transfer_checks,
+                "bsca_margin_check": bsca_margin_check,
+                "failures": [bsca_margin_check],
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="BSCA transfer check is strict best or within margin.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+            "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+            "integrity_checks": integrity_checks,
+            "pair_checks": pair_checks,
+            "transfer_checks": transfer_checks,
+            "bsca_margin_check": bsca_margin_check,
+        },
+    )
+
+
+def mkp_target_combo_core_strict_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "core_algorithms": CORE_ALGORITHMS,
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_checks = _check_target_combos(combos)
+    core_target_checks = [
+        check for check in target_checks if check["algorithm"] in CORE_ALGORITHMS
+    ]
+    failures = [check for check in core_target_checks if not check["passed"]]
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Core target combo checks failed.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "core_algorithms": CORE_ALGORITHMS,
+                "integrity_checks": integrity_checks,
+                "target_checks": target_checks,
+                "core_target_checks": core_target_checks,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Core target combo checks passed.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "core_algorithms": CORE_ALGORITHMS,
+            "integrity_checks": integrity_checks,
+            "target_checks": target_checks,
+            "core_target_checks": core_target_checks,
+        },
+    )
+
+
+def mkp_target_combo_bsca_margin_005_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_checks = _check_target_combos(combos)
+    bsca_margin_check = _bsca_target_margin_check(target_checks)
+    if not bsca_margin_check["passed"]:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="BSCA target combo check exceeded allowed margin.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "integrity_checks": integrity_checks,
+                "target_checks": target_checks,
+                "bsca_margin_check": bsca_margin_check,
+                "failures": [bsca_margin_check],
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="BSCA target combo check is strict best or within margin.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+            "integrity_checks": integrity_checks,
+            "target_checks": target_checks,
+            "bsca_margin_check": bsca_margin_check,
+        },
+    )
+
+
+def mkp_transfer_core_strict_bsca_margin_005_evaluator(
+    input_data: RoundEvalInput,
+) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    pair_checks = _check_pair_completeness(combos)
+    pair_failures = [check for check in pair_checks if not check["passed"]]
+    if integrity_failures or pair_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "failures": integrity_failures + pair_failures,
+            },
+        )
+
+    transfer_checks = _check_transfer_paired(combos)
+    bsca_margin_check = _bsca_transfer_margin_check(transfer_checks)
+    failures = [
+        check
+        for check in transfer_checks
+        if check["algorithm"] != "bsca" and not check["passed"]
+    ]
+    if not bsca_margin_check["passed"]:
+        failures.append(bsca_margin_check)
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Core transfer checks failed or BSCA exceeded allowed margin.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+                "integrity_checks": integrity_checks,
+                "pair_checks": pair_checks,
+                "transfer_checks": transfer_checks,
+                "bsca_margin_check": bsca_margin_check,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Core transfer checks passed and BSCA is strict best or within margin.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+            "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+            "integrity_checks": integrity_checks,
+            "pair_checks": pair_checks,
+            "transfer_checks": transfer_checks,
+            "bsca_margin_check": bsca_margin_check,
+        },
+    )
+
+
+def mkp_target_combo_core_strict_bsca_margin_005_evaluator(
+    input_data: RoundEvalInput,
+) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_checks = _check_target_combos(combos)
+    bsca_margin_check = _bsca_target_margin_check(target_checks)
+    failures = [
+        check
+        for check in target_checks
+        if check["algorithm"] != "bsca" and not check["passed"]
+    ]
+    if not bsca_margin_check["passed"]:
+        failures.append(bsca_margin_check)
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Core target combos failed or BSCA exceeded allowed margin.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "integrity_checks": integrity_checks,
+                "target_checks": target_checks,
+                "bsca_margin_check": bsca_margin_check,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Core target combos passed and BSCA is strict best or within margin.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+            "integrity_checks": integrity_checks,
+            "target_checks": target_checks,
+            "bsca_margin_check": bsca_margin_check,
+        },
+    )
+
+
+def mkp_calibration_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    transfer = mkp_transfer_paired_strict_evaluator(input_data)
+    target = mkp_target_combo_best_evaluator(input_data)
+    passed = transfer.passed and target.passed
+    return RoundEvalDecision(
+        passed=passed,
+        verdict=PASS if passed else FAIL,
+        message=(
+            "Calibration transfer and target-combo checks passed."
+            if passed
+            else "Calibration transfer or target-combo checks failed."
+        ),
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "transfer": transfer.details,
+            "target": target.details,
+        },
+    )
+
+
+def _combo_context(
+    variant_summaries: tuple[VariantSummary, ...],
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+    summary_failures = _summary_failures(variant_summaries)
+    combos = [_combo_from_variant(variant) for variant in variant_summaries]
+    integrity_checks = {
+        "summary_failures": summary_failures,
+        "combo_count": _check_combo_count(combos),
+        "algorithm_counts": _check_algorithm_counts(combos),
+        "unknown_algorithms": _check_unknown_algorithms(combos),
+    }
+    failures: list[dict[str, Any]] = []
+    if summary_failures:
+        failures.append({"check": "summary_failures", "passed": False, "failures": summary_failures})
+    if not integrity_checks["combo_count"]["passed"]:
+        failures.append({"check": "combo_count", **integrity_checks["combo_count"]})
+    failures.extend(
+        {"check": "algorithm_counts", **check}
+        for check in integrity_checks["algorithm_counts"]
+        if not check["passed"]
+    )
+    if not integrity_checks["unknown_algorithms"]["passed"]:
+        failures.append({"check": "unknown_algorithms", **integrity_checks["unknown_algorithms"]})
+    return combos, integrity_checks, failures
+
+
+def _summary_failures(variant_summaries: tuple[VariantSummary, ...]) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for variant in variant_summaries:
+        overall = variant.summary.overall
+        excluded = overall.excluded_counts
+        excluded_total = excluded.infeasible + excluded.objective_mismatch + excluded.runtime_error
+        if (
+            overall.total_runs <= 0
+            or overall.valid_run_count != overall.total_runs
+            or not math.isclose(overall.feasible_rate, 1.0)
+            or overall.pdev is None
+            or excluded_total != 0
+        ):
+            failures.append(
+                {
+                    "solver_id": variant.solver_id,
+                    "param_set_index": variant.param_set_index,
+                    "total_runs": overall.total_runs,
+                    "valid_run_count": overall.valid_run_count,
+                    "feasible_rate": overall.feasible_rate,
+                    "pdev": overall.pdev,
+                    "excluded_counts": {
+                        "infeasible": excluded.infeasible,
+                        "objective_mismatch": excluded.objective_mismatch,
+                        "runtime_error": excluded.runtime_error,
+                    },
+                }
+            )
+    return failures
+
+
+def _combo_from_variant(variant: VariantSummary) -> dict[str, Any]:
+    algorithm = ALGORITHM_BY_SOLVER_ID.get(variant.solver_id, "unknown")
+    params = variant.params
+    return {
+        "variant": f"{variant.solver_id}/param_{variant.param_set_index}",
+        "algorithm": algorithm,
+        "solver_id": variant.solver_id,
+        "param_set_index": variant.param_set_index,
+        "ctf": params.get("ctf", "tanh_abs"),
+        "z": params.get("z"),
+        "a": params.get("a"),
+        "pdev": float(variant.summary.overall.pdev),
+    }
+
+
+def _check_combo_count(combos: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "passed": len(combos) == EXPECTED_COMBO_COUNT,
+        "actual": len(combos),
+        "expected": EXPECTED_COMBO_COUNT,
+    }
+
+
+def _check_algorithm_counts(combos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "passed": _algorithm_count(combos, algorithm) == expected_count,
+            "algorithm": algorithm,
+            "actual": _algorithm_count(combos, algorithm),
+            "expected": expected_count,
+        }
+        for algorithm, expected_count in EXPECTED_ALGORITHM_COUNTS.items()
+    ]
+
+
+def _check_unknown_algorithms(combos: list[dict[str, Any]]) -> dict[str, Any]:
+    unknown = sorted({combo["variant"] for combo in combos if combo["algorithm"] == "unknown"})
+    return {
+        "passed": not unknown,
+        "unknown_variants": unknown,
+    }
+
+
+def _check_pair_completeness(combos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for algorithm, expected_pairs in EXPECTED_PAIRS.items():
+        algorithm_combos = [combo for combo in combos if combo["algorithm"] == algorithm]
+        for expected_pair in expected_pairs:
+            pair_combos = [
+                combo for combo in algorithm_combos if _matches_target(combo, expected_pair)
+            ]
+            counts_by_ctf = {
+                ctf: sum(1 for combo in pair_combos if combo["ctf"] == ctf)
+                for ctf in EXPECTED_CTFS
+            }
+            checks.append(
+                {
+                    "passed": all(count == 1 for count in counts_by_ctf.values()),
+                    "algorithm": algorithm,
+                    "pair": expected_pair,
+                    "counts_by_ctf": counts_by_ctf,
+                    "variants": [combo["variant"] for combo in pair_combos],
+                }
+            )
+    return checks
+
+
+def _check_transfer_paired(combos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for algorithm, expected_pairs in EXPECTED_PAIRS.items():
+        pair_metrics: list[dict[str, Any]] = []
+        for expected_pair in expected_pairs:
+            pair_combos = [
+                combo
+                for combo in combos
+                if combo["algorithm"] == algorithm and _matches_target(combo, expected_pair)
+            ]
+            by_ctf = {combo["ctf"]: combo for combo in pair_combos}
+            pdevs = {ctf: by_ctf[ctf]["pdev"] for ctf in EXPECTED_CTFS}
+            ranks = _dense_ranks(pdevs)
+            pair_metrics.append(
+                {
+                    "pair": expected_pair,
+                    "pdevs": pdevs,
+                    "ranks": ranks,
+                }
+            )
+
+        transfer_metrics = {
+            ctf: {
+                "avg_pdev": _avg([pair["pdevs"][ctf] for pair in pair_metrics]),
+                "avg_rank": _avg([pair["ranks"][ctf] for pair in pair_metrics]),
+            }
+            for ctf in EXPECTED_CTFS
+        }
+        best_avg_pdev = min(metric["avg_pdev"] for metric in transfer_metrics.values())
+        best_avg_rank = min(metric["avg_rank"] for metric in transfer_metrics.values())
+        tanh_metrics = transfer_metrics["tanh_abs"]
+        checks.append(
+            {
+                "passed": (
+                    tanh_metrics["avg_pdev"] <= best_avg_pdev
+                    and tanh_metrics["avg_rank"] <= best_avg_rank
+                ),
+                "algorithm": algorithm,
+                "expected_ctf": "tanh_abs",
+                "best_avg_pdev": best_avg_pdev,
+                "best_avg_rank": best_avg_rank,
+                "transfer_metrics": transfer_metrics,
+                "pairs": pair_metrics,
+            }
+        )
+    return checks
+
+
+def _check_target_combos(combos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for algorithm, target in TARGET_COMBOS.items():
+        algorithm_combos = [combo for combo in combos if combo["algorithm"] == algorithm]
+        target_combos = [combo for combo in algorithm_combos if _matches_target(combo, target)]
+        if len(target_combos) != 1 or not algorithm_combos:
+            results.append(
+                {
+                    "passed": False,
+                    "algorithm": algorithm,
+                    "reason": "target_combo_missing_or_ambiguous",
+                    "target": target,
+                    "matches": target_combos,
+                }
+            )
+            continue
+
+        target_combo = target_combos[0]
+        best_pdev = min(combo["pdev"] for combo in algorithm_combos)
+        results.append(
+            {
+                "passed": target_combo["pdev"] <= best_pdev,
+                "algorithm": algorithm,
+                "target": target,
+                "target_variant": target_combo["variant"],
+                "target_pdev": target_combo["pdev"],
+                "best_pdev": best_pdev,
+            }
+        )
+    return results
+
+
+def _bsca_transfer_margin_check(transfer_checks: list[dict[str, Any]]) -> dict[str, Any]:
+    bsca_check = next(
+        (check for check in transfer_checks if check["algorithm"] == "bsca"),
+        None,
+    )
+    if bsca_check is None:
+        return {
+            "passed": False,
+            "algorithm": "bsca",
+            "reason": "bsca_transfer_check_missing",
+        }
+
+    tanh_metrics = bsca_check["transfer_metrics"]["tanh_abs"]
+    gap_to_best = tanh_metrics["avg_pdev"] - bsca_check["best_avg_pdev"]
+    margin_passed = (
+        gap_to_best <= BSCA_MARGIN_PDEV
+        and tanh_metrics["avg_rank"] <= BSCA_TRANSFER_MAX_AVG_RANK
+    )
+    passed = bool(bsca_check["passed"] or margin_passed)
+    return {
+        **bsca_check,
+        "passed": passed,
+        "strict_passed": bsca_check["passed"],
+        "margin_passed": margin_passed,
+        "gap_to_best": gap_to_best,
+        "margin": BSCA_MARGIN_PDEV,
+        "max_allowed_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
+        "tanh_avg_pdev": tanh_metrics["avg_pdev"],
+        "tanh_avg_rank": tanh_metrics["avg_rank"],
+    }
+
+
+def _bsca_target_margin_check(target_checks: list[dict[str, Any]]) -> dict[str, Any]:
+    bsca_check = next(
+        (check for check in target_checks if check["algorithm"] == "bsca"),
+        None,
+    )
+    if bsca_check is None:
+        return {
+            "passed": False,
+            "algorithm": "bsca",
+            "reason": "bsca_target_check_missing",
+        }
+    if "target_pdev" not in bsca_check or "best_pdev" not in bsca_check:
+        return {
+            **bsca_check,
+            "passed": False,
+            "strict_passed": False,
+            "margin_passed": False,
+            "margin": BSCA_MARGIN_PDEV,
+        }
+
+    gap_to_best = bsca_check["target_pdev"] - bsca_check["best_pdev"]
+    margin_passed = gap_to_best <= BSCA_MARGIN_PDEV
+    passed = bool(bsca_check["passed"] or margin_passed)
+    return {
+        **bsca_check,
+        "passed": passed,
+        "strict_passed": bsca_check["passed"],
+        "margin_passed": margin_passed,
+        "gap_to_best": gap_to_best,
+        "margin": BSCA_MARGIN_PDEV,
+    }
+
+
+def _dense_ranks(pdevs: dict[str, float]) -> dict[str, int]:
+    ordered_values = sorted(set(pdevs.values()))
+    return {
+        ctf: 1 + ordered_values.index(pdev)
+        for ctf, pdev in pdevs.items()
+    }
+
+
+def _avg(values: list[int | float]) -> float:
+    return sum(float(value) for value in values) / len(values)
+
+
+def _algorithm_count(combos: list[dict[str, Any]], algorithm: str) -> int:
+    return sum(1 for combo in combos if combo["algorithm"] == algorithm)
+
+
+def _matches_target(combo: dict[str, Any], target: dict[str, Any]) -> bool:
+    return all(_same_value(combo.get(key), value) for key, value in target.items())
+
+
+def _same_value(left: Any, right: Any) -> bool:
+    if isinstance(left, (float, int)) and isinstance(right, (float, int)):
+        return math.isclose(float(left), float(right), rel_tol=1e-12, abs_tol=1e-12)
+    return left == right

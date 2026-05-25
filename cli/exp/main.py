@@ -3,8 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...experiment import ExperimentReport, build, register
-from .mkp_base import mkp_base_evaluator
-from .mkp_base2 import mkp_base2_evaluator
+from .mkp_base import mkp_base_evaluator, mkp_bsca_base_margin_2_evaluator
+from .mkp_base2 import mkp_base2_evaluator, mkp_base2_margin_005_evaluator
+from .mkp_calibration import (
+    mkp_calibration_evaluator,
+    mkp_target_combo_bsca_margin_005_evaluator,
+    mkp_target_combo_best_evaluator,
+    mkp_target_combo_core_strict_evaluator,
+    mkp_transfer_bsca_margin_005_evaluator,
+    mkp_transfer_core_strict_evaluator,
+    mkp_transfer_paired_strict_evaluator,
+)
 
 
 # 這種東西應該放在專案設定中
@@ -16,7 +25,16 @@ DEFAULT_OUTPUT_ROOT = Path("output") # 輸出路徑
 
 def main() -> ExperimentReport:
     register("mkp_base", mkp_base_evaluator)
+    register("mkp_bsca_base_margin_2", mkp_bsca_base_margin_2_evaluator)
     register("mkp_base2", mkp_base2_evaluator)
+    register("mkp_base2_margin_005", mkp_base2_margin_005_evaluator)
+    register("mkp_calibration", mkp_calibration_evaluator)
+    register("mkp_transfer_paired_strict", mkp_transfer_paired_strict_evaluator)
+    register("mkp_target_combo_best", mkp_target_combo_best_evaluator)
+    register("mkp_transfer_core_strict", mkp_transfer_core_strict_evaluator)
+    register("mkp_transfer_bsca_margin_005", mkp_transfer_bsca_margin_005_evaluator)
+    register("mkp_target_combo_core_strict", mkp_target_combo_core_strict_evaluator)
+    register("mkp_target_combo_bsca_margin_005", mkp_target_combo_bsca_margin_005_evaluator)
 
     # 1. 創建實驗模組
     experiment = build(
