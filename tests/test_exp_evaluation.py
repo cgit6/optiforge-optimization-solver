@@ -169,7 +169,7 @@ def test_mkp_base2_passes_when_brlsmasca_is_best_or_tied() -> None:
             evaluation=EvaluationSpec(name="mkp_base2"),
             variants=(
                 _variant_summary(solver_id="bsma_numba", param_set_index=0, params={}, pdev=1.1),
-                _variant_summary(solver_id="brlsmasca_numba", param_set_index=0, params={}, pdev=1.1),
+                _variant_summary(solver_id="brlsmasca_rl_numba", param_set_index=0, params={}, pdev=1.1),
             ),
         )
     )
@@ -184,11 +184,11 @@ def test_mkp_base2_fails_when_brlsmasca_is_not_best() -> None:
             evaluation=EvaluationSpec(name="mkp_base2"),
             variants=(
                 _variant_summary(solver_id="bsma_numba", param_set_index=0, params={}, pdev=1.0),
-                _variant_summary(solver_id="brlsmasca_numba", param_set_index=0, params={}, pdev=1.1),
+                _variant_summary(solver_id="brlsmasca_rl_numba", param_set_index=0, params={}, pdev=1.1),
             ),
         )
     )
 
     assert decision.passed is False
     assert decision.verdict == FAIL
-    assert decision.details["worse_targets"][0]["target"] == "brlsmasca_numba/param_0"
+    assert decision.details["worse_targets"][0]["target"] == "brlsmasca_rl_numba/param_0"

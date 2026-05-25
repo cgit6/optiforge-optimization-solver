@@ -5,7 +5,7 @@ from typing import Any
 
 from ...experiment import FAIL, PASS, RoundEvalDecision, RoundEvalInput, VariantSummary
 
-TARGET_SOLVER_ID = "brlsmasca_numba"
+TARGET_SOLVER_ID = "brlsmasca_rl_numba"
 
 
 def mkp_base2_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:

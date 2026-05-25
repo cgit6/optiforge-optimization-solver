@@ -28,7 +28,8 @@ pytest_plugin.py
 ./simulator/core.py
 ./solver/BSCA.py
 ./solver/BSCASMA.py
-./solver/BSCASMA_numba_v2.py
+./solver/BSCASMA_rl_numba.py
+./solver/BSCASMA_test_numba.py
 ./solver/BSCA_numba_v2.py
 ./solver/BSMA.py
 ./solver/BSMA_numba_v2.py
@@ -79,7 +80,8 @@ simulator/__init__.py
 simulator/core.py
 solver/BSCA.py
 solver/BSCASMA.py
-solver/BSCASMA_numba_v2.py
+solver/BSCASMA_rl_numba.py
+solver/BSCASMA_test_numba.py
 solver/BSCA_numba_v2.py
 solver/BSMA.py
 solver/BSMA_numba_v2.py

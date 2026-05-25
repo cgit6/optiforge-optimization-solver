@@ -5,6 +5,8 @@ import pytest
 
 from mkp.problem import ProblemModel
 from mkp.solver.BSCASMA import BRLSMASCATestSolver
+from mkp.solver.BSCASMA_rl_numba import BRLSMASCARLNumbaSolver
+from mkp.solver.BSCASMA_test_numba import BRLSMASCATestNumbaSolver
 from mkp.solver.registry import SolverRegistry
 
 
@@ -50,6 +52,21 @@ def _build_config(max_iterations: int = 60) -> dict:
     }
 
 
+def _build_numba_config(
+    *,
+    solver_id: str,
+    solver_class: str,
+    max_iterations: int = 20,
+    params: dict | None = None,
+) -> dict:
+    return {
+        "solver_id": solver_id,
+        "solver_class": solver_class,
+        "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
+        "params": params or {},
+    }
+
+
 def test_bscasma_solver_can_be_created_by_registry():
     registry = SolverRegistry()
     registry.register(
@@ -58,6 +75,15 @@ def test_bscasma_solver_can_be_created_by_registry():
     )
     solver = registry.create("brlsmasca")
     assert isinstance(solver, BRLSMASCATestSolver)
+
+
+def test_bscasma_numba_solvers_can_be_created_by_registry():
+    registry = SolverRegistry()
+    registry.register("brlsmasca_rl_numba", lambda: BRLSMASCARLNumbaSolver())
+    registry.register("brlsmasca_test_numba", lambda: BRLSMASCATestNumbaSolver())
+
+    assert isinstance(registry.create("brlsmasca_rl_numba"), BRLSMASCARLNumbaSolver)
+    assert isinstance(registry.create("brlsmasca_test_numba"), BRLSMASCATestNumbaSolver)
 
 
 def test_bscasma_solver_returns_valid_solve_result():
@@ -160,3 +186,86 @@ def test_bscasma_rejects_invalid_params():
             {**base, "params": {"prob_arr": [0.5, 0.5, 0.5, -0.5]}},
             rng,
         )
+
+
+def test_bscasma_rl_numba_returns_valid_solve_result_and_metadata():
+    solver = BRLSMASCARLNumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(
+        solver_id="brlsmasca_rl_numba",
+        solver_class="BRLSMASCARLNumbaSolver",
+        max_iterations=10,
+        params={"pop_size": 20, "alpha": 0.1, "gamma": 0.9},
+    )
+
+    result = solver.solve(problem, config, np.random.default_rng(123))
+
+    assert result.problem_id == "weish01"
+    assert result.solver_id == "brlsmasca_rl_numba"
+    assert result.stop_reason in {"max_iterations_reached", "best_known_reached"}
+    assert result.best_solution.shape == (problem.items,)
+    assert result.metadata["numba"] is True
+    assert result.metadata["rl"] is True
+    assert result.metadata["q_table_nonzero"] > 0
+    assert sum(result.metadata["action_counts"]) > 0
+
+
+def test_bscasma_rl_numba_reproducibility_same_seed_same_result():
+    solver = BRLSMASCARLNumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(
+        solver_id="brlsmasca_rl_numba",
+        solver_class="BRLSMASCARLNumbaSolver",
+        max_iterations=10,
+        params={"pop_size": 20},
+    )
+
+    result_a = solver.solve(problem, config, np.random.default_rng(999))
+    result_b = solver.solve(problem, config, np.random.default_rng(999))
+
+    assert result_a.run_seed == result_b.run_seed
+    assert result_a.best_objective == result_b.best_objective
+    assert np.array_equal(result_a.best_solution, result_b.best_solution)
+
+
+def test_bscasma_test_numba_uses_new_solver_id():
+    solver = BRLSMASCATestNumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(
+        solver_id="brlsmasca_test_numba",
+        solver_class="BRLSMASCATestNumbaSolver",
+        max_iterations=5,
+        params={"pop_size": 20},
+    )
+
+    result = solver.solve(problem, config, np.random.default_rng(123))
+
+    assert result.solver_id == "brlsmasca_test_numba"
+    assert result.metadata["numba"] is True
+    assert result.metadata["rl"] is False
+
+
+def test_bscasma_rl_numba_rejects_invalid_params():
+    solver = BRLSMASCARLNumbaSolver()
+    problem = _build_problem()
+    rng = np.random.default_rng(1)
+    base = {
+        "solver_id": "brlsmasca_rl_numba",
+        "solver_class": "BRLSMASCARLNumbaSolver",
+        "stop_condition": {"type": "max_iterations", "max_iterations": 5},
+    }
+
+    with pytest.raises(ValueError, match="params.pop_size"):
+        solver.solve(problem, {**base, "params": {"pop_size": 2}}, rng)
+
+    with pytest.raises(ValueError, match="params.a"):
+        solver.solve(problem, {**base, "params": {"a": 0}}, rng)
+
+    with pytest.raises(ValueError, match="params.z"):
+        solver.solve(problem, {**base, "params": {"z": 0.0}}, rng)
+
+    with pytest.raises(ValueError, match="params.alpha"):
+        solver.solve(problem, {**base, "params": {"alpha": 0.0}}, rng)
+
+    with pytest.raises(ValueError, match="params.gamma"):
+        solver.solve(problem, {**base, "params": {"gamma": 1.5}}, rng)

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from ..solver.BSCA import BSCASolver
-from ..solver.BSCA_numba_v2 import BSCANumbaSolver
+from ..solver.BSCA_numba import BSCANumbaSolver
 from ..solver.BSCASMA import BRLSMASCATestSolver
-from ..solver.BSCASMA_numba_v2 import BRLSMASCATestNumbaSolver
+from ..solver.BSCASMA_rl_numba import BRLSMASCARLNumbaSolver
+from ..solver.BSCASMA_test_numba import BRLSMASCATestNumbaSolver
 from ..solver.BSMA import BSMASolver
-from ..solver.BSMA_numba_v2 import BSMANumbaSolver
+from ..solver.BSMA_numba import BSMANumbaSolver
 from ..solver.registry import SolverBuilder, StubMaxIterationsSolver
 
 
@@ -20,5 +21,6 @@ def solverBuilders() -> dict[str, SolverBuilder]:
         "bsca": lambda: BSCASolver(),
         "bsca_numba": lambda: BSCANumbaSolver(),
         "brlsmasca": lambda: BRLSMASCATestSolver(),
-        "brlsmasca_numba": lambda: BRLSMASCATestNumbaSolver(),
+        "brlsmasca_rl_numba": lambda: BRLSMASCARLNumbaSolver(),
+        "brlsmasca_test_numba": lambda: BRLSMASCATestNumbaSolver(),
     }

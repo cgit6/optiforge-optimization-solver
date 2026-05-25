@@ -13,6 +13,7 @@ from mkp.experiment import (
     build,
     load_config,
 )
+from mkp.tools.solver_config_loader import SolverConfigLoader
 
 
 def _write_problem_yaml(path: Path, *, problem_id: str = "p1", dataset: str = "DATA") -> None:
@@ -114,31 +115,75 @@ def test_build_sample_exp_cfg_success() -> None:
     experiment = build(Path("cli/exp/exp_cfg.yaml"))
 
     assert isinstance(experiment, Experiment)
-    assert experiment.cfg.experiment_name == "mkp_test_now"
+    assert experiment.cfg.experiment_name == "mkp_final_compare"
     assert experiment.cfg.collects == 20
-    assert experiment.cfg.repeat == 1000000
+    assert experiment.cfg.repeat == 300000000000
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
-    assert experiment.cfg.solver_ids == ("bsma_numba", "bsca_numba", "brlsmasca_numba")
-    assert experiment.cfg.solver_variants == (
-        ("bsma_numba", 0),
-        ("bsca_numba", 0),
-        ("brlsmasca_numba", 0),
+    assert experiment.cfg.solver_ids == (
+        "bsma_numba",
+        "bsca_numba",
+        "brlsmasca_rl_numba",
+        "brlsmasca_test_numba",
     )
-    assert len(experiment.cfg.dataset_settings) == 1
+    assert experiment.cfg.solver_variants == (
+        ("bsma_numba", 1),
+        ("bsca_numba", 0),
+        ("brlsmasca_rl_numba", 5),
+        ("brlsmasca_test_numba", 2),
+    )
+    assert len(experiment.cfg.dataset_settings) == 12
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 87
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "weish"
-    assert first.dataset == "WEISH"
+    assert first.experiment_id == "set1_sent"
+    assert first.dataset == "SENT"
     assert first.problem_type == "mkp"
-    assert len(first.problem_settings) == 11
-    assert first.problem_ids[:3] == ("weish01", "weish02", "weish03")
+    assert len(first.problem_settings) == 2
+    assert first.problem_ids == ("sent01", "sent02")
     assert first.problem_settings[0].evaluation_names == ("mkp_base", "mkp_base2")
     assert first.problem_settings[0].evaluations[0].base_line == (
-        EvaluationBaseline(name="HLMS", pdev=0.18),
-        EvaluationBaseline(name="BIWOA", pdev=0.0),
-        EvaluationBaseline(name="BMMVO", pdev=0.0),
-        EvaluationBaseline(name="BSCA", pdev=0.09),
-        EvaluationBaseline(name="IBSMA_U1", pdev=0.0),
+        EvaluationBaseline(name="HLMS", pdev=0.129),
     )
+    weish = experiment.cfg.dataset_settings[4]
+    assert weish.experiment_id == "set2_weish"
+    assert weish.dataset == "WEISH"
+    assert len(weish.problem_settings) == 30
+
+    loader = SolverConfigLoader()
+    bsma_cfg = loader.load("bsma_numba", param_set_index=1)
+    assert bsma_cfg["params"] == {
+        "pop_size": 20,
+        "z": 0.08,
+        "ctf": "tanh_abs",
+    }
+    assert bsma_cfg["stop_condition"]["max_iterations"] == 5000
+
+    bsca_cfg = loader.load("bsca_numba", param_set_index=0)
+    assert bsca_cfg["params"] == {
+        "pop_size": 20,
+        "a": 1.5,
+        "ctf": "tanh_abs",
+    }
+    assert bsca_cfg["stop_condition"]["max_iterations"] == 5000
+
+    rl_cfg = loader.load("brlsmasca_rl_numba", param_set_index=5)
+    assert rl_cfg["params"] == {
+        "pop_size": 20,
+        "z": 0.08,
+        "a": 2.5,
+        "alpha": 0.1,
+        "gamma": 0.9,
+        "ctf": "tanh_abs",
+    }
+    assert rl_cfg["stop_condition"]["max_iterations"] == 5000
+
+    test_cfg = loader.load("brlsmasca_test_numba", param_set_index=2)
+    assert test_cfg["params"] == {
+        "pop_size": 20,
+        "a": 2.5,
+        "prob_arr": [0.04, 0.46, 0.25, 0.25],
+        "ctf": "tanh_abs",
+    }
+    assert test_cfg["stop_condition"]["max_iterations"] == 5000
 
 
 def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:

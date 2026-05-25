@@ -1,0 +1,175 @@
+solver_id: brlsmasca_rl_numba
+solver_class: BRLSMASCARLNumbaSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 5000
+  max_seconds: null
+params:
+  - pop_size: 20
+    z: 0.01
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.01
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.01
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.08
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.08
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.15
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.15
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+  - pop_size: 20
+    z: 0.15
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+
+  - pop_size: 20
+    z: 0.01
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.01
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.01
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.08
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.08
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.15
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.15
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+  - pop_size: 20
+    z: 0.15
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+
+  - pop_size: 20
+    z: 0.01
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.01
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.01
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.08
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.08
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.15
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.15
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+  - pop_size: 20
+    z: 0.15
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16

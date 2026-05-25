@@ -1,5 +1,5 @@
-solver_id: bsca_numba
-solver_class: BSCANumbaSolver
+solver_id: brlsmasca_test_numba
+solver_class: BRLSMASCATestNumbaSolver
 capabilities:
   problem_types: [mkp]
   encodings: [binary]
@@ -11,30 +11,39 @@ stop_condition:
 params:
   - pop_size: 20
     a: 1.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: tanh_abs
   - pop_size: 20
     a: 2.0
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: tanh_abs
   - pop_size: 20
     a: 2.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: tanh_abs
 
   - pop_size: 20
     a: 1.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: sigmoid_s0
   - pop_size: 20
     a: 2.0
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: sigmoid_s0
   - pop_size: 20
     a: 2.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: sigmoid_s0
 
   - pop_size: 20
     a: 1.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: abs_pow_16
   - pop_size: 20
     a: 2.0
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: abs_pow_16
   - pop_size: 20
     a: 2.5
+    prob_arr: [0.04, 0.46, 0.25, 0.25]
     ctf: abs_pow_16

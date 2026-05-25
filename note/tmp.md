@@ -148,12 +148,12 @@ ISCA / bsca:
 a = 1.5
 transfer = tanh_abs
 
-HSMSCA / bscasma:
+HSMSCA / brlsmasca_rl_numba:
 z = 0.08
 a = 2.5
 transfer = tanh_abs
 
-HSMASCA50:
+HSMASCA50(brlsmasca_test_numba):
 z = 0.08
 a = 2.5
 transfer = tanh_abs
@@ -172,7 +172,7 @@ HSMSCA / bscasma 最好
 ISMA / bsma 第二
 HSMASCA50 第三
 ISCA / bsca 第四
-其他文獻算法 劣於以上四種
+其他文獻算法 皆差於以上四種
 """
 對每個 set:
 
