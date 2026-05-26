@@ -13,6 +13,7 @@ SMA local 的兩個同伴以 direct randint 抽樣，保留「排除自己且兩
 from __future__ import annotations
 
 import copy as copy
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -27,6 +28,19 @@ from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
 
+
+def _cp_list_cache_key(
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+) -> tuple[tuple[tuple[int, ...], str, bytes], ...]:
+    return (
+        (values.shape, values.dtype.str, values.tobytes()),
+        (weights.shape, weights.dtype.str, weights.tobytes()),
+        (capacities.shape, capacities.dtype.str, capacities.tobytes()),
+    )
+
+
 # 檢查資料格式
 def _expect_mkp_problem_tensors(
     values: np.ndarray,
@@ -40,6 +54,20 @@ def _expect_mkp_problem_tensors(
         if not a.flags.c_contiguous:
             raise ValueError(f"{name}: must be C-contiguous")
     return values, weights, capacities
+
+
+@njit(cache=True)
+def _ctf_flip_probability_fast(ctf_id: int, x: float) -> float:
+    if ctf_id == 0:
+        return abs(math.tanh(x))
+    if ctf_id == 1:
+        if x >= 0.0:
+            return 1.0 / (1.0 + math.exp(-x))
+        et = math.exp(x)
+        return et / (1.0 + et)
+    if ctf_id == 9:
+        return abs(x) ** 1.6
+    return ctf_flip_probability(ctf_id, x)
 
 
 # 修復操作
@@ -59,11 +87,14 @@ def _repair_row_inplace(
     """修復操作"""
     for d in range(dim):
         resource[d] = 0.0
+    fi = 0.0
     for jj in range(items):
         x = pop_sol[row, jj]
         if x != 0.0:
             for d in range(dim):
                 resource[d] += weights[jj, d] * x
+        if x >= 0.5:
+            fi += float(values[jj])
 
     for pos in range(items - 1, -1, -1):
         jj = int(cp_list[pos])
@@ -76,6 +107,7 @@ def _repair_row_inplace(
             break
         if pop_sol[row, jj] == 1.0:
             pop_sol[row, jj] = 0.0
+            fi -= float(values[jj])
             for d in range(dim):
                 resource[d] -= weights[jj, d]
 
@@ -89,15 +121,12 @@ def _repair_row_inplace(
                     break
             if ok:
                 pop_sol[row, jj] = 1.0
+                fi += float(values[jj])
                 for d in range(dim):
                     resource[d] += weights[jj, d]
             else:
                 break
     # 與 ``BSMACore.repair`` 一致：最終解為 0/1，適配值應為整數和（避免 float 累加誤差影響後續比較與排序）
-    fi = 0.0
-    for j in range(items):
-        if pop_sol[row, j] >= 0.5:
-            fi += float(values[j])
     pop_fit[row] = fi
 
 
@@ -174,8 +203,6 @@ def _bsma_main_loop_numba(
     rng_seed: int,
     W: np.ndarray,
     acc_res: np.ndarray,
-    vb: np.ndarray,
-    vc: np.ndarray,
     tmp_sol: np.ndarray,
     tmp_fit: np.ndarray,
     idx_work: np.ndarray,
@@ -201,13 +228,18 @@ def _bsma_main_loop_numba(
 
         for i in range(pop_size):
             ratio = (best_fit - pop_fit[i]) / s_val + 1.0
+            logr = math.log10(ratio)
             if i < pop_size / 2:
-                W[i, :] = 1.0 + np.random.random(items) * np.log10(ratio)
+                for j in range(items):
+                    W[i, j] = 1.0 + np.random.random() * logr
             else:
-                W[i, :] = 1.0 - np.random.random(items) * np.log10(ratio)
+                for j in range(items):
+                    W[i, j] = 1.0 - np.random.random() * logr
 
         a = np.arctanh(-1.0 * ((iter_idx + 1) / max_iter) + 1.0)
         b = 1.0 - (iter_idx + 1) / max_iter
+        a_span = 2.0 * a
+        b_span = 2.0 * b
 
         for i in range(pop_size):
             if np.random.random() < z:
@@ -217,7 +249,7 @@ def _bsma_main_loop_numba(
                     acc_res[d] = 0.0
                 for pos in range(items):
                     jj = int(cp_list[pos])
-                    if np.random.uniform(0.0, 1.0) < 0.5:
+                    if np.random.random() < 0.5:
                         for d in range(dim):
                             acc_res[d] += weights[jj, d]
                         ok = True
@@ -231,19 +263,19 @@ def _bsma_main_loop_numba(
                     pop_sol, i, pop_fit, values, weights, capacities, cp_list, acc_res, items, dim
                 )
             else:
-                p = np.tanh(abs(pop_fit[i] - gbest_fit))
-                vb[:] = np.random.uniform(-a, a, items)
-                vc[:] = np.random.uniform(-b, b, items)
+                p = math.tanh(abs(pop_fit[i] - gbest_fit))
                 for j in range(items):
                     r = np.random.random()
+                    vb_j = -a + a_span * np.random.random()
+                    vc_j = -b + b_span * np.random.random()
                     a_idx, b_idx = _select_two_distinct_indices_excluding(pop_size, i)
                     if r < p:
-                        pop_sol[i, j] = gbest_sol[j] + vb[j] * (
+                        pop_sol[i, j] = gbest_sol[j] + vb_j * (
                             W[i, j] * pop_sol[a_idx, j] - pop_sol[b_idx, j]
                         )
                     else:
-                        pop_sol[i, j] = vc[j] * pop_sol[i, j]
-                    if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[i, j]):
+                        pop_sol[i, j] = vc_j * pop_sol[i, j]
+                    if np.random.random() < _ctf_flip_probability_fast(ctf_id, pop_sol[i, j]):
                         pop_sol[i, j] = 1.0
                     else:
                         pop_sol[i, j] = 0.0
@@ -267,6 +299,8 @@ def _bsma_main_loop_numba(
 class BSMANumbaCore:
     """與 ``BSMACore`` 相同前置；主迭代交給 Numba。"""
 
+    _cp_list_cache: dict[Any, np.ndarray] = {}
+
     def __init__(
         self,
         items: int,
@@ -288,6 +322,7 @@ class BSMANumbaCore:
         self.values, self.weights, self.capacities = _expect_mkp_problem_tensors(values, weights, capacities)
         self.seed = seed
         self.linprog_runtime = 0.0
+        self.cp_list_cache_hit = False
 
         if max_iter <= 0:
             raise ValueError("max_iter must be > 0")
@@ -311,6 +346,14 @@ class BSMANumbaCore:
         self._loop_trace: list[dict[str, Any]] | None = None
 
     def pseudo_utility(self) -> np.ndarray:
+        cache_key = _cp_list_cache_key(self.values, self.weights, self.capacities)
+        cached = type(self)._cp_list_cache.get(cache_key)
+        if cached is not None:
+            self.cp_list_cache_hit = True
+            self.linprog_runtime = 0.0
+            return cached.copy()
+
+        self.cp_list_cache_hit = False
         constraints = np.concatenate((self.capacities, np.ones(self.items)))
         i_weight = -np.concatenate((self.weights, np.eye(self.items)), axis=1)
         i_profit = self.values * -1
@@ -321,14 +364,16 @@ class BSMANumbaCore:
         denom = np.matmul(shadow_price.T, self.weights.T)
         with np.errstate(divide="ignore", invalid="ignore"):
             pseudo_utilities = (-i_profit).T / denom
-        return np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
+        cp_list = np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
+        type(self)._cp_list_cache[cache_key] = cp_list.copy()
+        return cp_list
 
     def initial_pop(self) -> np.ndarray:
         population = np.zeros([self.pop_size, self.items])
         for i in range(self.pop_size):
             accumulated_resources = np.zeros([self.dim])
             for j in self.cp_list:
-                if np.random.uniform(0.0, 1.0) < 0.5:
+                if np.random.random() < 0.5:
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
                         population[i, j] = 1
@@ -360,8 +405,6 @@ class BSMANumbaCore:
         ps, it, dm = self.pop_size, self.items, self.dim
         W = np.empty((ps, it), dtype=np.float64)
         acc_res = np.zeros(dm, dtype=np.float64)
-        vb = np.empty(it, dtype=np.float64)
-        vc = np.empty(it, dtype=np.float64)
         tmp_sol = np.empty((ps, it), dtype=np.float64)
         tmp_fit = np.empty(ps, dtype=np.float64)
         idx_work = np.empty(ps, dtype=np.int64)
@@ -384,8 +427,6 @@ class BSMANumbaCore:
             rng_seed,
             W,
             acc_res,
-            vb,
-            vc,
             tmp_sol,
             tmp_fit,
             idx_work,
@@ -466,6 +507,7 @@ class BSMANumbaSolver:
             error=None,
             metadata={
                 "linprog_runtime": float(core.linprog_runtime),
+                "cp_list_cache_hit": bool(core.cp_list_cache_hit),
                 "numba": True,
             },
         )

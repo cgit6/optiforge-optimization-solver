@@ -138,27 +138,25 @@ def test_build_sample_exp_cfg_success() -> None:
         ("brlsmasca_rl_numba", 25),
         ("brlsmasca_rl_numba", 26),
     )
-    assert len(experiment.cfg.dataset_settings) == 6
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 8
+    assert len(experiment.cfg.dataset_settings) == 3
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 4
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "param_pb"
-    assert first.dataset == "PB"
+    assert first.experiment_id == "param_cb3"
+    assert first.dataset == "OR5x500"
     assert first.problem_type == "mkp"
     assert len(first.problem_settings) == 1
-    assert first.problem_ids == ("pb4",)
+    assert first.problem_ids == ("OR5x500-0.25_3",)
     assert first.problem_settings[0].evaluation_names == (
         "mkp_transfer_paired_strict",
-        "mkp_target_combo_best",
+        "mkp_target_combo_bsma_strict",
+        "mkp_target_combo_bsca_margin_005",
+        "mkp_target_combo_brlsmasca_margin_004",
     )
     assert tuple(
         problem.problem_id
         for setting in experiment.cfg.dataset_settings
         for problem in setting.problem_settings
     ) == (
-        "pb4",
-        "weing5",
-        "weish16",
-        "weish26",
         "OR5x500-0.25_3",
         "OR10x500-0.25_2",
         "mk_gk04",
@@ -169,16 +167,16 @@ def test_build_sample_exp_cfg_success() -> None:
         for setting in experiment.cfg.dataset_settings
         for problem in setting.problem_settings
     }
-    assert evaluation_by_problem["weish16"] == (
-        "mkp_transfer_core_strict",
-        "mkp_transfer_bsca_margin_005",
-        "mkp_target_combo_core_strict",
+    assert evaluation_by_problem["OR5x500-0.25_3"] == (
+        "mkp_transfer_paired_strict",
+        "mkp_target_combo_bsma_strict",
         "mkp_target_combo_bsca_margin_005",
+        "mkp_target_combo_brlsmasca_margin_004",
     )
     assert all(
         evaluation_names == ("mkp_transfer_paired_strict", "mkp_target_combo_best")
         for problem_id, evaluation_names in evaluation_by_problem.items()
-        if problem_id != "weish16"
+        if problem_id != "OR5x500-0.25_3"
     )
 
     loader = SolverConfigLoader()

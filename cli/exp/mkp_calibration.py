@@ -9,8 +9,10 @@ from ...experiment import FAIL, PASS, RoundEvalDecision, RoundEvalInput, Variant
 EXPECTED_COMBO_COUNT = 45
 PDEV_TOLERANCE = 0.0
 BSCA_MARGIN_PDEV = 0.05
+BRLSMASCA_MARGIN_PDEV = 0.04
 BSCA_TRANSFER_MAX_AVG_RANK = 2.0
 EXPECTED_CTFS = ("tanh_abs", "sigmoid_s0", "abs_pow_16")
+EXPECTED_TRANSFER_CTF = "abs_pow_16"
 
 ALGORITHM_BY_SOLVER_ID = {
     "bsma_numba": "bsma",
@@ -66,9 +68,10 @@ def mkp_transfer_paired_strict_evaluator(input_data: RoundEvalInput) -> RoundEva
         return RoundEvalDecision(
             passed=False,
             verdict=FAIL,
-            message="tanh_abs is not the strict paired-average best transfer function.",
+            message=f"{EXPECTED_TRANSFER_CTF} is not the strict paired-average best transfer function.",
             details={
                 "pdev_tolerance": PDEV_TOLERANCE,
+                "expected_transfer_ctf": EXPECTED_TRANSFER_CTF,
                 "integrity_checks": integrity_checks,
                 "pair_checks": pair_checks,
                 "transfer_checks": transfer_checks,
@@ -79,9 +82,10 @@ def mkp_transfer_paired_strict_evaluator(input_data: RoundEvalInput) -> RoundEva
     return RoundEvalDecision(
         passed=True,
         verdict=PASS,
-        message="tanh_abs is the strict paired-average best transfer function.",
+        message=f"{EXPECTED_TRANSFER_CTF} is the strict paired-average best transfer function.",
         details={
             "pdev_tolerance": PDEV_TOLERANCE,
+            "expected_transfer_ctf": EXPECTED_TRANSFER_CTF,
             "integrity_checks": integrity_checks,
             "pair_checks": pair_checks,
             "transfer_checks": transfer_checks,
@@ -287,6 +291,49 @@ def mkp_target_combo_core_strict_evaluator(input_data: RoundEvalInput) -> RoundE
     )
 
 
+def mkp_target_combo_bsma_strict_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "algorithm": "bsma",
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_check = _single_target_combo_check(combos, "bsma")
+    if not target_check["passed"]:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="BSMA target combo is not strict best.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "algorithm": "bsma",
+                "integrity_checks": integrity_checks,
+                "target_check": target_check,
+                "failures": [target_check],
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="BSMA target combo is strict best.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "algorithm": "bsma",
+            "integrity_checks": integrity_checks,
+            "target_check": target_check,
+        },
+    )
+
+
 def mkp_target_combo_bsca_margin_005_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
     combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
     if integrity_failures:
@@ -302,8 +349,8 @@ def mkp_target_combo_bsca_margin_005_evaluator(input_data: RoundEvalInput) -> Ro
             },
         )
 
-    target_checks = _check_target_combos(combos)
-    bsca_margin_check = _bsca_target_margin_check(target_checks)
+    target_check = _single_target_combo_check(combos, "bsca")
+    bsca_margin_check = _target_margin_check(target_check, BSCA_MARGIN_PDEV)
     if not bsca_margin_check["passed"]:
         return RoundEvalDecision(
             passed=False,
@@ -313,7 +360,7 @@ def mkp_target_combo_bsca_margin_005_evaluator(input_data: RoundEvalInput) -> Ro
                 "pdev_tolerance": PDEV_TOLERANCE,
                 "bsca_margin_pdev": BSCA_MARGIN_PDEV,
                 "integrity_checks": integrity_checks,
-                "target_checks": target_checks,
+                "target_check": target_check,
                 "bsca_margin_check": bsca_margin_check,
                 "failures": [bsca_margin_check],
             },
@@ -327,76 +374,13 @@ def mkp_target_combo_bsca_margin_005_evaluator(input_data: RoundEvalInput) -> Ro
             "pdev_tolerance": PDEV_TOLERANCE,
             "bsca_margin_pdev": BSCA_MARGIN_PDEV,
             "integrity_checks": integrity_checks,
-            "target_checks": target_checks,
+            "target_check": target_check,
             "bsca_margin_check": bsca_margin_check,
         },
     )
 
 
-def mkp_transfer_core_strict_bsca_margin_005_evaluator(
-    input_data: RoundEvalInput,
-) -> RoundEvalDecision:
-    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
-    pair_checks = _check_pair_completeness(combos)
-    pair_failures = [check for check in pair_checks if not check["passed"]]
-    if integrity_failures or pair_failures:
-        return RoundEvalDecision(
-            passed=False,
-            verdict=FAIL,
-            message="Calibration combo set is incomplete.",
-            details={
-                "pdev_tolerance": PDEV_TOLERANCE,
-                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
-                "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
-                "integrity_checks": integrity_checks,
-                "pair_checks": pair_checks,
-                "failures": integrity_failures + pair_failures,
-            },
-        )
-
-    transfer_checks = _check_transfer_paired(combos)
-    bsca_margin_check = _bsca_transfer_margin_check(transfer_checks)
-    failures = [
-        check
-        for check in transfer_checks
-        if check["algorithm"] != "bsca" and not check["passed"]
-    ]
-    if not bsca_margin_check["passed"]:
-        failures.append(bsca_margin_check)
-    if failures:
-        return RoundEvalDecision(
-            passed=False,
-            verdict=FAIL,
-            message="Core transfer checks failed or BSCA exceeded allowed margin.",
-            details={
-                "pdev_tolerance": PDEV_TOLERANCE,
-                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
-                "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
-                "integrity_checks": integrity_checks,
-                "pair_checks": pair_checks,
-                "transfer_checks": transfer_checks,
-                "bsca_margin_check": bsca_margin_check,
-                "failures": failures,
-            },
-        )
-
-    return RoundEvalDecision(
-        passed=True,
-        verdict=PASS,
-        message="Core transfer checks passed and BSCA is strict best or within margin.",
-        details={
-            "pdev_tolerance": PDEV_TOLERANCE,
-            "bsca_margin_pdev": BSCA_MARGIN_PDEV,
-            "bsca_transfer_max_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
-            "integrity_checks": integrity_checks,
-            "pair_checks": pair_checks,
-            "transfer_checks": transfer_checks,
-            "bsca_margin_check": bsca_margin_check,
-        },
-    )
-
-
-def mkp_target_combo_core_strict_bsca_margin_005_evaluator(
+def mkp_target_combo_brlsmasca_margin_004_evaluator(
     input_data: RoundEvalInput,
 ) -> RoundEvalDecision:
     combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
@@ -407,46 +391,39 @@ def mkp_target_combo_core_strict_bsca_margin_005_evaluator(
             message="Calibration combo set is incomplete.",
             details={
                 "pdev_tolerance": PDEV_TOLERANCE,
-                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "brlsmasca_margin_pdev": BRLSMASCA_MARGIN_PDEV,
                 "integrity_checks": integrity_checks,
                 "failures": integrity_failures,
             },
         )
 
-    target_checks = _check_target_combos(combos)
-    bsca_margin_check = _bsca_target_margin_check(target_checks)
-    failures = [
-        check
-        for check in target_checks
-        if check["algorithm"] != "bsca" and not check["passed"]
-    ]
-    if not bsca_margin_check["passed"]:
-        failures.append(bsca_margin_check)
-    if failures:
+    target_check = _single_target_combo_check(combos, "bscasma")
+    brlsmasca_margin_check = _target_margin_check(target_check, BRLSMASCA_MARGIN_PDEV)
+    if not brlsmasca_margin_check["passed"]:
         return RoundEvalDecision(
             passed=False,
             verdict=FAIL,
-            message="Core target combos failed or BSCA exceeded allowed margin.",
+            message="BRLSMASCA target combo check exceeded allowed margin.",
             details={
                 "pdev_tolerance": PDEV_TOLERANCE,
-                "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+                "brlsmasca_margin_pdev": BRLSMASCA_MARGIN_PDEV,
                 "integrity_checks": integrity_checks,
-                "target_checks": target_checks,
-                "bsca_margin_check": bsca_margin_check,
-                "failures": failures,
+                "target_check": target_check,
+                "brlsmasca_margin_check": brlsmasca_margin_check,
+                "failures": [brlsmasca_margin_check],
             },
         )
 
     return RoundEvalDecision(
         passed=True,
         verdict=PASS,
-        message="Core target combos passed and BSCA is strict best or within margin.",
+        message="BRLSMASCA target combo check is strict best or within margin.",
         details={
             "pdev_tolerance": PDEV_TOLERANCE,
-            "bsca_margin_pdev": BSCA_MARGIN_PDEV,
+            "brlsmasca_margin_pdev": BRLSMASCA_MARGIN_PDEV,
             "integrity_checks": integrity_checks,
-            "target_checks": target_checks,
-            "bsca_margin_check": bsca_margin_check,
+            "target_check": target_check,
+            "brlsmasca_margin_check": brlsmasca_margin_check,
         },
     )
 
@@ -625,15 +602,15 @@ def _check_transfer_paired(combos: list[dict[str, Any]]) -> list[dict[str, Any]]
         }
         best_avg_pdev = min(metric["avg_pdev"] for metric in transfer_metrics.values())
         best_avg_rank = min(metric["avg_rank"] for metric in transfer_metrics.values())
-        tanh_metrics = transfer_metrics["tanh_abs"]
+        expected_metrics = transfer_metrics[EXPECTED_TRANSFER_CTF]
         checks.append(
             {
                 "passed": (
-                    tanh_metrics["avg_pdev"] <= best_avg_pdev
-                    and tanh_metrics["avg_rank"] <= best_avg_rank
+                    expected_metrics["avg_pdev"] <= best_avg_pdev
+                    and expected_metrics["avg_rank"] <= best_avg_rank
                 ),
                 "algorithm": algorithm,
-                "expected_ctf": "tanh_abs",
+                "expected_ctf": EXPECTED_TRANSFER_CTF,
                 "best_avg_pdev": best_avg_pdev,
                 "best_avg_rank": best_avg_rank,
                 "transfer_metrics": transfer_metrics,
@@ -644,35 +621,44 @@ def _check_transfer_paired(combos: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 def _check_target_combos(combos: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for algorithm, target in TARGET_COMBOS.items():
-        algorithm_combos = [combo for combo in combos if combo["algorithm"] == algorithm]
-        target_combos = [combo for combo in algorithm_combos if _matches_target(combo, target)]
-        if len(target_combos) != 1 or not algorithm_combos:
-            results.append(
-                {
-                    "passed": False,
-                    "algorithm": algorithm,
-                    "reason": "target_combo_missing_or_ambiguous",
-                    "target": target,
-                    "matches": target_combos,
-                }
-            )
-            continue
+    return [
+        _single_target_combo_check(combos, algorithm)
+        for algorithm in TARGET_COMBOS
+    ]
 
-        target_combo = target_combos[0]
-        best_pdev = min(combo["pdev"] for combo in algorithm_combos)
-        results.append(
-            {
-                "passed": target_combo["pdev"] <= best_pdev,
-                "algorithm": algorithm,
-                "target": target,
-                "target_variant": target_combo["variant"],
-                "target_pdev": target_combo["pdev"],
-                "best_pdev": best_pdev,
-            }
-        )
-    return results
+
+def _single_target_combo_check(
+    combos: list[dict[str, Any]],
+    algorithm: str,
+) -> dict[str, Any]:
+    target = TARGET_COMBOS[algorithm]
+    algorithm_combos = [combo for combo in combos if combo["algorithm"] == algorithm]
+    target_combos = [combo for combo in algorithm_combos if _matches_target(combo, target)]
+    if len(target_combos) != 1 or not algorithm_combos:
+        return {
+            "passed": False,
+            "algorithm": algorithm,
+            "reason": "target_combo_missing_or_ambiguous",
+            "target": target,
+            "matches": target_combos,
+        }
+
+    target_combo = target_combos[0]
+    best_pdev = min(combo["pdev"] for combo in algorithm_combos)
+    best_variants = [
+        combo["variant"]
+        for combo in algorithm_combos
+        if math.isclose(combo["pdev"], best_pdev, rel_tol=1e-12, abs_tol=1e-12)
+    ]
+    return {
+        "passed": target_combo["pdev"] <= best_pdev,
+        "algorithm": algorithm,
+        "target": target,
+        "target_variant": target_combo["variant"],
+        "target_pdev": target_combo["pdev"],
+        "best_pdev": best_pdev,
+        "best_variants": best_variants,
+    }
 
 
 def _bsca_transfer_margin_check(transfer_checks: list[dict[str, Any]]) -> dict[str, Any]:
@@ -687,11 +673,11 @@ def _bsca_transfer_margin_check(transfer_checks: list[dict[str, Any]]) -> dict[s
             "reason": "bsca_transfer_check_missing",
         }
 
-    tanh_metrics = bsca_check["transfer_metrics"]["tanh_abs"]
-    gap_to_best = tanh_metrics["avg_pdev"] - bsca_check["best_avg_pdev"]
+    expected_metrics = bsca_check["transfer_metrics"][EXPECTED_TRANSFER_CTF]
+    gap_to_best = expected_metrics["avg_pdev"] - bsca_check["best_avg_pdev"]
     margin_passed = (
         gap_to_best <= BSCA_MARGIN_PDEV
-        and tanh_metrics["avg_rank"] <= BSCA_TRANSFER_MAX_AVG_RANK
+        and expected_metrics["avg_rank"] <= BSCA_TRANSFER_MAX_AVG_RANK
     )
     passed = bool(bsca_check["passed"] or margin_passed)
     return {
@@ -702,8 +688,9 @@ def _bsca_transfer_margin_check(transfer_checks: list[dict[str, Any]]) -> dict[s
         "gap_to_best": gap_to_best,
         "margin": BSCA_MARGIN_PDEV,
         "max_allowed_avg_rank": BSCA_TRANSFER_MAX_AVG_RANK,
-        "tanh_avg_pdev": tanh_metrics["avg_pdev"],
-        "tanh_avg_rank": tanh_metrics["avg_rank"],
+        "expected_ctf": EXPECTED_TRANSFER_CTF,
+        "expected_ctf_avg_pdev": expected_metrics["avg_pdev"],
+        "expected_ctf_avg_rank": expected_metrics["avg_rank"],
     }
 
 
@@ -718,25 +705,29 @@ def _bsca_target_margin_check(target_checks: list[dict[str, Any]]) -> dict[str, 
             "algorithm": "bsca",
             "reason": "bsca_target_check_missing",
         }
-    if "target_pdev" not in bsca_check or "best_pdev" not in bsca_check:
+    return _target_margin_check(bsca_check, BSCA_MARGIN_PDEV)
+
+
+def _target_margin_check(target_check: dict[str, Any], margin: float) -> dict[str, Any]:
+    if "target_pdev" not in target_check or "best_pdev" not in target_check:
         return {
-            **bsca_check,
+            **target_check,
             "passed": False,
             "strict_passed": False,
             "margin_passed": False,
-            "margin": BSCA_MARGIN_PDEV,
+            "margin": margin,
         }
 
-    gap_to_best = bsca_check["target_pdev"] - bsca_check["best_pdev"]
-    margin_passed = gap_to_best <= BSCA_MARGIN_PDEV
-    passed = bool(bsca_check["passed"] or margin_passed)
+    gap_to_best = target_check["target_pdev"] - target_check["best_pdev"]
+    margin_passed = gap_to_best <= margin
+    passed = bool(target_check["passed"] or margin_passed)
     return {
-        **bsca_check,
+        **target_check,
         "passed": passed,
-        "strict_passed": bsca_check["passed"],
+        "strict_passed": target_check["passed"],
         "margin_passed": margin_passed,
         "gap_to_best": gap_to_best,
-        "margin": BSCA_MARGIN_PDEV,
+        "margin": margin,
     }
 
 

@@ -7,6 +7,8 @@ from .mkp_base import mkp_base_evaluator, mkp_bsca_base_margin_2_evaluator
 from .mkp_base2 import mkp_base2_evaluator, mkp_base2_margin_005_evaluator
 from .mkp_calibration import (
     mkp_calibration_evaluator,
+    mkp_target_combo_brlsmasca_margin_004_evaluator,
+    mkp_target_combo_bsma_strict_evaluator,
     mkp_target_combo_bsca_margin_005_evaluator,
     mkp_target_combo_best_evaluator,
     mkp_target_combo_core_strict_evaluator,
@@ -34,7 +36,12 @@ def main() -> ExperimentReport:
     register("mkp_transfer_core_strict", mkp_transfer_core_strict_evaluator)
     register("mkp_transfer_bsca_margin_005", mkp_transfer_bsca_margin_005_evaluator)
     register("mkp_target_combo_core_strict", mkp_target_combo_core_strict_evaluator)
+    register("mkp_target_combo_bsma_strict", mkp_target_combo_bsma_strict_evaluator)
     register("mkp_target_combo_bsca_margin_005", mkp_target_combo_bsca_margin_005_evaluator)
+    register(
+        "mkp_target_combo_brlsmasca_margin_004",
+        mkp_target_combo_brlsmasca_margin_004_evaluator,
+    )
 
     # 1. 創建實驗模組
     experiment = build(

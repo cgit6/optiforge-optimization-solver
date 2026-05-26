@@ -23,3 +23,5 @@ DEFAULT_CONFIG_PATH
 DEFAULT_PROBLEM_ROOT
 DEFAULT_SOLVER_ROOT
 DEFAULT_OUTPUT_ROOT
+
+[問題6] 優化器應該產出一個 seed_bank.json 然後算法設定檔有一個開關，根據這個 seed 跑結果但是最終實驗只會對某幾組參數做實驗，所以當初在跑 cil.exp 的時候並不會將範圍外的算法參數組合納入其中，可能會導致跑出非預期的結果。

@@ -6,6 +6,8 @@ from mkp.cli.exp.mkp_base import mkp_base_evaluator, mkp_bsca_base_margin_2_eval
 from mkp.cli.exp.mkp_base2 import mkp_base2_evaluator, mkp_base2_margin_005_evaluator
 from mkp.cli.exp.mkp_calibration import (
     mkp_calibration_evaluator,
+    mkp_target_combo_brlsmasca_margin_004_evaluator,
+    mkp_target_combo_bsma_strict_evaluator,
     mkp_target_combo_bsca_margin_005_evaluator,
     mkp_target_combo_best_evaluator,
     mkp_target_combo_core_strict_evaluator,
@@ -303,9 +305,9 @@ def _calibration_variants(*, break_bsma_target: bool = False) -> tuple[VariantSu
     for ctf in ("tanh_abs", "sigmoid_s0", "abs_pow_16"):
         for z in (0.01, 0.08, 0.15):
             pdev = {
-                "tanh_abs": 0.2,
+                "tanh_abs": 0.6,
                 "sigmoid_s0": 0.4,
-                "abs_pow_16": 0.5,
+                "abs_pow_16": 0.2,
             }[ctf]
             if ctf == "tanh_abs" and z == 0.08:
                 pdev = 0.1
@@ -325,9 +327,9 @@ def _calibration_variants(*, break_bsma_target: bool = False) -> tuple[VariantSu
     for ctf in ("tanh_abs", "sigmoid_s0", "abs_pow_16"):
         for a in (1.5, 2.0, 2.5):
             pdev = {
-                "tanh_abs": 0.2,
+                "tanh_abs": 0.6,
                 "sigmoid_s0": 0.4,
-                "abs_pow_16": 0.5,
+                "abs_pow_16": 0.2,
             }[ctf]
             if ctf == "tanh_abs" and a == 1.5:
                 pdev = 0.1
@@ -346,9 +348,9 @@ def _calibration_variants(*, break_bsma_target: bool = False) -> tuple[VariantSu
         for z in (0.01, 0.08, 0.15):
             for a in (1.5, 2.0, 2.5):
                 pdev = {
-                    "tanh_abs": 0.2,
+                    "tanh_abs": 0.6,
                     "sigmoid_s0": 0.4,
-                    "abs_pow_16": 0.5,
+                    "abs_pow_16": 0.2,
                 }[ctf]
                 if ctf == "tanh_abs" and z == 0.08 and a == 2.5:
                     pdev = 0.1
@@ -364,7 +366,27 @@ def _calibration_variants(*, break_bsma_target: bool = False) -> tuple[VariantSu
     return tuple(variants)
 
 
-def test_mkp_transfer_paired_strict_passes_when_tanh_abs_is_best_by_paired_average() -> None:
+def _replace_calibration_variant(
+    variants: tuple[VariantSummary, ...],
+    *,
+    solver_id: str,
+    param_set_index: int,
+    pdev: float,
+) -> tuple[VariantSummary, ...]:
+    updated = list(variants)
+    for index, variant in enumerate(updated):
+        if variant.solver_id == solver_id and variant.param_set_index == param_set_index:
+            updated[index] = _variant_summary(
+                solver_id=variant.solver_id,
+                param_set_index=variant.param_set_index,
+                params=variant.params,
+                pdev=pdev,
+            )
+            return tuple(updated)
+    raise AssertionError(f"variant not found: {solver_id}/param_{param_set_index}")
+
+
+def test_mkp_transfer_paired_strict_passes_when_abs_pow_16_is_best_by_paired_average() -> None:
     decision = mkp_transfer_paired_strict_evaluator(
         _input(
             evaluation=EvaluationSpec(name="mkp_transfer_paired_strict"),
@@ -377,11 +399,13 @@ def test_mkp_transfer_paired_strict_passes_when_tanh_abs_is_best_by_paired_avera
     bsma_check = next(
         check for check in decision.details["transfer_checks"] if check["algorithm"] == "bsma"
     )
-    assert math.isclose(bsma_check["transfer_metrics"]["tanh_abs"]["avg_pdev"], 1 / 6)
-    assert bsma_check["transfer_metrics"]["tanh_abs"]["avg_rank"] == 1.0
+    assert decision.details["expected_transfer_ctf"] == "abs_pow_16"
+    assert bsma_check["expected_ctf"] == "abs_pow_16"
+    assert math.isclose(bsma_check["transfer_metrics"]["abs_pow_16"]["avg_pdev"], 0.2)
+    assert math.isclose(bsma_check["transfer_metrics"]["abs_pow_16"]["avg_rank"], 4 / 3)
 
 
-def test_mkp_transfer_paired_strict_fails_when_non_tanh_transfer_has_better_paired_average() -> None:
+def test_mkp_transfer_paired_strict_fails_when_non_expected_transfer_has_better_paired_average() -> None:
     variants = list(_calibration_variants())
     variants[3] = _variant_summary(
         solver_id="bsma_numba",
@@ -549,6 +573,32 @@ def test_mkp_target_combo_best_fails_when_target_combo_is_not_best() -> None:
     )
 
 
+def test_mkp_target_combo_bsma_strict_passes_when_bsma_target_is_best() -> None:
+    decision = mkp_target_combo_bsma_strict_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_bsma_strict"),
+            variants=_calibration_variants(),
+        )
+    )
+
+    assert decision.passed is True
+    assert decision.verdict == PASS
+    assert decision.details["target_check"]["algorithm"] == "bsma"
+
+
+def test_mkp_target_combo_bsma_strict_fails_when_bsma_target_is_not_best() -> None:
+    decision = mkp_target_combo_bsma_strict_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_bsma_strict"),
+            variants=_calibration_variants(break_bsma_target=True),
+        )
+    )
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+    assert decision.details["target_check"]["algorithm"] == "bsma"
+
+
 def test_mkp_target_combo_core_strict_passes_when_core_targets_pass_even_if_bsca_lags() -> None:
     variants = list(_calibration_variants())
     variants[9] = _variant_summary(
@@ -633,6 +683,61 @@ def test_mkp_target_combo_bsca_margin_005_fails_when_bsca_target_exceeds_margin(
     assert decision.verdict == FAIL
     assert decision.details["bsca_margin_check"]["margin_passed"] is False
     assert math.isclose(decision.details["bsca_margin_check"]["gap_to_best"], 0.051)
+
+
+def test_mkp_target_combo_brlsmasca_margin_004_passes_when_brlsmasca_target_is_within_margin() -> None:
+    variants = _replace_calibration_variant(
+        _calibration_variants(),
+        solver_id="brlsmasca_rl_numba",
+        param_set_index=19,
+        pdev=0.018,
+    )
+    variants = _replace_calibration_variant(
+        variants,
+        solver_id="brlsmasca_rl_numba",
+        param_set_index=5,
+        pdev=0.055,
+    )
+
+    decision = mkp_target_combo_brlsmasca_margin_004_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_brlsmasca_margin_004"),
+            variants=variants,
+        )
+    )
+
+    assert decision.passed is True
+    assert decision.verdict == PASS
+    assert decision.details["brlsmasca_margin_check"]["strict_passed"] is False
+    assert decision.details["brlsmasca_margin_check"]["margin_passed"] is True
+    assert math.isclose(decision.details["brlsmasca_margin_check"]["gap_to_best"], 0.037)
+
+
+def test_mkp_target_combo_brlsmasca_margin_004_fails_when_brlsmasca_target_exceeds_margin() -> None:
+    variants = _replace_calibration_variant(
+        _calibration_variants(),
+        solver_id="brlsmasca_rl_numba",
+        param_set_index=19,
+        pdev=0.018,
+    )
+    variants = _replace_calibration_variant(
+        variants,
+        solver_id="brlsmasca_rl_numba",
+        param_set_index=5,
+        pdev=0.059,
+    )
+
+    decision = mkp_target_combo_brlsmasca_margin_004_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_brlsmasca_margin_004"),
+            variants=variants,
+        )
+    )
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+    assert decision.details["brlsmasca_margin_check"]["margin_passed"] is False
+    assert math.isclose(decision.details["brlsmasca_margin_check"]["gap_to_best"], 0.041)
 
 
 def test_mkp_target_combo_core_strict_fails_when_core_target_fails() -> None:

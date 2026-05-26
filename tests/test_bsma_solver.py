@@ -5,6 +5,7 @@ import pytest
 
 from mkp.problem import ProblemModel
 from mkp.solver.BSMA import BSMASolver
+from mkp.solver.BSMA_numba import BSMANumbaSolver, _repair_row_inplace
 from mkp.solver.registry import SolverRegistry
 
 
@@ -36,6 +37,15 @@ def _build_config(max_iterations: int = 60) -> dict:
         "solver_class": "BSMASolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "params": {},
+    }
+
+
+def _build_numba_config(max_iterations: int = 60, params: dict | None = None) -> dict:
+    return {
+        "solver_id": "bsma_numba",
+        "solver_class": "BSMANumbaSolver",
+        "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
+        "params": params or {},
     }
 
 
@@ -112,3 +122,43 @@ def test_bsma_params_pop_size_from_config_affects_evaluation_count():
 def test_problem_model_rejects_unknown_best_known_before_bsma_runs():
     with pytest.raises(ValueError, match="best_known must be a positive integer"):
         _build_problem(best_known=None)  # type: ignore[arg-type]
+
+
+def test_bsma_numba_reproducibility_same_seed_same_result():
+    solver = BSMANumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(max_iterations=10, params={"pop_size": 7, "z": 0.08})
+
+    result_a = solver.solve(problem, config, np.random.default_rng(999))
+    result_b = solver.solve(problem, config, np.random.default_rng(999))
+
+    assert result_a.run_seed == result_b.run_seed
+    assert result_a.best_objective == result_b.best_objective
+    assert np.array_equal(result_a.best_solution, result_b.best_solution)
+    assert "cp_list_cache_hit" in result_b.metadata
+
+
+def test_bsma_numba_repair_preserves_add_failure_break_semantics():
+    values = np.array([10, 9, 7], dtype=np.int64)
+    weights = np.array([[5], [4], [3]], dtype=np.int64)
+    capacities = np.array([8], dtype=np.int64)
+    cp_list = np.array([0, 1, 2], dtype=np.int64)
+    pop_sol = np.array([[1, 0, 0]], dtype=np.float64)
+    pop_fit = np.array([0.0], dtype=np.float64)
+    resource = np.zeros(1, dtype=np.float64)
+
+    _repair_row_inplace(
+        pop_sol,
+        0,
+        pop_fit,
+        values,
+        weights,
+        capacities,
+        cp_list,
+        resource,
+        values.size,
+        capacities.size,
+    )
+
+    assert np.array_equal(pop_sol, np.array([[1, 0, 0]], dtype=np.float64))
+    assert pop_fit[0] == pytest.approx(10.0)

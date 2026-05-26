@@ -1,5 +1,11 @@
 solver_id: brlsmasca_rl_numba
 solver_class: BRLSMASCARLNumbaSolver
+
+# 做一個優化器的開關
+optimal_setting:
+  use_optimal: false
+  seed_bank: [] # seed 檔案
+
 capabilities:
   problem_types: [mkp]
   encodings: [binary]

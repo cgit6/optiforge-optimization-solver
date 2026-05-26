@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import copy as copy
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +24,32 @@ from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
 from .BSMA import _argsort_pop_fit_desc_deterministic
 from .BSMA_numba import _expect_mkp_problem_tensors, _sort_pop_desc_deterministic_inplace
+
+
+def _cp_list_cache_key(
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+) -> tuple[tuple[tuple[int, ...], str, bytes], ...]:
+    return (
+        (values.shape, values.dtype.str, values.tobytes()),
+        (weights.shape, weights.dtype.str, weights.tobytes()),
+        (capacities.shape, capacities.dtype.str, capacities.tobytes()),
+    )
+
+
+@njit(cache=True)
+def _ctf_flip_probability_fast(ctf_id: int, x: float) -> float:
+    if ctf_id == 0:
+        return abs(math.tanh(x))
+    if ctf_id == 1:
+        if x >= 0.0:
+            return 1.0 / (1.0 + math.exp(-x))
+        et = math.exp(x)
+        return et / (1.0 + et)
+    if ctf_id == 9:
+        return abs(x) ** 1.6
+    return ctf_flip_probability(ctf_id, x)
 
 
 @njit(cache=True)
@@ -41,11 +68,14 @@ def _repair_bsca_row_inplace(
     """修復操作"""
     for d in range(dim):
         resource[d] = 0.0
+    fi = 0.0
     for jj in range(items):
         x = pop_sol[row, jj]
         if x != 0.0:
             for d in range(dim):
                 resource[d] += weights[jj, d] * x
+        if x >= 0.5:
+            fi += float(values[jj])
 
     for pos in range(items - 1, -1, -1):
         jj = int(cp_list[pos])
@@ -58,6 +88,7 @@ def _repair_bsca_row_inplace(
             break
         if pop_sol[row, jj] == 1.0:
             pop_sol[row, jj] = 0.0
+            fi -= float(values[jj])
             for d in range(dim):
                 resource[d] -= weights[jj, d]
 
@@ -71,13 +102,10 @@ def _repair_bsca_row_inplace(
                     break
             if ok:
                 pop_sol[row, jj] = 1.0
+                fi += float(values[jj])
                 for d in range(dim):
                     resource[d] += weights[jj, d]
 
-    fi = 0.0
-    for j in range(items):
-        if pop_sol[row, j] >= 0.5:
-            fi += float(values[j])
     pop_fit[row] = fi
 
 
@@ -110,25 +138,25 @@ def _bsca_main_loop_numba(
         gbest_sol[j] = pop_sol[0, j]
 
     mf = float(max_iter)
+    two_pi = 2.0 * math.pi
     for iter_idx in range(max_iter):
+        r1 = a - a * (float(iter_idx) / mf)
         for i in range(pop_size):
-            r1 = a - a * (float(iter_idx) / mf)
-
             for j in range(items):
-                r2 = np.pi * np.random.uniform(0.0, 2.0)
-                r3 = np.random.uniform(0.0, 2.0)
-                r4 = np.random.uniform(0.0, 1.0)
+                r2 = two_pi * np.random.random()
+                r3 = 2.0 * np.random.random()
+                r4 = np.random.random()
 
                 if r4 < 0.5:
                     pop_sol[i, j] = pop_sol[i, j] + (
-                        abs(r1 * np.sin(r2)) * r3 * gbest_sol[j] - pop_sol[i, j]
+                        abs(r1 * math.sin(r2)) * r3 * gbest_sol[j] - pop_sol[i, j]
                     )
                 else:
                     pop_sol[i, j] = pop_sol[i, j] + (
-                        abs(r1 * np.cos(r2)) * r3 * gbest_sol[j] - pop_sol[i, j]
+                        abs(r1 * math.cos(r2)) * r3 * gbest_sol[j] - pop_sol[i, j]
                     )
 
-                if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[i, j]):
+                if np.random.random() < _ctf_flip_probability_fast(ctf_id, pop_sol[i, j]):
                     pop_sol[i, j] = 1.0
                 else:
                     pop_sol[i, j] = 0.0
@@ -136,24 +164,25 @@ def _bsca_main_loop_numba(
             _repair_bsca_row_inplace(
                 pop_sol, i, pop_fit, values, weights, capacities, cp_list, acc_res, items, dim
             )
-            # 
-            _sort_pop_desc_deterministic_inplace(
-                pop_sol, pop_fit, tmp_sol, tmp_fit, idx_work, pop_size, items
-            )
 
             # 判斷是否更新最佳解
-            if pop_fit[0] > gbest_fit:
-                gbest_fit = pop_fit[0]
+            if pop_fit[i] > gbest_fit:
+                gbest_fit = pop_fit[i]
                 for j in range(items):
-                    gbest_sol[j] = pop_sol[0, j]
+                    gbest_sol[j] = pop_sol[i, j]
             if gbest_fit == float(glbal_best):
                 return gbest_fit
+        _sort_pop_desc_deterministic_inplace(
+            pop_sol, pop_fit, tmp_sol, tmp_fit, idx_work, pop_size, items
+        )
 
     return gbest_fit
 
 
 class BSCANumbaCore:
     """與 BSCACore 相同前置；主迭代交給 Numba。"""
+
+    _cp_list_cache: dict[Any, np.ndarray] = {}
 
     def __init__(
         self,
@@ -176,6 +205,7 @@ class BSCANumbaCore:
         self.values, self.weights, self.capacities = _expect_mkp_problem_tensors(values, weights, capacities)
         self.seed = seed
         self.linprog_runtime = 0.0
+        self.cp_list_cache_hit = False
 
         if max_iter <= 0:
             raise ValueError("max_iter must be > 0")
@@ -197,6 +227,14 @@ class BSCANumbaCore:
         self.Gbest_fit = copy.deepcopy(self.pop_fit[0])
 
     def pseudo_utility(self) -> np.ndarray:
+        cache_key = _cp_list_cache_key(self.values, self.weights, self.capacities)
+        cached = type(self)._cp_list_cache.get(cache_key)
+        if cached is not None:
+            self.cp_list_cache_hit = True
+            self.linprog_runtime = 0.0
+            return cached.copy()
+
+        self.cp_list_cache_hit = False
         constraints = np.concatenate((self.capacities, np.ones(self.items)))
         i_weight = -np.concatenate((self.weights, np.eye(self.items)), axis=1)
         i_profit = self.values * -1
@@ -207,14 +245,16 @@ class BSCANumbaCore:
         denom = np.matmul(shadow_price.T, self.weights.T)
         with np.errstate(divide="ignore", invalid="ignore"):
             pseudo_utilities = (-i_profit).T / denom
-        return np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
+        cp_list = np.ascontiguousarray((-pseudo_utilities).argsort().astype(np.int64))
+        type(self)._cp_list_cache[cache_key] = cp_list.copy()
+        return cp_list
 
     def initial_pop(self) -> np.ndarray:
         population = np.zeros([self.pop_size, self.items])
         for i in range(self.pop_size):
             accumulated_resources = np.zeros([self.dim])
             for j in self.cp_list:
-                if np.random.uniform(0.0, 1.0) < 0.5:
+                if np.random.random() < 0.5:
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
                         population[i, j] = 1
@@ -345,6 +385,7 @@ class BSCANumbaSolver:
             error=None,
             metadata={
                 "linprog_runtime": float(core.linprog_runtime),
+                "cp_list_cache_hit": bool(core.cp_list_cache_hit),
                 "numba": True,
             },
         )

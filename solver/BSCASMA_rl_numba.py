@@ -20,23 +20,32 @@ from ..engine.models import SolveResult
 from ..problem import ProblemModel
 from ..tools.continuous_to_binary import parse_ctf_kind
 from ..tools.ctf_numba import ctf_flip_probability
-from .BSCA_numba import _repair_bsca_row_inplace
 from .BSMA import _argsort_pop_fit_desc_deterministic
 from .BSMA_numba import _expect_mkp_problem_tensors
+
+
+def _cp_list_cache_key(
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+) -> tuple[tuple[tuple[int, ...], str, bytes], ...]:
+    return (
+        (values.shape, values.dtype.str, values.tobytes()),
+        (weights.shape, weights.dtype.str, weights.tobytes()),
+        (capacities.shape, capacities.dtype.str, capacities.tobytes()),
+    )
 
 
 @njit(cache=True)
 def _sort_bscasma_rl_desc_deterministic_inplace(
     pop_sol: np.ndarray,
     pop_fit: np.ndarray,
-    individual_best_sol: np.ndarray,
-    individual_best_fit: np.ndarray,
     individual_ids: np.ndarray,
+    row_hamming: np.ndarray,
     tmp_sol: np.ndarray,
     tmp_fit: np.ndarray,
-    tmp_ibs: np.ndarray,
-    tmp_ibf: np.ndarray,
     tmp_ids: np.ndarray,
+    tmp_hamming: np.ndarray,
     idx_work: np.ndarray,
     pop_size: int,
     items: int,
@@ -59,17 +68,15 @@ def _sort_bscasma_rl_desc_deterministic_inplace(
         si = idx_work[i]
         for j in range(items):
             tmp_sol[i, j] = pop_sol[si, j]
-            tmp_ibs[i, j] = individual_best_sol[si, j]
         tmp_fit[i] = pop_fit[si]
-        tmp_ibf[i] = individual_best_fit[si]
         tmp_ids[i] = individual_ids[si]
+        tmp_hamming[i] = row_hamming[si]
     for i in range(pop_size):
         for j in range(items):
             pop_sol[i, j] = tmp_sol[i, j]
-            individual_best_sol[i, j] = tmp_ibs[i, j]
         pop_fit[i] = tmp_fit[i]
-        individual_best_fit[i] = tmp_ibf[i]
         individual_ids[i] = tmp_ids[i]
+        row_hamming[i] = tmp_hamming[i]
 
 
 @njit(cache=True)
@@ -83,9 +90,81 @@ def _update_sma_weight_inplace(W: np.ndarray, pop_fit: np.ndarray, pop_size: int
         ratio = (best_fit - pop_fit[i]) / S + 1.0
         logr = np.log10(ratio)
         if i < pop_size / 2:
-            W[i, :] = 1.0 + np.random.random(items) * logr
+            for j in range(items):
+                W[i, j] = 1.0 + np.random.random() * logr
         else:
-            W[i, :] = 1.0 - np.random.random(items) * logr
+            for j in range(items):
+                W[i, j] = 1.0 - np.random.random() * logr
+
+
+@njit(cache=True)
+def _ctf_flip_probability_fast(ctf_id: int, x: float) -> float:
+    if ctf_id == 0:
+        return abs(math.tanh(x))
+    if ctf_id == 1:
+        if x >= 0.0:
+            return 1.0 / (1.0 + math.exp(-x))
+        et = math.exp(x)
+        return et / (1.0 + et)
+    if ctf_id == 9:
+        return abs(x) ** 1.6
+    return ctf_flip_probability(ctf_id, x)
+
+
+@njit(cache=True)
+def _repair_bscasma_row_inplace(
+    pop_sol: np.ndarray,
+    row: int,
+    pop_fit: np.ndarray,
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    cp_list: np.ndarray,
+    resource: np.ndarray,
+    items: int,
+    dim: int,
+) -> None:
+    for d in range(dim):
+        resource[d] = 0.0
+    fi = 0.0
+    for jj in range(items):
+        x = pop_sol[row, jj]
+        if x != 0.0:
+            for d in range(dim):
+                resource[d] += weights[jj, d] * x
+        if x >= 0.5:
+            fi += float(values[jj])
+
+    for pos in range(items - 1, -1, -1):
+        jj = int(cp_list[pos])
+        over = False
+        for d in range(dim):
+            if resource[d] > capacities[d]:
+                over = True
+                break
+        if not over:
+            break
+        if pop_sol[row, jj] == 1.0:
+            pop_sol[row, jj] = 0.0
+            fi -= float(values[jj])
+            for d in range(dim):
+                resource[d] -= weights[jj, d]
+
+    for pos in range(items):
+        jj = int(cp_list[pos])
+        if pop_sol[row, jj] == 0.0:
+            ok = True
+            for d in range(dim):
+                if resource[d] + weights[jj, d] > capacities[d]:
+                    ok = False
+                    break
+            if ok:
+                pop_sol[row, jj] = 1.0
+                fi += float(values[jj])
+                for d in range(dim):
+                    resource[d] += weights[jj, d]
+
+    pop_fit[row] = fi
 
 
 @njit(cache=True)
@@ -98,20 +177,116 @@ def _state_bin(value: float) -> int:
 
 
 @njit(cache=True)
-def _population_density(pop_sol: np.ndarray, pop_size: int, items: int) -> float:
+def _init_ones_count(pop_sol: np.ndarray, ones_count: np.ndarray, pop_size: int, items: int) -> None:
+    for j in range(items):
+        ones_count[j] = 0
+    for i in range(pop_size):
+        for j in range(items):
+            if pop_sol[i, j] >= 0.5:
+                ones_count[j] += 1
+
+
+@njit(cache=True)
+def _init_density_state(
+    pop_sol: np.ndarray,
+    ones_count: np.ndarray,
+    avg_bits: np.ndarray,
+    row_hamming: np.ndarray,
+    sqrt_lookup: np.ndarray,
+    pop_size: int,
+    items: int,
+) -> float:
+    _init_ones_count(pop_sol, ones_count, pop_size, items)
+    for j in range(items):
+        avg_bits[j] = 1.0 if ones_count[j] * 2 >= pop_size else 0.0
+    density_sum = 0.0
+    for i in range(pop_size):
+        hd = 0.0
+        for j in range(items):
+            bit = 1.0 if pop_sol[i, j] >= 0.5 else 0.0
+            if bit != avg_bits[j]:
+                hd += 1.0
+        row_hamming[i] = hd
+        density_sum += sqrt_lookup[int(hd)]
+    return density_sum
+
+
+@njit(cache=True)
+def _copy_row_bits(pop_sol: np.ndarray, row: int, old_row: np.ndarray, items: int) -> None:
+    for j in range(items):
+        old_row[j] = 1.0 if pop_sol[row, j] >= 0.5 else 0.0
+
+
+@njit(cache=True)
+def _update_density_state_for_row(
+    pop_sol: np.ndarray,
+    row: int,
+    old_row: np.ndarray,
+    ones_count: np.ndarray,
+    avg_bits: np.ndarray,
+    row_hamming: np.ndarray,
+    density_sum: float,
+    sqrt_lookup: np.ndarray,
+    pop_size: int,
+    items: int,
+) -> float:
+    for j in range(items):
+        old_bit = 1 if old_row[j] >= 0.5 else 0
+        new_bit = 1 if pop_sol[row, j] >= 0.5 else 0
+        if old_bit == new_bit:
+            continue
+
+        old_avg = 1 if avg_bits[j] >= 0.5 else 0
+        new_ones = ones_count[j] + new_bit - old_bit
+        new_avg = 1 if new_ones * 2 >= pop_size else 0
+        ones_count[j] = new_ones
+        avg_bits[j] = float(new_avg)
+
+        if old_avg != new_avg:
+            for i in range(pop_size):
+                before = row_hamming[i]
+                if i == row:
+                    bit_before = old_bit
+                    bit_after = new_bit
+                else:
+                    bit_before = 1 if pop_sol[i, j] >= 0.5 else 0
+                    bit_after = bit_before
+                old_mismatch = 1 if bit_before != old_avg else 0
+                new_mismatch = 1 if bit_after != new_avg else 0
+                delta = new_mismatch - old_mismatch
+                if delta != 0:
+                    after = before + float(delta)
+                    row_hamming[i] = after
+                    density_sum += sqrt_lookup[int(after)] - sqrt_lookup[int(before)]
+        else:
+            before = row_hamming[row]
+            old_mismatch = 1 if old_bit != old_avg else 0
+            new_mismatch = 1 if new_bit != old_avg else 0
+            delta = new_mismatch - old_mismatch
+            if delta != 0:
+                after = before + float(delta)
+                row_hamming[row] = after
+                density_sum += sqrt_lookup[int(after)] - sqrt_lookup[int(before)]
+    return density_sum
+
+
+@njit(cache=True)
+def _population_density_from_counts(
+    pop_sol: np.ndarray,
+    ones_count: np.ndarray,
+    sqrt_lookup: np.ndarray,
+    pop_size: int,
+    items: int,
+) -> float:
     total = 0.0
     for i in range(pop_size):
         hd = 0.0
         for j in range(items):
-            ones = 0
-            for k in range(pop_size):
-                if pop_sol[k, j] >= 0.5:
-                    ones += 1
-            avg_bit = 1.0 if (float(ones) / float(pop_size)) >= 0.5 else 0.0
+            avg_bit = 1.0 if ones_count[j] * 2 >= pop_size else 0.0
             bit = 1.0 if pop_sol[i, j] >= 0.5 else 0.0
             if bit != avg_bit:
                 hd += 1.0
-        total += math.sqrt(hd)
+        total += sqrt_lookup[int(hd)]
     return total / (float(pop_size) * float(items))
 
 
@@ -135,24 +310,24 @@ def _state_for_row(
 
 
 @njit(cache=True)
-def _select_q_action(q_table: np.ndarray, individual_id: int, state: int) -> int:
-    best_value = q_table[individual_id, state, 0]
-    for action in range(1, 4):
+def _select_q_action_non_global(q_table: np.ndarray, individual_id: int, state: int) -> int:
+    best_value = q_table[individual_id, state, 1]
+    for action in range(2, 4):
         value = q_table[individual_id, state, action]
         if value > best_value:
             best_value = value
     tie_count = 0
-    for action in range(4):
+    for action in range(1, 4):
         if q_table[individual_id, state, action] == best_value:
             tie_count += 1
     pick = np.random.randint(0, tie_count)
     seen = 0
-    for action in range(4):
+    for action in range(1, 4):
         if q_table[individual_id, state, action] == best_value:
             if seen == pick:
                 return action
             seen += 1
-    return 0
+    return 1
 
 
 @njit(cache=True)
@@ -172,14 +347,6 @@ def _update_q_value(
             next_max = q_table[individual_id, next_state, a]
     current = q_table[individual_id, state, action]
     q_table[individual_id, state, action] = current + alpha * (reward + gamma * next_max - current)
-
-
-@njit(cache=True)
-def _find_id_row(individual_ids: np.ndarray, individual_id: int, pop_size: int) -> int:
-    for i in range(pop_size):
-        if int(individual_ids[i]) == individual_id:
-            return i
-    return -1
 
 
 @njit(cache=True)
@@ -218,7 +385,7 @@ def _sma_global_row(
         acc_res[d] = 0.0
     for pos in range(items):
         jj = int(cp_list[pos])
-        if np.random.uniform(0.0, 1.0) < 0.5:
+        if np.random.random() < 0.5:
             for d in range(dim):
                 acc_res[d] += weights[jj, d]
             ok = True
@@ -238,30 +405,27 @@ def _sma_local_row(
     gbest_fit: float,
     gbest_sol: np.ndarray,
     W: np.ndarray,
-    iter_idx: int,
-    max_iter: int,
+    local_a: float,
+    local_b: float,
     pop_size: int,
     items: int,
-    vb: np.ndarray,
-    vc: np.ndarray,
     ctf_id: int,
 ) -> None:
-    mf = float(max_iter)
-    a = np.arctanh(-1.0 * ((iter_idx + 1) / mf) + 1.0)
-    b = 1.0 - (iter_idx + 1) / mf
-    p = np.tanh(abs(pop_fit[row] - gbest_fit))
-    vb[:] = np.random.uniform(-a, a, items)
-    vc[:] = np.random.uniform(-b, b, items)
+    p = math.tanh(abs(pop_fit[row] - gbest_fit))
+    local_a_span = 2.0 * local_a
+    local_b_span = 2.0 * local_b
     for j in range(items):
         r = np.random.random()
+        vb_j = -local_a + local_a_span * np.random.random()
+        vc_j = -local_b + local_b_span * np.random.random()
         a_idx, b_idx = _select_two_distinct_indices_excluding(pop_size, row)
         if r < p:
-            pop_sol[row, j] = gbest_sol[j] + vb[j] * (
+            pop_sol[row, j] = gbest_sol[j] + vb_j * (
                 W[row, j] * pop_sol[a_idx, j] - pop_sol[b_idx, j]
             )
         else:
-            pop_sol[row, j] = vc[j] * pop_sol[row, j]
-        if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[row, j]):
+            pop_sol[row, j] = vc_j * pop_sol[row, j]
+        if np.random.random() < _ctf_flip_probability_fast(ctf_id, pop_sol[row, j]):
             pop_sol[row, j] = 1.0
         else:
             pop_sol[row, j] = 0.0
@@ -272,18 +436,20 @@ def _sca_sin_row(
     pop_sol: np.ndarray,
     individual_best_sol: np.ndarray,
     row: int,
+    individual_id: int,
     gbest_sol: np.ndarray,
     r1: float,
     items: int,
+    two_pi: float,
     ctf_id: int,
 ) -> None:
     for j in range(items):
-        r2 = math.pi * np.random.uniform(0.0, 2.0)
-        r3 = np.random.uniform(0.0, 2.0)
-        pop_sol[row, j] = individual_best_sol[row, j] + (
-            r1 * math.sin(r2) * abs(r3 * gbest_sol[j] - individual_best_sol[row, j])
+        r2 = two_pi * np.random.random()
+        r3 = 2.0 * np.random.random()
+        pop_sol[row, j] = individual_best_sol[individual_id, j] + (
+            r1 * math.sin(r2) * abs(r3 * gbest_sol[j] - individual_best_sol[individual_id, j])
         )
-        if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[row, j]):
+        if np.random.random() < _ctf_flip_probability_fast(ctf_id, pop_sol[row, j]):
             pop_sol[row, j] = 1.0
         else:
             pop_sol[row, j] = 0.0
@@ -294,18 +460,20 @@ def _sca_cos_row(
     pop_sol: np.ndarray,
     individual_best_sol: np.ndarray,
     row: int,
+    individual_id: int,
     gbest_sol: np.ndarray,
     r1: float,
     items: int,
+    two_pi: float,
     ctf_id: int,
 ) -> None:
     for j in range(items):
-        r2 = math.pi * np.random.uniform(0.0, 2.0)
-        r3 = np.random.uniform(0.0, 2.0)
-        pop_sol[row, j] = individual_best_sol[row, j] + (
-            r1 * math.cos(r2) * abs(r3 * gbest_sol[j] - individual_best_sol[row, j])
+        r2 = two_pi * np.random.random()
+        r3 = 2.0 * np.random.random()
+        pop_sol[row, j] = individual_best_sol[individual_id, j] + (
+            r1 * math.cos(r2) * abs(r3 * gbest_sol[j] - individual_best_sol[individual_id, j])
         )
-        if np.random.uniform(0.0, 1.0) < ctf_flip_probability(ctf_id, pop_sol[row, j]):
+        if np.random.random() < _ctf_flip_probability_fast(ctf_id, pop_sol[row, j]):
             pop_sol[row, j] = 1.0
         else:
             pop_sol[row, j] = 0.0
@@ -329,6 +497,7 @@ def _bscasma_rl_main_loop_numba(
     items: int,
     dim: int,
     a: float,
+    z: float,
     alpha: float,
     gamma: float,
     glbal_best: int,
@@ -336,37 +505,44 @@ def _bscasma_rl_main_loop_numba(
     rng_seed: int,
     tmp_sol: np.ndarray,
     tmp_fit: np.ndarray,
-    tmp_ibs: np.ndarray,
-    tmp_ibf: np.ndarray,
     tmp_ids: np.ndarray,
+    tmp_hamming: np.ndarray,
     idx_work: np.ndarray,
-    iter_ids: np.ndarray,
+    ones_count: np.ndarray,
+    avg_bits: np.ndarray,
+    row_hamming: np.ndarray,
+    old_row: np.ndarray,
+    sqrt_lookup: np.ndarray,
     acc_res: np.ndarray,
     gbest_sol: np.ndarray,
-    vb: np.ndarray,
-    vc: np.ndarray,
     ctf_id: int,
 ) -> float:
     np.random.seed(rng_seed)
     gbest_fit = pop_fit[0]
     for j in range(items):
         gbest_sol[j] = pop_sol[0, j]
+    density_sum = _init_density_state(
+        pop_sol, ones_count, avg_bits, row_hamming, sqrt_lookup, pop_size, items
+    )
     mf = float(max_iter)
+    density_denominator = float(pop_size) * float(items)
+    two_pi = 2.0 * math.pi
 
     for iter_idx in range(max_iter):
         _update_sma_weight_inplace(W, pop_fit, pop_size, items)
         r1 = a - a * (float(iter_idx) / mf)
-        for i in range(pop_size):
-            iter_ids[i] = individual_ids[i]
+        local_a = np.arctanh(-1.0 * ((iter_idx + 1) / mf) + 1.0)
+        local_b = 1.0 - (iter_idx + 1) / mf
 
-        for step in range(pop_size):
-            individual_id = int(iter_ids[step])
-            row = _find_id_row(individual_ids, individual_id, pop_size)
-            if row < 0:
-                continue
-            density = _population_density(pop_sol, pop_size, items)
+        for row in range(pop_size):
+            individual_id = int(individual_ids[row])
+            density = density_sum / density_denominator
             state = _state_for_row(pop_sol, row, gbest_sol, pop_size, items, density)
-            action = _select_q_action(q_table, individual_id, state)
+            _copy_row_bits(pop_sol, row, old_row, items)
+            if np.random.random() < z:
+                action = 0
+            else:
+                action = _select_q_action_non_global(q_table, individual_id, state)
             action_counts[individual_id, action] += 1
 
             if action == 0:
@@ -379,28 +555,42 @@ def _bscasma_rl_main_loop_numba(
                     gbest_fit,
                     gbest_sol,
                     W,
-                    iter_idx,
-                    max_iter,
+                    local_a,
+                    local_b,
                     pop_size,
                     items,
-                    vb,
-                    vc,
                     ctf_id,
                 )
             elif action == 2:
-                _sca_sin_row(pop_sol, individual_best_sol, row, gbest_sol, r1, items, ctf_id)
+                _sca_sin_row(
+                    pop_sol, individual_best_sol, row, individual_id, gbest_sol, r1, items, two_pi, ctf_id
+                )
             elif action == 3:
-                _sca_cos_row(pop_sol, individual_best_sol, row, gbest_sol, r1, items, ctf_id)
+                _sca_cos_row(
+                    pop_sol, individual_best_sol, row, individual_id, gbest_sol, r1, items, two_pi, ctf_id
+                )
 
-            _repair_bsca_row_inplace(
+            _repair_bscasma_row_inplace(
                 pop_sol, row, pop_fit, values, weights, capacities, cp_list, acc_res, items, dim
+            )
+            density_sum = _update_density_state_for_row(
+                pop_sol,
+                row,
+                old_row,
+                ones_count,
+                avg_bits,
+                row_hamming,
+                density_sum,
+                sqrt_lookup,
+                pop_size,
+                items,
             )
 
             reward = -1.0
-            if pop_fit[row] > individual_best_fit[row]:
+            if pop_fit[row] > individual_best_fit[individual_id]:
                 for j in range(items):
-                    individual_best_sol[row, j] = pop_sol[row, j]
-                individual_best_fit[row] = pop_fit[row]
+                    individual_best_sol[individual_id, j] = pop_sol[row, j]
+                individual_best_fit[individual_id] = pop_fit[row]
                 reward = 1.0
 
             if pop_fit[row] > gbest_fit:
@@ -408,33 +598,31 @@ def _bscasma_rl_main_loop_numba(
                 for j in range(items):
                     gbest_sol[j] = pop_sol[row, j]
 
-            _sort_bscasma_rl_desc_deterministic_inplace(
-                pop_sol,
-                pop_fit,
-                individual_best_sol,
-                individual_best_fit,
-                individual_ids,
-                tmp_sol,
-                tmp_fit,
-                tmp_ibs,
-                tmp_ibf,
-                tmp_ids,
-                idx_work,
-                pop_size,
-                items,
-            )
-
-            next_row = _find_id_row(individual_ids, individual_id, pop_size)
-            next_density = _population_density(pop_sol, pop_size, items)
-            next_state = _state_for_row(pop_sol, next_row, gbest_sol, pop_size, items, next_density)
+            next_density = density_sum / density_denominator
+            next_state = _state_for_row(pop_sol, row, gbest_sol, pop_size, items, next_density)
             _update_q_value(q_table, individual_id, state, action, reward, next_state, alpha, gamma)
 
             if gbest_fit == float(glbal_best):
                 return gbest_fit
+        _sort_bscasma_rl_desc_deterministic_inplace(
+            pop_sol,
+            pop_fit,
+            individual_ids,
+            row_hamming,
+            tmp_sol,
+            tmp_fit,
+            tmp_ids,
+            tmp_hamming,
+            idx_work,
+            pop_size,
+            items,
+        )
     return gbest_fit
 
 
 class BRLSMASCARLNumbaCore:
+    _cp_list_cache: dict[Any, np.ndarray] = {}
+
     def __init__(
         self,
         items: int,
@@ -459,6 +647,7 @@ class BRLSMASCARLNumbaCore:
         self.values, self.weights, self.capacities = _expect_mkp_problem_tensors(values, weights, capacities)
         self.seed = seed
         self.linprog_runtime = 0.0
+        self.cp_list_cache_hit = False
 
         if max_iter <= 0:
             raise ValueError("max_iter must be > 0")
@@ -500,6 +689,14 @@ class BRLSMASCARLNumbaCore:
         self.action_counts = np.zeros([self.pop_size, 4], dtype=np.int64)
 
     def pseudo_utility(self) -> np.ndarray:
+        cache_key = _cp_list_cache_key(self.values, self.weights, self.capacities)
+        cached = type(self)._cp_list_cache.get(cache_key)
+        if cached is not None:
+            self.cp_list_cache_hit = True
+            self.linprog_runtime = 0.0
+            return cached.copy()
+
+        self.cp_list_cache_hit = False
         constraints = np.concatenate((self.capacities, np.ones(self.items)))
         i_weight = -np.concatenate((self.weights, np.eye(self.items)), axis=1)
         i_profit = self.values * -1
@@ -511,14 +708,16 @@ class BRLSMASCARLNumbaCore:
         with np.errstate(divide="ignore", invalid="ignore"):
             pseudo_utilities = (-i_profit).T / denom
         x = (-np.asarray(pseudo_utilities, dtype=np.float64)).ravel()
-        return np.ascontiguousarray(np.argsort(x, kind="stable").astype(np.int64))
+        cp_list = np.ascontiguousarray(np.argsort(x, kind="stable").astype(np.int64))
+        type(self)._cp_list_cache[cache_key] = cp_list.copy()
+        return cp_list
 
     def initial_pop(self) -> None:
         self.pop_sol = np.zeros([self.pop_size, self.items])
         for i in range(self.pop_size):
             accumulated_resources = np.zeros([self.dim])
             for j in self.cp_list:
-                if np.random.uniform(0.0, 1.0) < 0.5:
+                if np.random.random() < 0.5:
                     accumulated_resources += self.weights[j]
                     if np.all(accumulated_resources <= self.capacities):
                         self.pop_sol[i, j] = 1
@@ -526,29 +725,23 @@ class BRLSMASCARLNumbaCore:
             self.individual_best_sol[i] = self.pop_sol[i]
             self.individual_best_fit[i] = self.pop_fit[i]
 
-    def sort_pop_with_ids(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def sort_pop_with_ids(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         pop_sol = np.zeros([self.pop_size, self.items])
         pop_fit = np.zeros([self.pop_size], dtype=int)
         sorted_indices = _argsort_pop_fit_desc_deterministic(self.pop_fit, self.pop_size)
-        individual_best_sol = np.zeros([self.pop_size, self.items])
-        individual_best_fit = np.zeros([self.pop_size], dtype=int)
         individual_ids = np.zeros([self.pop_size], dtype=np.int64)
         for i in range(self.pop_size):
             source = sorted_indices[i]
             pop_sol[i] = self.pop_sol[source]
             pop_fit[i] = self.pop_fit[source]
-            individual_best_sol[i] = self.individual_best_sol[source]
-            individual_best_fit[i] = self.individual_best_fit[source]
             individual_ids[i] = self.individual_ids[source]
-        return pop_sol, pop_fit, individual_best_sol, individual_best_fit, individual_ids
+        return pop_sol, pop_fit, individual_ids
 
     def run(self) -> tuple[np.ndarray, int]:
         np.random.seed(self.seed)
         (
             self.pop_sol,
             self.pop_fit,
-            self.individual_best_sol,
-            self.individual_best_fit,
             self.individual_ids,
         ) = self.sort_pop_with_ids()
         pop_sol = np.ascontiguousarray(self.pop_sol, dtype=np.float64)
@@ -562,15 +755,16 @@ class BRLSMASCARLNumbaCore:
         W = np.empty((ps, it), dtype=np.float64)
         tmp_sol = np.empty((ps, it), dtype=np.float64)
         tmp_fit = np.empty(ps, dtype=np.float64)
-        tmp_ibs = np.empty((ps, it), dtype=np.float64)
-        tmp_ibf = np.empty(ps, dtype=np.float64)
         tmp_ids = np.empty(ps, dtype=np.int64)
+        tmp_hamming = np.empty(ps, dtype=np.float64)
         idx_work = np.empty(ps, dtype=np.int64)
-        iter_ids = np.empty(ps, dtype=np.int64)
+        ones_count = np.empty(it, dtype=np.int64)
+        avg_bits = np.empty(it, dtype=np.float64)
+        row_hamming = np.empty(ps, dtype=np.float64)
+        old_row = np.empty(it, dtype=np.float64)
+        sqrt_lookup = np.sqrt(np.arange(it + 1, dtype=np.float64))
         acc_res = np.zeros(dm, dtype=np.float64)
         gbest_sol = np.empty(it, dtype=np.float64)
-        vb = np.empty(it, dtype=np.float64)
-        vc = np.empty(it, dtype=np.float64)
         rng_seed = int(self.seed) if self.seed is not None else 0
 
         gfit = _bscasma_rl_main_loop_numba(
@@ -590,6 +784,7 @@ class BRLSMASCARLNumbaCore:
             it,
             dm,
             self.a,
+            self.z,
             self.alpha,
             self.gamma,
             int(self.glbal_best),
@@ -597,15 +792,16 @@ class BRLSMASCARLNumbaCore:
             rng_seed,
             tmp_sol,
             tmp_fit,
-            tmp_ibs,
-            tmp_ibf,
             tmp_ids,
+            tmp_hamming,
             idx_work,
-            iter_ids,
+            ones_count,
+            avg_bits,
+            row_hamming,
+            old_row,
+            sqrt_lookup,
             acc_res,
             gbest_sol,
-            vb,
-            vc,
             self.ctf_id,
         )
 
@@ -687,8 +883,10 @@ class BRLSMASCARLNumbaSolver:
             error=None,
             metadata={
                 "linprog_runtime": float(core.linprog_runtime),
+                "cp_list_cache_hit": bool(core.cp_list_cache_hit),
                 "numba": True,
                 "rl": True,
+                "z": float(z),
                 "alpha": float(alpha),
                 "gamma": float(gamma),
                 "q_table_nonzero": int(np.count_nonzero(core.q_table)),

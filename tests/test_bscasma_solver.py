@@ -5,8 +5,23 @@ import pytest
 
 from mkp.problem import ProblemModel
 from mkp.solver.BSCASMA import BRLSMASCATestSolver
-from mkp.solver.BSCASMA_rl_numba import BRLSMASCARLNumbaSolver
-from mkp.solver.BSCASMA_test_numba import BRLSMASCATestNumbaSolver
+from mkp.solver.BSCA_numba import BSCANumbaCore, _repair_bsca_row_inplace
+from mkp.solver.BSMA_numba import BSMANumbaCore
+from mkp.solver.BSCASMA_rl_numba import (
+    BRLSMASCARLNumbaCore,
+    BRLSMASCARLNumbaSolver,
+    _copy_row_bits,
+    _init_density_state,
+    _population_density_from_counts,
+    _repair_bscasma_row_inplace as _repair_bscasma_rl_row_inplace,
+    _sort_bscasma_rl_desc_deterministic_inplace,
+    _update_density_state_for_row,
+)
+from mkp.solver.BSCASMA_test_numba import (
+    BRLSMASCATestNumbaCore,
+    BRLSMASCATestNumbaSolver,
+    _repair_bscasma_row_inplace as _repair_bscasma_test_row_inplace,
+)
 from mkp.solver.registry import SolverRegistry
 
 
@@ -206,6 +221,8 @@ def test_bscasma_rl_numba_returns_valid_solve_result_and_metadata():
     assert result.best_solution.shape == (problem.items,)
     assert result.metadata["numba"] is True
     assert result.metadata["rl"] is True
+    assert "cp_list_cache_hit" in result.metadata
+    assert result.metadata["z"] == 0.03
     assert result.metadata["q_table_nonzero"] > 0
     assert sum(result.metadata["action_counts"]) > 0
 
@@ -228,6 +245,24 @@ def test_bscasma_rl_numba_reproducibility_same_seed_same_result():
     assert np.array_equal(result_a.best_solution, result_b.best_solution)
 
 
+def test_bscasma_rl_numba_z_one_forces_global_action_gate():
+    solver = BRLSMASCARLNumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(
+        solver_id="brlsmasca_rl_numba",
+        solver_class="BRLSMASCARLNumbaSolver",
+        max_iterations=5,
+        params={"pop_size": 20, "z": 1.0},
+    )
+
+    result = solver.solve(problem, config, np.random.default_rng(321))
+
+    action_counts = result.metadata["action_counts"]
+    assert action_counts[0] > 0
+    assert action_counts[1:] == [0, 0, 0]
+    assert result.metadata["z"] == 1.0
+
+
 def test_bscasma_test_numba_uses_new_solver_id():
     solver = BRLSMASCATestNumbaSolver()
     problem = _build_problem(best_known=10**9)
@@ -243,6 +278,204 @@ def test_bscasma_test_numba_uses_new_solver_id():
     assert result.solver_id == "brlsmasca_test_numba"
     assert result.metadata["numba"] is True
     assert result.metadata["rl"] is False
+    assert "cp_list_cache_hit" in result.metadata
+
+
+def test_bscasma_test_numba_reproducibility_same_seed_same_result():
+    solver = BRLSMASCATestNumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(
+        solver_id="brlsmasca_test_numba",
+        solver_class="BRLSMASCATestNumbaSolver",
+        max_iterations=10,
+        params={"pop_size": 20},
+    )
+
+    result_a = solver.solve(problem, config, np.random.default_rng(999))
+    result_b = solver.solve(problem, config, np.random.default_rng(999))
+
+    assert result_a.run_seed == result_b.run_seed
+    assert result_a.best_objective == result_b.best_objective
+    assert np.array_equal(result_a.best_solution, result_b.best_solution)
+
+
+def test_bscasma_rl_incremental_density_matches_full_density():
+    pop_sol = np.array(
+        [
+            [1, 0, 1, 0, 1, 0],
+            [0, 1, 1, 0, 0, 1],
+            [1, 1, 0, 0, 1, 0],
+            [0, 0, 0, 1, 1, 1],
+        ],
+        dtype=np.float64,
+    )
+    pop_size, items = pop_sol.shape
+    ones_count = np.empty(items, dtype=np.int64)
+    avg_bits = np.empty(items, dtype=np.float64)
+    row_hamming = np.empty(pop_size, dtype=np.float64)
+    sqrt_lookup = np.sqrt(np.arange(items + 1, dtype=np.float64))
+
+    density_sum = _init_density_state(
+        pop_sol, ones_count, avg_bits, row_hamming, sqrt_lookup, pop_size, items
+    )
+    full_density = _population_density_from_counts(pop_sol, ones_count, sqrt_lookup, pop_size, items)
+    assert density_sum / (pop_size * items) == pytest.approx(full_density)
+
+    old_row = np.empty(items, dtype=np.float64)
+    _copy_row_bits(pop_sol, 1, old_row, items)
+    pop_sol[1] = np.array([1, 1, 0, 1, 0, 0], dtype=np.float64)
+    density_sum = _update_density_state_for_row(
+        pop_sol,
+        1,
+        old_row,
+        ones_count,
+        avg_bits,
+        row_hamming,
+        density_sum,
+        sqrt_lookup,
+        pop_size,
+        items,
+    )
+
+    check_ones = np.empty(items, dtype=np.int64)
+    check_avg = np.empty(items, dtype=np.float64)
+    check_hamming = np.empty(pop_size, dtype=np.float64)
+    check_sum = _init_density_state(
+        pop_sol, check_ones, check_avg, check_hamming, sqrt_lookup, pop_size, items
+    )
+
+    assert np.array_equal(ones_count, check_ones)
+    assert np.array_equal(avg_bits, check_avg)
+    assert np.array_equal(row_hamming, check_hamming)
+    assert density_sum == pytest.approx(check_sum)
+
+    pop_fit = np.array([10.0, 40.0, 20.0, 30.0], dtype=np.float64)
+    individual_ids = np.arange(pop_size, dtype=np.int64)
+    tmp_sol = np.empty_like(pop_sol)
+    tmp_fit = np.empty_like(pop_fit)
+    tmp_ids = np.empty_like(individual_ids)
+    tmp_hamming = np.empty_like(row_hamming)
+    idx_work = np.empty(pop_size, dtype=np.int64)
+    _sort_bscasma_rl_desc_deterministic_inplace(
+        pop_sol,
+        pop_fit,
+        individual_ids,
+        row_hamming,
+        tmp_sol,
+        tmp_fit,
+        tmp_ids,
+        tmp_hamming,
+        idx_work,
+        pop_size,
+        items,
+    )
+    sorted_ones = np.empty(items, dtype=np.int64)
+    sorted_avg = np.empty(items, dtype=np.float64)
+    sorted_hamming = np.empty(pop_size, dtype=np.float64)
+    _init_density_state(pop_sol, sorted_ones, sorted_avg, sorted_hamming, sqrt_lookup, pop_size, items)
+    assert np.array_equal(row_hamming, sorted_hamming)
+
+
+def test_numba_cp_list_caches_are_per_solver_core():
+    problem = _build_problem(best_known=10**9)
+    core_specs = [
+        (BSMANumbaCore, {"pop_size": 6, "z": 0.08, "max_iter": 2}),
+        (BSCANumbaCore, {"pop_size": 6, "a": 1.5, "max_iter": 2}),
+        (
+            BRLSMASCARLNumbaCore,
+            {"pop_size": 6, "a": 2.5, "z": 0.08, "max_iter": 2, "alpha": 0.1, "gamma": 0.9},
+        ),
+        (BRLSMASCATestNumbaCore, {"pop_size": 6, "a": 2.5, "max_iter": 2}),
+    ]
+
+    for core_cls, _ in core_specs:
+        core_cls._cp_list_cache.clear()
+
+    first_cp_lists = {}
+    for core_cls, kwargs in core_specs:
+        core = core_cls(
+            problem.items,
+            problem.dim,
+            problem.best_known,
+            problem.values,
+            problem.weights,
+            problem.capacities,
+            seed=123,
+            **kwargs,
+        )
+        assert core.cp_list_cache_hit is False
+        assert len(core_cls._cp_list_cache) == 1
+        first_cp_lists[core_cls] = core.cp_list.copy()
+
+    for core_cls, kwargs in core_specs:
+        core = core_cls(
+            problem.items,
+            problem.dim,
+            problem.best_known,
+            problem.values,
+            problem.weights,
+            problem.capacities,
+            seed=123,
+            **kwargs,
+        )
+        assert core.cp_list_cache_hit is True
+        assert core.linprog_runtime == 0.0
+        assert np.array_equal(core.cp_list, first_cp_lists[core_cls])
+
+
+@pytest.mark.parametrize(
+    "repair_func",
+    [_repair_bscasma_rl_row_inplace, _repair_bscasma_test_row_inplace],
+)
+def test_bscasma_local_repair_matches_bsca_repair(repair_func):
+    values = np.array([10, 7, 9, 6, 12, 4], dtype=np.int64)
+    weights = np.array(
+        [
+            [4, 2],
+            [3, 3],
+            [5, 2],
+            [2, 4],
+            [6, 5],
+            [1, 2],
+        ],
+        dtype=np.int64,
+    )
+    capacities = np.array([10, 8], dtype=np.int64)
+    cp_list = np.array([4, 0, 2, 1, 3, 5], dtype=np.int64)
+    pop_sol_ref = np.array([[1, 1, 1, 0, 1, 0]], dtype=np.float64)
+    pop_sol_local = pop_sol_ref.copy()
+    pop_fit_ref = np.array([0.0], dtype=np.float64)
+    pop_fit_local = np.array([0.0], dtype=np.float64)
+    resource_ref = np.zeros(2, dtype=np.float64)
+    resource_local = np.zeros(2, dtype=np.float64)
+
+    _repair_bsca_row_inplace(
+        pop_sol_ref,
+        0,
+        pop_fit_ref,
+        values,
+        weights,
+        capacities,
+        cp_list,
+        resource_ref,
+        values.size,
+        capacities.size,
+    )
+    repair_func(
+        pop_sol_local,
+        0,
+        pop_fit_local,
+        values,
+        weights,
+        capacities,
+        cp_list,
+        resource_local,
+        values.size,
+        capacities.size,
+    )
+
+    assert np.array_equal(pop_sol_local, pop_sol_ref)
+    assert pop_fit_local[0] == pytest.approx(pop_fit_ref[0])
 
 
 def test_bscasma_rl_numba_rejects_invalid_params():

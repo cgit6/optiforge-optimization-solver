@@ -19,7 +19,7 @@ from ..tools.show import write_simulator_result
 from ..tools.stat import SummaryMeta, machine_result_entries, summarize
 
 EXP_BASE_SEED = 0
-COLLECTION_PROGRESS_INTERVAL = 50
+COLLECTION_PROGRESS_INTERVAL = 30
 
 _EVALUATORS: dict[str, RoundEvaluator] = {}
 

@@ -12,7 +12,7 @@ from ..problem import buildProblemRegistry, problemBuilders
 from ..tools.solver_config_loader import SolverConfigLoader
 
 
-DEFAULT_WORKER_COUNT = 20 # 併發數
+DEFAULT_WORKER_COUNT = 15 # 併發數
 
 _REQUIRED_TOP_LEVEL_KEYS = frozenset(
     {"experiment_name", "collects", "solvers", "repeat", "dataset_settings"}

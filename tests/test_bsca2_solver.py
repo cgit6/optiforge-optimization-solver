@@ -5,6 +5,7 @@ import pytest
 
 from mkp.problem import ProblemModel
 from mkp.solver.BSCA import BSCASolver
+from mkp.solver.BSCA_numba import BSCANumbaCore, BSCANumbaSolver, _repair_bsca_row_inplace
 from mkp.solver.registry import SolverRegistry
 
 
@@ -36,6 +37,15 @@ def _build_config(max_iterations: int = 60) -> dict:
         "solver_class": "BSCASolver",
         "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
         "params": {},
+    }
+
+
+def _build_numba_config(max_iterations: int = 60, params: dict | None = None) -> dict:
+    return {
+        "solver_id": "bsca_numba",
+        "solver_class": "BSCANumbaSolver",
+        "stop_condition": {"type": "max_iterations", "max_iterations": max_iterations},
+        "params": params or {},
     }
 
 
@@ -136,3 +146,55 @@ def test_bsca2_rejects_invalid_params():
             },
             rng,
         )
+
+
+def test_bsca_numba_reproducibility_same_seed_same_result():
+    BSCANumbaCore._cp_list_cache.clear()
+    solver = BSCANumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    config = _build_numba_config(max_iterations=10, params={"pop_size": 7, "a": 1.5})
+
+    result_a = solver.solve(problem, config, np.random.default_rng(999))
+    result_b = solver.solve(problem, config, np.random.default_rng(999))
+
+    assert result_a.run_seed == result_b.run_seed
+    assert result_a.best_objective == result_b.best_objective
+    assert np.array_equal(result_a.best_solution, result_b.best_solution)
+    assert result_a.metadata["cp_list_cache_hit"] is False
+    assert result_b.metadata["cp_list_cache_hit"] is True
+
+
+def test_bsca_numba_repair_computes_expected_solution_and_fitness():
+    values = np.array([10, 7, 9, 6, 12, 4], dtype=np.int64)
+    weights = np.array(
+        [
+            [4, 2],
+            [3, 3],
+            [5, 2],
+            [2, 4],
+            [6, 5],
+            [1, 2],
+        ],
+        dtype=np.int64,
+    )
+    capacities = np.array([10, 8], dtype=np.int64)
+    cp_list = np.array([4, 0, 2, 1, 3, 5], dtype=np.int64)
+    pop_sol = np.array([[1, 1, 1, 0, 1, 0]], dtype=np.float64)
+    pop_fit = np.array([0.0], dtype=np.float64)
+    resource = np.zeros(2, dtype=np.float64)
+
+    _repair_bsca_row_inplace(
+        pop_sol,
+        0,
+        pop_fit,
+        values,
+        weights,
+        capacities,
+        cp_list,
+        resource,
+        values.size,
+        capacities.size,
+    )
+
+    assert np.array_equal(pop_sol, np.array([[1, 0, 0, 0, 1, 0]], dtype=np.float64))
+    assert pop_fit[0] == pytest.approx(22.0)
