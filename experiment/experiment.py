@@ -50,6 +50,7 @@ class Experiment:
     collected_results: list[ProblemCollectionReport] = field(default_factory=list)
 
     def run(self, *, problem_root: Path, solver_root: Path, output_root: Path) -> ExperimentReport:
+        """執行優化任務"""
         _assert_configured_evaluators_registered(self.cfg)
         experiment_output_dir = Path(output_root) / self.cfg.experiment_name
         if experiment_output_dir.exists():
@@ -86,7 +87,10 @@ class Experiment:
             output_dir=str(experiment_output_dir),
             problems=tuple(problem_reports),
         )
+        # 輸出
+        print("step: write summary.json file")
         _write_json(experiment_output_dir / "summary.json", asdict(report))
+        print("step3: finish")
         return report
 
     def _build_dataset_simulators(
