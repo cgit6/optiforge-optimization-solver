@@ -4,11 +4,17 @@
 
 [問題1] 算法是不是需要類似 Act 函數可以提交過程的狀態用於研究?
 [目標] 算法可以在運行過程中執行 `Act("狀態","編碼","對外訊息")` 將狀態提交到緩存中
-[方案] 這個 method 要掛在??
+[方案] 這個 method 要掛在 `Machine> ` 物件下面。但是這個問題暫時無法處理，需要對 Machine -> Solver 之間做重構後再處理
+
+`*problab.Machine > *slot.Game > *slot.GameMode > *buf.GameModeResult > AddAct(...)`
 
 [問題2] cil.run 要可以支援定義直接給 run seed 陣列然後執行模擬。
 [目標] cil.run 要可以重現 cil.exp 的結果
-[方案] cil.exp 結束後會輸出一個 seed_bank 他會對指定的算法組合做結果的重現，算法設定檔那邊可以設定 opt 打開
+[方案] cil.exp 結束後會輸出一個 seed_bank 他會對指定的算法組合做結果的重現，算法設定檔那邊可以設定 opt 打開。所以這個問題有三件事要處理。
+
+1. seed 需要在執行 `cil.exp` 後被保存下來。保存至 seed_bank.json 然後把檔案放在 seed folder 中
+2. 算法設定那邊需要一個開關。用於判斷是否要用預定的那些 seed 來執行模擬。
+3. 模擬的時候需要判斷開關，以及開了之後的後續動作。
 
 [問題3] 目前 solver 的清單 Engine 和 Simulator 各自維護一份，感覺這個有點重複了。
 [目標]
