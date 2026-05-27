@@ -16,6 +16,7 @@ from .mkp_calibration import (
     mkp_transfer_core_strict_evaluator,
     mkp_transfer_paired_strict_evaluator,
 )
+from .mkp_random_collect import mkp_random_collect_every_n_5_20_evaluator
 
 __all__ = [
     "main",
@@ -32,4 +33,5 @@ __all__ = [
     "mkp_transfer_bsca_margin_005_evaluator",
     "mkp_transfer_core_strict_evaluator",
     "mkp_transfer_paired_strict_evaluator",
+    "mkp_random_collect_every_n_5_20_evaluator",
 ]

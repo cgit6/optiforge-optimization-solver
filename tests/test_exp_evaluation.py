@@ -15,6 +15,7 @@ from mkp.cli.exp.mkp_calibration import (
     mkp_transfer_core_strict_evaluator,
     mkp_transfer_paired_strict_evaluator,
 )
+from mkp.cli.exp.mkp_random_collect import mkp_random_collect_every_n_5_20_evaluator
 from mkp.experiment import (
     DatasetSetting,
     EvaluationBaseline,
@@ -90,12 +91,14 @@ def _input(
     *,
     evaluation: EvaluationSpec | None = None,
     variants: tuple[VariantSummary, ...] | None = None,
+    problem_id: str = "p1",
+    repeat_index: int = 0,
 ) -> RoundEvalInput:
     eval_spec = evaluation or EvaluationSpec(
         name="mkp_base",
         base_line=(EvaluationBaseline(name="baseline", pdev=2.0),),
     )
-    problem_setting = ProblemSetting(problem_id="p1", evaluations=(eval_spec,))
+    problem_setting = ProblemSetting(problem_id=problem_id, evaluations=(eval_spec,))
     dataset_setting = DatasetSetting(
         experiment_id="exp1",
         dataset="DATA",
@@ -106,8 +109,8 @@ def _input(
     return RoundEvalInput(
         dataset_setting=dataset_setting,
         problem_setting=problem_setting,
-        problem_id="p1",
-        repeat_index=0,
+        problem_id=problem_id,
+        repeat_index=repeat_index,
         evaluation=eval_spec,
         evaluation_name=eval_spec.name,
         variant_summaries=variants
@@ -120,6 +123,54 @@ def _input(
         candidate_result=result,
         projected_result=result,
     )
+
+
+def test_random_collect_every_n_5_20_accepts_one_repeat_per_problem_block() -> None:
+    eval_spec = EvaluationSpec(name="mkp_random_collect_every_n_5_20")
+    first_decision = mkp_random_collect_every_n_5_20_evaluator(
+        _input(evaluation=eval_spec, problem_id="OR5x500-0.25_3")
+    )
+    interval = first_decision.details["interval"]
+
+    assert 5 <= interval <= 20
+
+    accepted = [
+        repeat_index
+        for repeat_index in range(interval * 3)
+        if mkp_random_collect_every_n_5_20_evaluator(
+            _input(
+                evaluation=eval_spec,
+                problem_id="OR5x500-0.25_3",
+                repeat_index=repeat_index,
+            )
+        ).passed
+    ]
+
+    assert len(accepted) == 3
+    assert [repeat_index // interval for repeat_index in accepted] == [0, 1, 2]
+
+
+def test_random_collect_every_n_5_20_is_deterministic_and_problem_specific() -> None:
+    eval_spec = EvaluationSpec(name="mkp_random_collect_every_n_5_20")
+    base = mkp_random_collect_every_n_5_20_evaluator(
+        _input(evaluation=eval_spec, problem_id="p1", repeat_index=0)
+    )
+    repeat = mkp_random_collect_every_n_5_20_evaluator(
+        _input(evaluation=eval_spec, problem_id="p1", repeat_index=0)
+    )
+    different_problem = next(
+        mkp_random_collect_every_n_5_20_evaluator(
+            _input(evaluation=eval_spec, problem_id=f"p{index}", repeat_index=0)
+        )
+        for index in range(2, 100)
+        if mkp_random_collect_every_n_5_20_evaluator(
+            _input(evaluation=eval_spec, problem_id=f"p{index}", repeat_index=0)
+        ).details["interval"]
+        != base.details["interval"]
+    )
+
+    assert repeat.details == base.details
+    assert different_problem.details["interval"] != base.details["interval"]
 
 
 def test_mkp_base_passes_when_bsma_and_brlsmasca_beat_best_baseline() -> None:
@@ -555,6 +606,46 @@ def test_mkp_target_combo_best_passes_when_target_combos_are_algorithm_best() ->
     assert decision.passed is True
     assert decision.verdict == PASS
     assert len(decision.details["target_checks"]) == 3
+    bsma_check = next(
+        check for check in decision.details["target_checks"] if check["algorithm"] == "bsma"
+    )
+    assert bsma_check["target"] == {"z": 0.08}
+    assert "ctf" not in bsma_check["target"]
+    assert math.isclose(bsma_check["target_avg_pdev"], (0.1 + 0.4 + 0.2) / 3)
+
+
+def test_mkp_target_combo_best_uses_parameter_average_not_single_ctf_cell() -> None:
+    variants = _calibration_variants()
+    for solver_id, target_indices in (
+        ("bsma_numba", (1, 4, 7)),
+        ("bsca_numba", (0, 3, 6)),
+        ("brlsmasca_rl_numba", (5, 14, 23)),
+    ):
+        for param_set_index in target_indices:
+            variants = _replace_calibration_variant(
+                variants,
+                solver_id=solver_id,
+                param_set_index=param_set_index,
+                pdev=0.0,
+            )
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id=solver_id,
+            param_set_index=target_indices[0],
+            pdev=1.0,
+        )
+
+    decision = mkp_target_combo_best_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_best"),
+            variants=variants,
+        )
+    )
+
+    assert decision.passed is True
+    assert decision.verdict == PASS
+    for check in decision.details["target_checks"]:
+        assert check["target_avg_pdev"] < 0.4
 
 
 def test_mkp_target_combo_best_fails_when_target_combo_is_not_best() -> None:
@@ -630,18 +721,22 @@ def test_mkp_target_combo_core_strict_passes_when_core_targets_pass_even_if_bsca
 
 def test_mkp_target_combo_bsca_margin_005_passes_when_bsca_target_is_within_margin() -> None:
     variants = list(_calibration_variants())
-    variants[9] = _variant_summary(
-        solver_id="bsca_numba",
-        param_set_index=0,
-        params={"a": 1.5, "ctf": "tanh_abs"},
-        pdev=0.0274,
-    )
-    variants[12] = _variant_summary(
-        solver_id="bsca_numba",
-        param_set_index=3,
-        params={"a": 1.5, "ctf": "sigmoid_s0"},
-        pdev=0.0,
-    )
+    for list_index in (9, 12, 15):
+        variant = variants[list_index]
+        variants[list_index] = _variant_summary(
+            solver_id=variant.solver_id,
+            param_set_index=variant.param_set_index,
+            params=variant.params,
+            pdev=0.0274,
+        )
+    for list_index in (10, 13, 16):
+        variant = variants[list_index]
+        variants[list_index] = _variant_summary(
+            solver_id=variant.solver_id,
+            param_set_index=variant.param_set_index,
+            params=variant.params,
+            pdev=0.0,
+        )
 
     decision = mkp_target_combo_bsca_margin_005_evaluator(
         _input(
@@ -659,18 +754,22 @@ def test_mkp_target_combo_bsca_margin_005_passes_when_bsca_target_is_within_marg
 
 def test_mkp_target_combo_bsca_margin_005_fails_when_bsca_target_exceeds_margin() -> None:
     variants = list(_calibration_variants())
-    variants[9] = _variant_summary(
-        solver_id="bsca_numba",
-        param_set_index=0,
-        params={"a": 1.5, "ctf": "tanh_abs"},
-        pdev=0.051,
-    )
-    variants[12] = _variant_summary(
-        solver_id="bsca_numba",
-        param_set_index=3,
-        params={"a": 1.5, "ctf": "sigmoid_s0"},
-        pdev=0.0,
-    )
+    for list_index in (9, 12, 15):
+        variant = variants[list_index]
+        variants[list_index] = _variant_summary(
+            solver_id=variant.solver_id,
+            param_set_index=variant.param_set_index,
+            params=variant.params,
+            pdev=0.051,
+        )
+    for list_index in (10, 13, 16):
+        variant = variants[list_index]
+        variants[list_index] = _variant_summary(
+            solver_id=variant.solver_id,
+            param_set_index=variant.param_set_index,
+            params=variant.params,
+            pdev=0.0,
+        )
 
     decision = mkp_target_combo_bsca_margin_005_evaluator(
         _input(
@@ -686,18 +785,21 @@ def test_mkp_target_combo_bsca_margin_005_fails_when_bsca_target_exceeds_margin(
 
 
 def test_mkp_target_combo_brlsmasca_margin_004_passes_when_brlsmasca_target_is_within_margin() -> None:
-    variants = _replace_calibration_variant(
-        _calibration_variants(),
-        solver_id="brlsmasca_rl_numba",
-        param_set_index=19,
-        pdev=0.018,
-    )
-    variants = _replace_calibration_variant(
-        variants,
-        solver_id="brlsmasca_rl_numba",
-        param_set_index=5,
-        pdev=0.055,
-    )
+    variants = _calibration_variants()
+    for param_set_index in (5, 14, 23):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="brlsmasca_rl_numba",
+            param_set_index=param_set_index,
+            pdev=0.055,
+        )
+    for param_set_index in (1, 10, 19):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="brlsmasca_rl_numba",
+            param_set_index=param_set_index,
+            pdev=0.018,
+        )
 
     decision = mkp_target_combo_brlsmasca_margin_004_evaluator(
         _input(
@@ -714,18 +816,21 @@ def test_mkp_target_combo_brlsmasca_margin_004_passes_when_brlsmasca_target_is_w
 
 
 def test_mkp_target_combo_brlsmasca_margin_004_fails_when_brlsmasca_target_exceeds_margin() -> None:
-    variants = _replace_calibration_variant(
-        _calibration_variants(),
-        solver_id="brlsmasca_rl_numba",
-        param_set_index=19,
-        pdev=0.018,
-    )
-    variants = _replace_calibration_variant(
-        variants,
-        solver_id="brlsmasca_rl_numba",
-        param_set_index=5,
-        pdev=0.059,
-    )
+    variants = _calibration_variants()
+    for param_set_index in (5, 14, 23):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="brlsmasca_rl_numba",
+            param_set_index=param_set_index,
+            pdev=0.059,
+        )
+    for param_set_index in (1, 10, 19):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="brlsmasca_rl_numba",
+            param_set_index=param_set_index,
+            pdev=0.018,
+        )
 
     decision = mkp_target_combo_brlsmasca_margin_004_evaluator(
         _input(

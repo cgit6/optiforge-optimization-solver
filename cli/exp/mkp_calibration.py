@@ -39,9 +39,9 @@ EXPECTED_PAIRS = {
     ),
 }
 TARGET_COMBOS = {
-    "bsma": {"ctf": "tanh_abs", "z": 0.08},
-    "bsca": {"ctf": "tanh_abs", "a": 1.5},
-    "bscasma": {"ctf": "tanh_abs", "z": 0.08, "a": 2.5},
+    "bsma": {"z": 0.08},
+    "bsca": {"a": 1.5},
+    "bscasma": {"z": 0.08, "a": 2.5},
 }
 
 
@@ -632,32 +632,92 @@ def _single_target_combo_check(
     algorithm: str,
 ) -> dict[str, Any]:
     target = TARGET_COMBOS[algorithm]
+    target_label = _target_label(target)
     algorithm_combos = [combo for combo in combos if combo["algorithm"] == algorithm]
-    target_combos = [combo for combo in algorithm_combos if _matches_target(combo, target)]
-    if len(target_combos) != 1 or not algorithm_combos:
+    expected_options = EXPECTED_PAIRS[algorithm]
+    if not algorithm_combos:
         return {
             "passed": False,
             "algorithm": algorithm,
-            "reason": "target_combo_missing_or_ambiguous",
+            "reason": "algorithm_combos_missing",
             "target": target,
-            "matches": target_combos,
+            "target_label": target_label,
         }
 
-    target_combo = target_combos[0]
-    best_pdev = min(combo["pdev"] for combo in algorithm_combos)
-    best_variants = [
-        combo["variant"]
-        for combo in algorithm_combos
-        if math.isclose(combo["pdev"], best_pdev, rel_tol=1e-12, abs_tol=1e-12)
+    ctf_checks: list[dict[str, Any]] = []
+    for ctf in EXPECTED_CTFS:
+        ctf_combos = [combo for combo in algorithm_combos if combo["ctf"] == ctf]
+        pdevs: dict[str, float] = {}
+        variants: dict[str, str] = {}
+        option_matches: dict[str, list[str]] = {}
+        for option in expected_options:
+            option_label = _target_label(option)
+            matches = [combo for combo in ctf_combos if _matches_target(combo, option)]
+            option_matches[option_label] = [combo["variant"] for combo in matches]
+            if len(matches) == 1:
+                pdevs[option_label] = matches[0]["pdev"]
+                variants[option_label] = matches[0]["variant"]
+
+        missing_or_ambiguous = {
+            option_label: matches
+            for option_label, matches in option_matches.items()
+            if len(matches) != 1
+        }
+        if missing_or_ambiguous:
+            return {
+                "passed": False,
+                "algorithm": algorithm,
+                "reason": "target_option_missing_or_ambiguous",
+                "target": target,
+                "target_label": target_label,
+                "ctf": ctf,
+                "matches": missing_or_ambiguous,
+            }
+
+        ranks = _dense_ranks(pdevs)
+        ctf_checks.append(
+            {
+                "ctf": ctf,
+                "pdevs": pdevs,
+                "ranks": ranks,
+                "variants": variants,
+            }
+        )
+
+    option_metrics = {
+        _target_label(option): {
+            "option": option,
+            "avg_pdev": _avg([check["pdevs"][_target_label(option)] for check in ctf_checks]),
+            "avg_rank": _avg([check["ranks"][_target_label(option)] for check in ctf_checks]),
+        }
+        for option in expected_options
+    }
+    best_avg_pdev = min(metric["avg_pdev"] for metric in option_metrics.values())
+    best_avg_rank = min(metric["avg_rank"] for metric in option_metrics.values())
+    target_metrics = option_metrics[target_label]
+    best_options = [
+        label
+        for label, metric in option_metrics.items()
+        if math.isclose(metric["avg_pdev"], best_avg_pdev, rel_tol=1e-12, abs_tol=1e-12)
     ]
     return {
-        "passed": target_combo["pdev"] <= best_pdev,
+        "passed": (
+            target_metrics["avg_pdev"] <= best_avg_pdev
+            and target_metrics["avg_rank"] <= best_avg_rank
+        ),
         "algorithm": algorithm,
         "target": target,
-        "target_variant": target_combo["variant"],
-        "target_pdev": target_combo["pdev"],
-        "best_pdev": best_pdev,
-        "best_variants": best_variants,
+        "target_label": target_label,
+        "target_pdev": target_metrics["avg_pdev"],
+        "target_avg_pdev": target_metrics["avg_pdev"],
+        "target_avg_rank": target_metrics["avg_rank"],
+        "best_pdev": best_avg_pdev,
+        "best_avg_pdev": best_avg_pdev,
+        "best_avg_rank": best_avg_rank,
+        "best_options": best_options,
+        "best_variants": best_options,
+        "option_metrics": option_metrics,
+        "ctf_checks": ctf_checks,
     }
 
 
@@ -749,6 +809,18 @@ def _algorithm_count(combos: list[dict[str, Any]], algorithm: str) -> int:
 
 def _matches_target(combo: dict[str, Any], target: dict[str, Any]) -> bool:
     return all(_same_value(combo.get(key), value) for key, value in target.items())
+
+
+def _target_label(target: dict[str, Any]) -> str:
+    return ",".join(f"{key}={target[key]}" for key in PAIR_KEYS[_target_algorithm(target)])
+
+
+def _target_algorithm(target: dict[str, Any]) -> str:
+    for algorithm, keys in PAIR_KEYS.items():
+        if set(target) == set(keys):
+            return algorithm
+    # Preserve deterministic output for malformed targets used only in failure details.
+    return next(iter(PAIR_KEYS))
 
 
 def _same_value(left: Any, right: Any) -> bool:

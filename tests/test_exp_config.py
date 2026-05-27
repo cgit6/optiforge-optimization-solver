@@ -138,46 +138,65 @@ def test_build_sample_exp_cfg_success() -> None:
         ("brlsmasca_rl_numba", 25),
         ("brlsmasca_rl_numba", 26),
     )
-    assert len(experiment.cfg.dataset_settings) == 3
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 4
+    assert len(experiment.cfg.dataset_settings) == 12
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 87
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "param_cb3"
-    assert first.dataset == "OR5x500"
+    assert first.experiment_id == "set1_sent"
+    assert first.dataset == "SENT"
     assert first.problem_type == "mkp"
-    assert len(first.problem_settings) == 1
-    assert first.problem_ids == ("OR5x500-0.25_3",)
-    assert first.problem_settings[0].evaluation_names == (
-        "mkp_transfer_paired_strict",
-        "mkp_target_combo_bsma_strict",
-        "mkp_target_combo_bsca_margin_005",
-        "mkp_target_combo_brlsmasca_margin_004",
+    assert first.problem_ids == ("sent01", "sent02")
+    last = experiment.cfg.dataset_settings[-1]
+    assert last.experiment_id == "set4_gk"
+    assert last.dataset == "GK"
+    assert last.problem_ids == (
+        "mk_gk01",
+        "mk_gk02",
+        "mk_gk03",
+        "mk_gk04",
+        "mk_gk05",
+        "mk_gk06",
+        "mk_gk07",
+        "mk_gk08",
+        "mk_gk09",
     )
     assert tuple(
         problem.problem_id
         for setting in experiment.cfg.dataset_settings
         for problem in setting.problem_settings
     ) == (
-        "OR5x500-0.25_3",
-        "OR10x500-0.25_2",
-        "mk_gk04",
-        "mk_gk09",
+        "sent01",
+        "sent02",
+        "hp1",
+        "hp2",
+        "pb1",
+        "pb2",
+        "pb4",
+        "pb5",
+        "pb6",
+        "pb7",
+        "weing1",
+        "weing2",
+        "weing3",
+        "weing4",
+        "weing5",
+        "weing6",
+        "weing7",
+        "weing8",
+        *tuple(f"weish{index:02d}" for index in range(1, 31)),
+        *tuple(f"OR5x100-0.25_{index}" for index in range(1, 6)),
+        *tuple(f"OR5x250-0.25_{index}" for index in range(1, 6)),
+        *tuple(f"OR5x500-0.25_{index}" for index in range(1, 6)),
+        *tuple(f"OR10x100-0.25_{index}" for index in range(1, 6)),
+        *tuple(f"OR10x250-0.25_{index}" for index in range(1, 6)),
+        *tuple(f"OR10x500-0.25_{index}" for index in range(1, 6)),
+        *tuple(f"mk_gk{index:02d}" for index in range(1, 10)),
     )
     evaluation_by_problem = {
         problem.problem_id: problem.evaluation_names
         for setting in experiment.cfg.dataset_settings
         for problem in setting.problem_settings
     }
-    assert evaluation_by_problem["OR5x500-0.25_3"] == (
-        "mkp_transfer_paired_strict",
-        "mkp_target_combo_bsma_strict",
-        "mkp_target_combo_bsca_margin_005",
-        "mkp_target_combo_brlsmasca_margin_004",
-    )
-    assert all(
-        evaluation_names == ("mkp_transfer_paired_strict", "mkp_target_combo_best")
-        for problem_id, evaluation_names in evaluation_by_problem.items()
-        if problem_id != "OR5x500-0.25_3"
-    )
+    assert all(evaluation_names == () for evaluation_names in evaluation_by_problem.values())
 
     loader = SolverConfigLoader()
     bsma_cfg = loader.load("bsma_numba", param_set_index=1)
@@ -335,7 +354,7 @@ def test_load_config_rejects_solver_param_idx_out_of_range(tmp_path: Path) -> No
             ),
             "param_idx",
         ),
-        (_valid_config_text(evaluation="[]"), "evaluation"),
+        (_valid_config_text(evaluation=""), "evaluation"),
         (
             _valid_config_text(
                 extra_top_level="seed: [1, 3]\n",
@@ -363,6 +382,28 @@ def test_load_config_rejects_invalid_core_fields(
     exp_path, problem_root, solver_root = _write_valid_project(tmp_path, config_text=config_text)
 
     with pytest.raises(ValueError, match=error_match):
+        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_load_config_allows_empty_problem_evaluation_list(tmp_path: Path) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text=_valid_config_text(evaluation="[]"),
+    )
+
+    cfg = load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
+
+    assert cfg.dataset_settings[0].problem_settings[0].evaluations == ()
+    assert cfg.dataset_settings[0].problem_settings[0].evaluation_names == ()
+
+
+def test_load_config_rejects_null_problem_evaluation(tmp_path: Path) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text=_valid_config_text(evaluation=""),
+    )
+
+    with pytest.raises(ValueError, match="evaluation"):
         load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 

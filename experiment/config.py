@@ -66,8 +66,6 @@ class ProblemSetting:
         if not self.problem_id.strip():
             raise ValueError("problem cannot be empty.")
         evaluations = tuple(self.evaluations)
-        if not evaluations:
-            raise ValueError("evaluation cannot be empty.")
         if any(not isinstance(item, EvaluationSpec) for item in evaluations):
             raise ValueError("evaluation must contain EvaluationSpec entries.")
         names = tuple(item.name for item in evaluations)
@@ -365,7 +363,7 @@ def _parse_problem_settings(value: Any, *, context: str) -> tuple[ProblemSetting
         base_line = _parse_base_line(item.get("base_line", []), field_name=f"{item_context}.base_line")
         evaluations = tuple(
             EvaluationSpec(name=evaluation_name, base_line=base_line)
-            for evaluation_name in _parse_string_list(item["evaluation"], f"{item_context}.evaluation")
+            for evaluation_name in _parse_evaluation_list(item["evaluation"], f"{item_context}.evaluation")
         )
         settings.append(ProblemSetting(problem_id=problem_id, evaluations=evaluations))
     return tuple(settings)
@@ -462,6 +460,15 @@ def _validate_keys(
 def _parse_string_list(value: Any, field_name: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not value:
         raise ValueError(f"{field_name} must be a non-empty list.")
+    parsed = tuple(_parse_non_empty_string(item, f"{field_name}[{index}]") for index, item in enumerate(value))
+    if len(set(parsed)) != len(parsed):
+        raise ValueError(f"{field_name} cannot contain duplicate value.")
+    return parsed
+
+
+def _parse_evaluation_list(value: Any, field_name: str) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list.")
     parsed = tuple(_parse_non_empty_string(item, f"{field_name}[{index}]") for index, item in enumerate(value))
     if len(set(parsed)) != len(parsed):
         raise ValueError(f"{field_name} cannot contain duplicate value.")

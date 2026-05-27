@@ -256,6 +256,42 @@ def test_repeat_limit_fail_fast_when_problem_cannot_collect_enough_rounds(tmp_pa
     assert not (tmp_path / "output" / "exp_search" / "exp1" / "p1").exists()
 
 
+def test_empty_problem_evaluation_collects_first_available_rounds(tmp_path: Path) -> None:
+    datasets = """
+  - experiment-id: exp1
+    dataset: DATA
+    type: mkp
+    problems:
+      - problem: p1
+        evaluation: []
+"""
+    experiment, problem_root, solver_root = _project(
+        tmp_path,
+        collects=2,
+        repeat=3,
+        datasets=datasets,
+    )
+
+    report = experiment.run(
+        problem_root=problem_root,
+        solver_root=solver_root,
+        output_root=tmp_path / "output",
+    )
+
+    assert report.problems[0].collected_repeat_indices == (0, 1)
+    assert report.problems[0].collected_count == 2
+    rows = json.loads(
+        (tmp_path / "output" / "exp_search" / "exp1" / "p1" / "stub_solver" / "param_0" / "runs.json")
+        .read_text(encoding="utf-8")
+    )
+    assert [row["repeat_index"] for row in rows] == [0, 1]
+    summary = json.loads(
+        (tmp_path / "output" / "exp_search" / "exp1" / "p1" / "stub_solver" / "param_0" / "summary.json")
+        .read_text(encoding="utf-8")
+    )
+    assert summary["overall"]["meta"]["experiment"]["evaluations"] == []
+
+
 def test_run_fails_fast_on_unknown_problem_evaluator(tmp_path: Path) -> None:
     experiment, problem_root, solver_root = _project(tmp_path, collects=1, repeat=1)
 

@@ -16,6 +16,7 @@ from .mkp_calibration import (
     mkp_transfer_core_strict_evaluator,
     mkp_transfer_paired_strict_evaluator,
 )
+from .mkp_random_collect import mkp_random_collect_every_n_5_20_evaluator
 
 
 # 這種東西應該放在專案設定中
@@ -42,6 +43,7 @@ def main() -> ExperimentReport:
         "mkp_target_combo_brlsmasca_margin_004",
         mkp_target_combo_brlsmasca_margin_004_evaluator,
     )
+    register("mkp_random_collect_every_n_5_20", mkp_random_collect_every_n_5_20_evaluator)
 
     # 1. 創建實驗模組
     experiment = build(
