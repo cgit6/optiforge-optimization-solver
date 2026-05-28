@@ -7,9 +7,9 @@ solvers:
   - solver: bsma_numba
     param_idx: [7]
   - solver: bsca_numba
-    param_idx: [6]
+    param_idx: [8]
   - solver: brlsmasca_rl_numba
-    param_idx: [23]
+    param_idx: [20]
   - solver: brlsmasca_test_numba
     param_idx: [8]
 

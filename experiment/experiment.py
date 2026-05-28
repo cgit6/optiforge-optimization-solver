@@ -68,6 +68,7 @@ class Experiment:
         progress.emit()
 
         problem_reports: list[ProblemCollectionReport] = []
+        # 對每一個題庫跑模擬
         for dataset_setting in self.cfg.dataset_settings:
             simulators = self._build_dataset_simulators(
                 dataset_setting,
@@ -75,6 +76,7 @@ class Experiment:
                 solver_root=solver_root,
             )
             try:
+                # 跑模擬
                 dataset_reports = self._run_dataset(
                     dataset_setting,
                     simulators=simulators,

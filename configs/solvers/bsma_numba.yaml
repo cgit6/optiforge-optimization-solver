@@ -9,6 +9,7 @@ stop_condition:
   max_iterations: 5000
   max_seconds: null
 params:
+  # 轉換函數 V
   - pop_size: 20
     z: 0.01
     ctf: tanh_abs
@@ -19,6 +20,7 @@ params:
     z: 0.15
     ctf: tanh_abs
 
+  # 轉換函數 S
   - pop_size: 20
     z: 0.01
     ctf: sigmoid_s0
@@ -29,6 +31,7 @@ params:
     z: 0.15
     ctf: sigmoid_s0
 
+  # 轉換函數 V
   - pop_size: 20
     z: 0.01
     ctf: abs_pow_16
