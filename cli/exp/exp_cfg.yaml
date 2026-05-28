@@ -1,5 +1,5 @@
 # 最終實驗
-experiment_name: mkp_final_compare
+experiment_name: mkp_final_compare(add_QPSO)
 collects: 20
 repeat: 300000000000
 
@@ -530,12 +530,18 @@ dataset_settings:
             Pdev: 0.328
           - name: BMMVO
             Pdev: 1.358
+          - name: QPSO
+            Mean: 24381.0
+            Pdev: 0.000
       - problem: OR5x100-0.25_2
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 0.177
           - name: BMMVO
+            Pdev: 0.000
+          - name: QPSO
+            Mean: 24274.0
             Pdev: 0.000
       - problem: OR5x100-0.25_3
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
@@ -544,6 +550,9 @@ dataset_settings:
             Pdev: 0.127
           - name: BMMVO
             Pdev: 0.132
+          - name: QPSO
+            Mean: 23551.0
+            Pdev: 0.000
       - problem: OR5x100-0.25_4
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -551,6 +560,9 @@ dataset_settings:
             Pdev: 0.484
           - name: BMMVO
             Pdev: 1.759
+          - name: QPSO
+            Mean: 23534.0
+            Pdev: 0.000
       - problem: OR5x100-0.25_5
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -558,6 +570,9 @@ dataset_settings:
             Pdev: 0.225
           - name: BMMVO
             Pdev: 0.379
+          - name: QPSO
+            Mean: 23991.0
+            Pdev: 0.000
 
   - experiment-id: set3_cb2
     dataset: OR5x250
@@ -570,6 +585,9 @@ dataset_settings:
             Pdev: 0.759
           - name: BMMVO
             Pdev: 1.807
+          - name: QPSO
+            Mean: 59312.0
+            Pdev: 0.000
       - problem: OR5x250-0.25_2
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -577,6 +595,9 @@ dataset_settings:
             Pdev: 0.685
           - name: BMMVO
             Pdev: 1.760
+          - name: QPSO
+            Mean: 61470.0
+            Pdev: 0.003
       - problem: OR5x250-0.25_3
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -584,6 +605,9 @@ dataset_settings:
             Pdev: 0.930
           - name: BMMVO
             Pdev: 1.288
+          - name: QPSO
+            Mean: 62130.0
+            Pdev: 0.000
       - problem: OR5x250-0.25_4
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -591,6 +615,9 @@ dataset_settings:
             Pdev: 0.910
           - name: BMMVO
             Pdev: 1.956
+          - name: QPSO
+            Mean: 59427.0
+            Pdev: 0.061
       - problem: OR5x250-0.25_5
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -598,6 +625,9 @@ dataset_settings:
             Pdev: 0.952
           - name: BMMVO
             Pdev: 1.104
+          - name: QPSO
+            Mean: 58951.0
+            Pdev: 0.000
 
   - experiment-id: set3_cb3
     dataset: OR5x500
@@ -610,6 +640,9 @@ dataset_settings:
             Pdev: 1.407
           - name: BMMVO
             Pdev: 0.206
+          - name: QPSO
+            Mean: 120105.7
+            Pdev: 0.035
       - problem: OR5x500-0.25_2
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -617,6 +650,9 @@ dataset_settings:
             Pdev: 1.845
           - name: BMMVO
             Pdev: 2.103
+          - name: QPSO
+            Mean: 117834.3
+            Pdev: 0.038
       - problem: OR5x500-0.25_3
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -624,6 +660,9 @@ dataset_settings:
             Pdev: 1.373
           - name: BMMVO
             Pdev: 1.842
+          - name: QPSO
+            Mean: 121092.0
+            Pdev: 0.032
       - problem: OR5x500-0.25_4
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -631,6 +670,9 @@ dataset_settings:
             Pdev: 2.002
           - name: BMMVO
             Pdev: 1.576
+          - name: QPSO
+            Mean: 120740.3
+            Pdev: 0.053
       - problem: OR5x500-0.25_5
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
@@ -638,6 +680,9 @@ dataset_settings:
             Pdev: 1.669
           - name: BMMVO
             Pdev: 1.242
+          - name: QPSO
+            Mean: 122300.7
+            Pdev: 0.015
 
   - experiment-id: set3_cb4
     dataset: OR10x100
@@ -648,26 +693,41 @@ dataset_settings:
         base_line:
           - name: HLMS
             Pdev: 0.650
+          - name: QPSO
+            Mean: 23064.0
+            Pdev: 0.000
       - problem: OR10x100-0.25_2
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 0.754
+          - name: QPSO
+            Mean: 22801.0
+            Pdev: 0.000
       - problem: OR10x100-0.25_3
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.008
+          - name: QPSO
+            Mean: 22131.0
+            Pdev: 0.000
       - problem: OR10x100-0.25_4
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.071
+          - name: QPSO
+            Mean: 22772.0
+            Pdev: 0.000
       - problem: OR10x100-0.25_5
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 0.651
+          - name: QPSO
+            Mean: 22751.0
+            Pdev: 0.000
 
   - experiment-id: set3_cb5
     dataset: OR10x250
@@ -678,26 +738,41 @@ dataset_settings:
         base_line:
           - name: HLMS
             Pdev: 1.200
+          - name: QPSO
+            Mean: 59173.0
+            Pdev: 0.024
       - problem: OR10x250-0.25_2
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.162
+          - name: QPSO
+            Mean: 58733.0
+            Pdev: 0.082
       - problem: OR10x250-0.25_3
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.170
+          - name: QPSO
+            Mean: 58095.5
+            Pdev: 0.003
       - problem: OR10x250-0.25_4
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.177
+          - name: QPSO
+            Mean: 60986.0
+            Pdev: 0.023
       - problem: OR10x250-0.25_5
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.501
+          - name: QPSO
+            Mean: 58092.0
+            Pdev: 0.000
 
   - experiment-id: set3_cb6
     dataset: OR10x500
@@ -708,26 +783,41 @@ dataset_settings:
         base_line:
           - name: HLMS
             Pdev: 2.073
+          - name: QPSO
+            Mean: 117733.5
+            Pdev: 0.074
       - problem: OR10x500-0.25_2
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.800
+          - name: QPSO
+            Mean: 119148.5
+            Pdev: 0.084
       - problem: OR10x500-0.25_3
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 1.991
+          - name: QPSO
+            Mean: 119146.5
+            Pdev: 0.057
       - problem: OR10x500-0.25_4
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 2.005
+          - name: QPSO
+            Mean: 118747.5
+            Pdev: 0.069
       - problem: OR10x500-0.25_5
         evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
         base_line:
           - name: HLMS
             Pdev: 2.014
+          - name: QPSO
+            Mean: 116449.5
+            Pdev: 0.069
 
   - experiment-id: set4_gk
     dataset: GK
