@@ -5,7 +5,7 @@
 [問題1] 算法需要維護對外暴露與呈現數據的功能，所以需要 addAct 函數。以及 Extend 物件。
 [目標] 算法可以在運行過程中執行 `addAct(狀態, solution, 對外訊息)` 將狀態提交到緩存中。
 
-[方案] 這個 method 要掛在 `Machine` 物件下面。但是這個問題暫時無法處理，需要對 Machine -> Solver 之間做重構後再處理。預計是要掛在算法執行結果的那個 Result 物件的方法之下，但需要根據目前系統價構重新做評估。
+[方案] 這個 method 要掛在 `Machine` 物件下面。slot 模擬系統的架構 `*problab.Machine > *slot.Game > *slot.GameMode > *buf.GameModeResult > AddAct(...)`。但是這個問題暫時無法處理，需要對 Machine -> Solver 之間做重構後再處理。預計是要掛在算法執行結果的那個 Result 物件的方法之下，但需要根據目前系統價構重新做評估。
 
 函數名稱為 `addAct(狀態, solution, 對外訊息)` 所以一個算法的數據狀態要切分成內部算法狀態、外部暴露狀態。而函數提交的就是對外暴露的數據狀態。
 
@@ -17,7 +17,8 @@ extend 物件
 
 1. seed 需要在執行 `cli.exp` 後被保存下來。保存至 seed_bank.json 然後把檔案放在 seed folder 中。這個 seed_bamk.json 中保存一個 array。
 2. 算法設定那邊需要一個開關。用於判斷是否要用預定的那些 seed 來執行模擬。
-3. 模擬的時候需要判斷開關，以及開了之後的後續動作。
+3. 創建一個 cli.replay。
+4. 模擬的時候需要判斷開關，以及開了之後的後續動作。
 
 [風險] 做這件事有幾個風險，
 

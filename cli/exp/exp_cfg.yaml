@@ -13,56 +13,48 @@ solvers:
     param_idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
 
 dataset_settings:
-  - experiment-id: set1_hp
-    dataset: HP
+  - experiment-id: set1_sent
+    dataset: SENT
     type: mkp
     problems:
-      # min lead PDev: 0.066579162624
-      - problem: hp2
-        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
+      - problem: sent02
+        evaluation: [mkp_transfer_paired_strict]
 
-  - experiment-id: set1_pb
-    dataset: PB
+  - experiment-id: set1_weing
+    dataset: WEING
     type: mkp
     problems:
-      # min lead PDev: 0.016565529748
-      - problem: pb2
-        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
+      - problem: weing5
+        evaluation: [mkp_transfer_paired_strict]
 
   - experiment-id: set2_weish
     dataset: WEISH
     type: mkp
     problems:
-      # min lead PDev: 0.000000000000
-      - problem: weish22
-        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
-      # min lead PDev: 0.003353791461
-      - problem: weish25
-        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
+      - problem: weish04
+        evaluation: [mkp_transfer_paired_strict]
+      - problem: weish09
+        evaluation: [mkp_transfer_paired_strict]
 
   - experiment-id: set3_cb2
-    dataset: OR5x250
+    dataset: OR10x250
     type: mkp
     problems:
-      # min lead PDev: 0.006166299492
-      - problem: OR5x250-0.25_4
-        evaluation: [mkp_target_combo_front6_lead]
+      - problem: OR10x250-0.25_4
+        evaluation: [mkp_transfer_paired_strict]
 
   - experiment-id: set3_cb4
-    dataset: OR10x100
+    dataset: OR10x500
     type: mkp
     problems:
-      # min lead PDev: 0.016116507699
-      - problem: OR10x100-0.25_5
-        evaluation: [mkp_target_combo_front6_lead]
+      - problem: OR10x500-0.25_1
+        evaluation: [mkp_transfer_paired_strict]
 
   - experiment-id: set4_gk
     dataset: GK
     type: mkp
     problems:
-      # max lag PDev: 0.119571767875
+      - problem: mk_gk06
+        evaluation: [mkp_transfer_paired_strict]
       - problem: mk_gk08
-        evaluation: [mkp_target_combo_gk_lag]
-      # max lag PDev: 0.147658478082
-      - problem: mk_gk09
-        evaluation: [mkp_target_combo_gk_lag]
+        evaluation: [mkp_transfer_paired_strict]
