@@ -12,6 +12,8 @@ from .mkp_calibration import (
     mkp_target_combo_bsca_margin_005_evaluator,
     mkp_target_combo_best_evaluator,
     mkp_target_combo_core_strict_evaluator,
+    mkp_target_combo_front6_lead_evaluator,
+    mkp_target_combo_gk_lag_evaluator,
     mkp_transfer_bsca_margin_005_evaluator,
     mkp_transfer_core_strict_evaluator,
     mkp_transfer_paired_strict_evaluator,
@@ -27,6 +29,8 @@ DEFAULT_OUTPUT_ROOT = Path("output") # 輸出路徑
 
 
 def main() -> ExperimentReport:
+
+    # 註冊評估函數
     register("mkp_base", mkp_base_evaluator)
     register("mkp_bsca_base_margin_2", mkp_bsca_base_margin_2_evaluator)
     register("mkp_base2", mkp_base2_evaluator)
@@ -39,6 +43,8 @@ def main() -> ExperimentReport:
     register("mkp_target_combo_core_strict", mkp_target_combo_core_strict_evaluator)
     register("mkp_target_combo_bsma_strict", mkp_target_combo_bsma_strict_evaluator)
     register("mkp_target_combo_bsca_margin_005", mkp_target_combo_bsca_margin_005_evaluator)
+    register("mkp_target_combo_front6_lead", mkp_target_combo_front6_lead_evaluator)
+    register("mkp_target_combo_gk_lag", mkp_target_combo_gk_lag_evaluator)
     register(
         "mkp_target_combo_brlsmasca_margin_004",
         mkp_target_combo_brlsmasca_margin_004_evaluator,

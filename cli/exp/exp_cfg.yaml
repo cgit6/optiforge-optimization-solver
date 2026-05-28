@@ -1,7 +1,7 @@
 # 參數實驗
-experiment_name: mkp_transfer_param
+experiment_name: mkp_transfer_param2
 
-collects: 100
+collects: 20
 repeat: 300000000000 # 重複次數上限
 
 solvers:
@@ -13,236 +13,56 @@ solvers:
     param_idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
 
 dataset_settings:
-  - experiment-id: set1_sent
-    dataset: SENT
-    type: mkp
-    problems:
-      - problem: sent01
-        evaluation: []
-      - problem: sent02
-        evaluation: []
-
   - experiment-id: set1_hp
     dataset: HP
     type: mkp
     problems:
-      - problem: hp1
-        evaluation: []
+      # min lead PDev: 0.066579162624
       - problem: hp2
-        evaluation: []
+        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
 
   - experiment-id: set1_pb
     dataset: PB
     type: mkp
     problems:
-      - problem: pb1
-        evaluation: []
+      # min lead PDev: 0.016565529748
       - problem: pb2
-        evaluation: []
-      - problem: pb4
-        evaluation: []
-      - problem: pb5
-        evaluation: []
-      - problem: pb6
-        evaluation: []
-      - problem: pb7
-        evaluation: []
-
-  - experiment-id: set1_weing
-    dataset: WEING
-    type: mkp
-    problems:
-      - problem: weing1
-        evaluation: []
-      - problem: weing2
-        evaluation: []
-      - problem: weing3
-        evaluation: []
-      - problem: weing4
-        evaluation: []
-      - problem: weing5
-        evaluation: []
-      - problem: weing6
-        evaluation: []
-      - problem: weing7
-        evaluation: []
-      - problem: weing8
-        evaluation: []
+        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
 
   - experiment-id: set2_weish
     dataset: WEISH
     type: mkp
     problems:
-      - problem: weish01
-        evaluation: []
-      - problem: weish02
-        evaluation: []
-      - problem: weish03
-        evaluation: []
-      - problem: weish04
-        evaluation: []
-      - problem: weish05
-        evaluation: []
-      - problem: weish06
-        evaluation: []
-      - problem: weish07
-        evaluation: []
-      - problem: weish08
-        evaluation: []
-      - problem: weish09
-        evaluation: []
-      - problem: weish10
-        evaluation: []
-      - problem: weish11
-        evaluation: []
-      - problem: weish12
-        evaluation: []
-      - problem: weish13
-        evaluation: []
-      - problem: weish14
-        evaluation: []
-      - problem: weish15
-        evaluation: []
-      - problem: weish16
-        evaluation: []
-      - problem: weish17
-        evaluation: []
-      - problem: weish18
-        evaluation: []
-      - problem: weish19
-        evaluation: []
-      - problem: weish20
-        evaluation: []
-      - problem: weish21
-        evaluation: []
+      # min lead PDev: 0.000000000000
       - problem: weish22
-        evaluation: []
-      - problem: weish23
-        evaluation: []
-      - problem: weish24
-        evaluation: []
+        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
+      # min lead PDev: 0.003353791461
       - problem: weish25
-        evaluation: []
-      - problem: weish26
-        evaluation: []
-      - problem: weish27
-        evaluation: []
-      - problem: weish28
-        evaluation: []
-      - problem: weish29
-        evaluation: []
-      - problem: weish30
-        evaluation: []
-
-  - experiment-id: set3_cb1
-    dataset: OR5x100
-    type: mkp
-    problems:
-      - problem: OR5x100-0.25_1
-        evaluation: []
-      - problem: OR5x100-0.25_2
-        evaluation: []
-      - problem: OR5x100-0.25_3
-        evaluation: []
-      - problem: OR5x100-0.25_4
-        evaluation: []
-      - problem: OR5x100-0.25_5
-        evaluation: []
+        evaluation: [mkp_transfer_paired_strict, mkp_target_combo_front6_lead]
 
   - experiment-id: set3_cb2
     dataset: OR5x250
     type: mkp
     problems:
-      - problem: OR5x250-0.25_1
-        evaluation: []
-      - problem: OR5x250-0.25_2
-        evaluation: []
-      - problem: OR5x250-0.25_3
-        evaluation: []
+      # min lead PDev: 0.006166299492
       - problem: OR5x250-0.25_4
-        evaluation: []
-      - problem: OR5x250-0.25_5
-        evaluation: []
-
-  - experiment-id: set3_cb3
-    dataset: OR5x500
-    type: mkp
-    problems:
-      - problem: OR5x500-0.25_1
-        evaluation: []
-      - problem: OR5x500-0.25_2
-        evaluation: []
-      - problem: OR5x500-0.25_3
-        evaluation: []
-      - problem: OR5x500-0.25_4
-        evaluation: []
-      - problem: OR5x500-0.25_5
-        evaluation: []
+        evaluation: [mkp_target_combo_front6_lead]
 
   - experiment-id: set3_cb4
     dataset: OR10x100
     type: mkp
     problems:
-      - problem: OR10x100-0.25_1
-        evaluation: []
-      - problem: OR10x100-0.25_2
-        evaluation: []
-      - problem: OR10x100-0.25_3
-        evaluation: []
-      - problem: OR10x100-0.25_4
-        evaluation: []
+      # min lead PDev: 0.016116507699
       - problem: OR10x100-0.25_5
-        evaluation: []
-
-  - experiment-id: set3_cb5
-    dataset: OR10x250
-    type: mkp
-    problems:
-      - problem: OR10x250-0.25_1
-        evaluation: []
-      - problem: OR10x250-0.25_2
-        evaluation: []
-      - problem: OR10x250-0.25_3
-        evaluation: []
-      - problem: OR10x250-0.25_4
-        evaluation: []
-      - problem: OR10x250-0.25_5
-        evaluation: []
-
-  - experiment-id: set3_cb6
-    dataset: OR10x500
-    type: mkp
-    problems:
-      - problem: OR10x500-0.25_1
-        evaluation: []
-      - problem: OR10x500-0.25_2
-        evaluation: []
-      - problem: OR10x500-0.25_3
-        evaluation: []
-      - problem: OR10x500-0.25_4
-        evaluation: []
-      - problem: OR10x500-0.25_5
-        evaluation: []
+        evaluation: [mkp_target_combo_front6_lead]
 
   - experiment-id: set4_gk
     dataset: GK
     type: mkp
     problems:
-      - problem: mk_gk01
-        evaluation: []
-      - problem: mk_gk02
-        evaluation: []
-      - problem: mk_gk03
-        evaluation: []
-      - problem: mk_gk04
-        evaluation: []
-      - problem: mk_gk05
-        evaluation: []
-      - problem: mk_gk06
-        evaluation: []
-      - problem: mk_gk07
-        evaluation: []
+      # max lag PDev: 0.119571767875
       - problem: mk_gk08
-        evaluation: []
+        evaluation: [mkp_target_combo_gk_lag]
+      # max lag PDev: 0.147658478082
       - problem: mk_gk09
-        evaluation: []
+        evaluation: [mkp_target_combo_gk_lag]

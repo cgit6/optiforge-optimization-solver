@@ -35,7 +35,24 @@ def test_cli_exp_main_registers_bundled_evaluators_builds_and_runs(monkeypatch, 
         tmp_path / "problems",
         tmp_path / "solvers",
     )
-    assert [name for name, _ in calls["register"]] == ["mkp_base", "mkp_base2"]
+    assert [name for name, _ in calls["register"]] == [
+        "mkp_base",
+        "mkp_bsca_base_margin_2",
+        "mkp_base2",
+        "mkp_base2_margin_005",
+        "mkp_calibration",
+        "mkp_transfer_paired_strict",
+        "mkp_target_combo_best",
+        "mkp_transfer_core_strict",
+        "mkp_transfer_bsca_margin_005",
+        "mkp_target_combo_core_strict",
+        "mkp_target_combo_bsma_strict",
+        "mkp_target_combo_bsca_margin_005",
+        "mkp_target_combo_front6_lead",
+        "mkp_target_combo_gk_lag",
+        "mkp_target_combo_brlsmasca_margin_004",
+        "mkp_random_collect_every_n_5_20",
+    ]
     assert calls["run"] == (
         tmp_path / "problems",
         tmp_path / "solvers",

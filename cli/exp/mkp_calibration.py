@@ -13,6 +13,7 @@ BRLSMASCA_MARGIN_PDEV = 0.04
 BSCA_TRANSFER_MAX_AVG_RANK = 2.0
 EXPECTED_CTFS = ("tanh_abs", "sigmoid_s0", "abs_pow_16")
 EXPECTED_TRANSFER_CTF = "abs_pow_16"
+PDEV_COMPARISON_TOLERANCE = 1e-12
 
 ALGORITHM_BY_SOLVER_ID = {
     "bsma_numba": "bsma",
@@ -42,6 +43,18 @@ TARGET_COMBOS = {
     "bsma": {"z": 0.08},
     "bsca": {"a": 1.5},
     "bscasma": {"z": 0.08, "a": 2.5},
+}
+TARGET_COMBO_FRONT6_MIN_LEADS = {
+    "hp2": 0.066579162624,
+    "pb2": 0.016565529748,
+    "weish22": 0.0,
+    "weish25": 0.003353791461,
+    "OR5x250-0.25_4": 0.006166299492,
+    "OR10x100-0.25_5": 0.016116507699,
+}
+TARGET_COMBO_GK_MAX_LAGS = {
+    "mk_gk08": 0.119571767875,
+    "mk_gk09": 0.147658478082,
 }
 
 
@@ -428,6 +441,144 @@ def mkp_target_combo_brlsmasca_margin_004_evaluator(
     )
 
 
+def mkp_target_combo_front6_lead_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    min_lead = TARGET_COMBO_FRONT6_MIN_LEADS.get(input_data.problem_id)
+    if min_lead is None:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Problem is not configured for the front-six target combo lead check.",
+            details={
+                "configured_problem_ids": sorted(TARGET_COMBO_FRONT6_MIN_LEADS),
+                "problem_id": input_data.problem_id,
+            },
+        )
+
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "min_lead_pdev": min_lead,
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_checks = _check_target_combos(combos)
+    margin_checks = _target_combo_pdev_margin_checks(target_checks)
+    target_failures = [check for check in target_checks if not check["passed"]]
+    lead_failures = [
+        check
+        for check in margin_checks
+        if (
+            not check["passed"]
+            or check["lead_margin_pdev"] + PDEV_COMPARISON_TOLERANCE < min_lead
+        )
+    ]
+    failures = target_failures + lead_failures
+    if failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Target parameter combos did not meet the required front-six lead.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "comparison_tolerance": PDEV_COMPARISON_TOLERANCE,
+                "min_lead_pdev": min_lead,
+                "integrity_checks": integrity_checks,
+                "target_checks": target_checks,
+                "margin_checks": margin_checks,
+                "failures": failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Target parameter combos met the required front-six lead.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "comparison_tolerance": PDEV_COMPARISON_TOLERANCE,
+            "min_lead_pdev": min_lead,
+            "integrity_checks": integrity_checks,
+            "target_checks": target_checks,
+            "margin_checks": margin_checks,
+        },
+    )
+
+
+def mkp_target_combo_gk_lag_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
+    max_lag = TARGET_COMBO_GK_MAX_LAGS.get(input_data.problem_id)
+    if max_lag is None:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Problem is not configured for the GK target combo lag check.",
+            details={
+                "configured_problem_ids": sorted(TARGET_COMBO_GK_MAX_LAGS),
+                "problem_id": input_data.problem_id,
+            },
+        )
+
+    combos, integrity_checks, integrity_failures = _combo_context(input_data.variant_summaries)
+    if integrity_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Calibration combo set is incomplete.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "max_lag_pdev": max_lag,
+                "integrity_checks": integrity_checks,
+                "failures": integrity_failures,
+            },
+        )
+
+    target_checks = _check_target_combos(combos)
+    margin_checks = _target_combo_pdev_margin_checks(target_checks)
+    lag_failures = [
+        check
+        for check in margin_checks
+        if (
+            not check["passed"]
+            or check["lag_pdev"] - PDEV_COMPARISON_TOLERANCE > max_lag
+        )
+    ]
+    if lag_failures:
+        return RoundEvalDecision(
+            passed=False,
+            verdict=FAIL,
+            message="Target parameter combos exceeded the allowed GK lag.",
+            details={
+                "pdev_tolerance": PDEV_TOLERANCE,
+                "comparison_tolerance": PDEV_COMPARISON_TOLERANCE,
+                "max_lag_pdev": max_lag,
+                "integrity_checks": integrity_checks,
+                "target_checks": target_checks,
+                "margin_checks": margin_checks,
+                "failures": lag_failures,
+            },
+        )
+
+    return RoundEvalDecision(
+        passed=True,
+        verdict=PASS,
+        message="Target parameter combos are within the allowed GK lag.",
+        details={
+            "pdev_tolerance": PDEV_TOLERANCE,
+            "comparison_tolerance": PDEV_COMPARISON_TOLERANCE,
+            "max_lag_pdev": max_lag,
+            "integrity_checks": integrity_checks,
+            "target_checks": target_checks,
+            "margin_checks": margin_checks,
+        },
+    )
+
+
 def mkp_calibration_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision:
     transfer = mkp_transfer_paired_strict_evaluator(input_data)
     target = mkp_target_combo_best_evaluator(input_data)
@@ -766,6 +917,56 @@ def _bsca_target_margin_check(target_checks: list[dict[str, Any]]) -> dict[str, 
             "reason": "bsca_target_check_missing",
         }
     return _target_margin_check(bsca_check, BSCA_MARGIN_PDEV)
+
+
+def _target_combo_pdev_margin_checks(target_checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_target_combo_pdev_margin_check(check) for check in target_checks]
+
+
+def _target_combo_pdev_margin_check(target_check: dict[str, Any]) -> dict[str, Any]:
+    if (
+        "target_label" not in target_check
+        or "target_avg_pdev" not in target_check
+        or "option_metrics" not in target_check
+    ):
+        return {
+            **target_check,
+            "passed": False,
+            "reason": "target_margin_metrics_missing",
+            "lead_margin_pdev": -math.inf,
+            "lag_pdev": math.inf,
+        }
+
+    target_label = target_check["target_label"]
+    target_pdev = target_check["target_avg_pdev"]
+    challenger_margins = {
+        label: metric["avg_pdev"] - target_pdev
+        for label, metric in target_check["option_metrics"].items()
+        if label != target_label
+    }
+    if not challenger_margins:
+        return {
+            **target_check,
+            "passed": False,
+            "reason": "target_challengers_missing",
+            "lead_margin_pdev": -math.inf,
+            "lag_pdev": math.inf,
+        }
+
+    nearest_challenger_label, lead_margin = min(
+        challenger_margins.items(),
+        key=lambda item: item[1],
+    )
+    return {
+        **target_check,
+        "passed": True,
+        "target_combo": target_label,
+        "nearest_challenger": nearest_challenger_label,
+        "nearest_challenger_pdev": target_check["option_metrics"][nearest_challenger_label]["avg_pdev"],
+        "lead_margin_pdev": lead_margin,
+        "lag_pdev": max(0.0, -lead_margin),
+        "challenger_margins": challenger_margins,
+    }
 
 
 def _target_margin_check(target_check: dict[str, Any], margin: float) -> dict[str, Any]:

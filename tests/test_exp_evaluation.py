@@ -11,6 +11,8 @@ from mkp.cli.exp.mkp_calibration import (
     mkp_target_combo_bsca_margin_005_evaluator,
     mkp_target_combo_best_evaluator,
     mkp_target_combo_core_strict_evaluator,
+    mkp_target_combo_front6_lead_evaluator,
+    mkp_target_combo_gk_lag_evaluator,
     mkp_transfer_bsca_margin_005_evaluator,
     mkp_transfer_core_strict_evaluator,
     mkp_transfer_paired_strict_evaluator,
@@ -843,6 +845,108 @@ def test_mkp_target_combo_brlsmasca_margin_004_fails_when_brlsmasca_target_excee
     assert decision.verdict == FAIL
     assert decision.details["brlsmasca_margin_check"]["margin_passed"] is False
     assert math.isclose(decision.details["brlsmasca_margin_check"]["gap_to_best"], 0.041)
+
+
+def test_mkp_target_combo_front6_lead_requires_problem_threshold() -> None:
+    variants = _calibration_variants()
+
+    passing = mkp_target_combo_front6_lead_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_front6_lead"),
+            problem_id="hp2",
+            variants=variants,
+        )
+    )
+
+    assert passing.passed is True
+    assert passing.details["min_lead_pdev"] == 0.066579162624
+
+    failing_variants = variants
+    for param_set_index in (0, 3, 6):
+        failing_variants = _replace_calibration_variant(
+            failing_variants,
+            solver_id="bsca_numba",
+            param_set_index=param_set_index,
+            pdev=0.0,
+        )
+    for param_set_index in (1, 4, 7):
+        failing_variants = _replace_calibration_variant(
+            failing_variants,
+            solver_id="bsca_numba",
+            param_set_index=param_set_index,
+            pdev=0.01,
+        )
+
+    failing = mkp_target_combo_front6_lead_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_front6_lead"),
+            problem_id="hp2",
+            variants=failing_variants,
+        )
+    )
+
+    assert failing.passed is False
+    assert failing.verdict == FAIL
+    bsca_failure = next(
+        check for check in failing.details["failures"] if check["algorithm"] == "bsca"
+    )
+    assert math.isclose(bsca_failure["lead_margin_pdev"], 0.01)
+
+
+def test_mkp_target_combo_gk_lag_allows_configured_lag() -> None:
+    variants = _calibration_variants()
+    for param_set_index in (0, 3, 6):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="bsca_numba",
+            param_set_index=param_set_index,
+            pdev=0.1,
+        )
+    for param_set_index in (1, 4, 7):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="bsca_numba",
+            param_set_index=param_set_index,
+            pdev=0.0,
+        )
+
+    passing = mkp_target_combo_gk_lag_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_gk_lag"),
+            problem_id="mk_gk08",
+            variants=variants,
+        )
+    )
+
+    assert passing.passed is True
+    assert passing.details["max_lag_pdev"] == 0.119571767875
+    bsca_check = next(
+        check for check in passing.details["margin_checks"] if check["algorithm"] == "bsca"
+    )
+    assert math.isclose(bsca_check["lag_pdev"], 0.1)
+
+    for param_set_index in (0, 3, 6):
+        variants = _replace_calibration_variant(
+            variants,
+            solver_id="bsca_numba",
+            param_set_index=param_set_index,
+            pdev=0.13,
+        )
+
+    failing = mkp_target_combo_gk_lag_evaluator(
+        _input(
+            evaluation=EvaluationSpec(name="mkp_target_combo_gk_lag"),
+            problem_id="mk_gk08",
+            variants=variants,
+        )
+    )
+
+    assert failing.passed is False
+    assert failing.verdict == FAIL
+    bsca_failure = next(
+        check for check in failing.details["failures"] if check["algorithm"] == "bsca"
+    )
+    assert math.isclose(bsca_failure["lag_pdev"], 0.13)
 
 
 def test_mkp_target_combo_core_strict_fails_when_core_target_fails() -> None:

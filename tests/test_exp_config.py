@@ -119,7 +119,7 @@ def test_build_sample_exp_cfg_success() -> None:
 
     assert isinstance(experiment, Experiment)
     assert experiment.cfg.experiment_name == "mkp_transfer_param"
-    assert experiment.cfg.collects == 20
+    assert experiment.cfg.collects == 50
     assert experiment.cfg.repeat == 300000000000
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
     assert experiment.cfg.solver_ids == (
@@ -138,65 +138,46 @@ def test_build_sample_exp_cfg_success() -> None:
         ("brlsmasca_rl_numba", 25),
         ("brlsmasca_rl_numba", 26),
     )
-    assert len(experiment.cfg.dataset_settings) == 12
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 87
+    assert len(experiment.cfg.dataset_settings) == 6
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 8
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "set1_sent"
-    assert first.dataset == "SENT"
+    assert first.experiment_id == "set1_hp"
+    assert first.dataset == "HP"
     assert first.problem_type == "mkp"
-    assert first.problem_ids == ("sent01", "sent02")
+    assert first.problem_ids == ("hp2",)
     last = experiment.cfg.dataset_settings[-1]
     assert last.experiment_id == "set4_gk"
     assert last.dataset == "GK"
-    assert last.problem_ids == (
-        "mk_gk01",
-        "mk_gk02",
-        "mk_gk03",
-        "mk_gk04",
-        "mk_gk05",
-        "mk_gk06",
-        "mk_gk07",
-        "mk_gk08",
-        "mk_gk09",
-    )
+    assert last.problem_ids == ("mk_gk08", "mk_gk09")
     assert tuple(
         problem.problem_id
         for setting in experiment.cfg.dataset_settings
         for problem in setting.problem_settings
     ) == (
-        "sent01",
-        "sent02",
-        "hp1",
         "hp2",
-        "pb1",
         "pb2",
-        "pb4",
-        "pb5",
-        "pb6",
-        "pb7",
-        "weing1",
-        "weing2",
-        "weing3",
-        "weing4",
-        "weing5",
-        "weing6",
-        "weing7",
-        "weing8",
-        *tuple(f"weish{index:02d}" for index in range(1, 31)),
-        *tuple(f"OR5x100-0.25_{index}" for index in range(1, 6)),
-        *tuple(f"OR5x250-0.25_{index}" for index in range(1, 6)),
-        *tuple(f"OR5x500-0.25_{index}" for index in range(1, 6)),
-        *tuple(f"OR10x100-0.25_{index}" for index in range(1, 6)),
-        *tuple(f"OR10x250-0.25_{index}" for index in range(1, 6)),
-        *tuple(f"OR10x500-0.25_{index}" for index in range(1, 6)),
-        *tuple(f"mk_gk{index:02d}" for index in range(1, 10)),
+        "weish22",
+        "weish25",
+        "OR5x250-0.25_4",
+        "OR10x100-0.25_5",
+        "mk_gk08",
+        "mk_gk09",
     )
     evaluation_by_problem = {
         problem.problem_id: problem.evaluation_names
         for setting in experiment.cfg.dataset_settings
         for problem in setting.problem_settings
     }
-    assert all(evaluation_names == () for evaluation_names in evaluation_by_problem.values())
+    assert evaluation_by_problem == {
+        "hp2": ("mkp_target_combo_front6_lead",),
+        "pb2": ("mkp_target_combo_front6_lead",),
+        "weish22": ("mkp_target_combo_front6_lead",),
+        "weish25": ("mkp_target_combo_front6_lead",),
+        "OR5x250-0.25_4": ("mkp_target_combo_front6_lead",),
+        "OR10x100-0.25_5": ("mkp_target_combo_front6_lead",),
+        "mk_gk08": ("mkp_target_combo_gk_lag",),
+        "mk_gk09": ("mkp_target_combo_gk_lag",),
+    }
 
     loader = SolverConfigLoader()
     bsma_cfg = loader.load("bsma_numba", param_set_index=1)
