@@ -20,6 +20,7 @@ def main(
     spec = createExperimentSpec(args) # 實驗規格物件
     bundle = buildSimulationBundle(
         spec,
+        param_set_index=args.param_set_index,
         seed_strategy=DerivedPerProblemSeedStrategy(),
         problem_root=Path(problem_root),
         solver_root=Path(solver_root),

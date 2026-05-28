@@ -10,6 +10,7 @@ from typing import Any
 
 from .config import DatasetSetting, ExperimentConfig, ProblemSetting, load_config
 from .evaluation import RoundEvalDecision, RoundEvalInput, RoundEvaluator, VariantSummary
+from .seed_bank import build_seed_bank, problem_seed_entry, solver_config_snapshot, variant_key, write_seed_bank
 from ..engine.assembly import Engine
 from ..engine.models import ExperimentSpec, RunTask
 from ..machine import Machine, MachinePool, MachinePoolSession, MachineResult, SimulatorRunRow
@@ -48,6 +49,8 @@ class ExperimentReport:
 class Experiment:
     cfg: ExperimentConfig
     collected_results: list[ProblemCollectionReport] = field(default_factory=list)
+    _seed_bank_problem_entries: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
+    _seed_bank_variants: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
 
     def run(self, *, problem_root: Path, solver_root: Path, output_root: Path) -> ExperimentReport:
         """執行優化任務"""
@@ -57,6 +60,8 @@ class Experiment:
             shutil.rmtree(experiment_output_dir)
         experiment_output_dir.mkdir(parents=True, exist_ok=True)
         self.collected_results.clear()
+        self._seed_bank_problem_entries.clear()
+        self._seed_bank_variants.clear()
 
         progress = _CollectionProgress(self.cfg)
         print("step1: collect", file=sys.stderr, flush=True)
@@ -90,6 +95,17 @@ class Experiment:
         # 輸出
         print("step: write summary.json file")
         _write_json(experiment_output_dir / "summary.json", asdict(report))
+        if self._seed_bank_problem_entries:
+            write_seed_bank(
+                experiment_output_dir / "seed_bank.json",
+                build_seed_bank(
+                    experiment_name=self.cfg.experiment_name,
+                    base_seed=EXP_BASE_SEED,
+                    seed_strategy=DerivedPerProblemSeedStrategy.__name__,
+                    variants=self._seed_bank_variants.values(),
+                    problems=self._seed_bank_problem_entries,
+                ),
+            )
         print("step3: finish")
         return report
 
@@ -246,6 +262,13 @@ class Experiment:
             output_root=output_root,
             variant_metadata=metadata,
         )
+        self._record_seed_bank_problem(
+            dataset_setting=dataset_setting,
+            problem_id=problem_id,
+            machines=machines,
+            collected_repeat_indices=tuple(collected_repeat_indices),
+            collected_run_seeds=tuple(collected_run_seeds),
+        )
         return ProblemCollectionReport(
             dataset_experiment_id=dataset_setting.experiment_id,
             dataset=dataset_setting.dataset,
@@ -256,6 +279,38 @@ class Experiment:
             attempted_repeats=attempted_repeats,
             collected_repeat_indices=tuple(collected_repeat_indices),
             collected_run_seeds=tuple(collected_run_seeds),
+        )
+
+    def _record_seed_bank_problem(
+        self,
+        *,
+        dataset_setting: DatasetSetting,
+        problem_id: str,
+        machines: tuple[Machine, ...],
+        collected_repeat_indices: tuple[int, ...],
+        collected_run_seeds: tuple[int, ...],
+    ) -> None:
+        variant_keys: list[str] = []
+        for machine in machines:
+            key = variant_key(machine.solver_id, machine.param_set_index)
+            config = solver_config_snapshot(
+                machine._solver_configs.get(machine.solver_id, machine.param_set_index)
+            )
+            existing = self._seed_bank_variants.get(key)
+            if existing is not None and existing != config:
+                raise RuntimeError(f"conflicting seed bank variant snapshot: {key!r}")
+            self._seed_bank_variants[key] = config
+            variant_keys.append(key)
+        self._seed_bank_problem_entries.append(
+            problem_seed_entry(
+                dataset_experiment_id=dataset_setting.experiment_id,
+                dataset=dataset_setting.dataset,
+                problem_type=dataset_setting.problem_type,
+                problem_id=problem_id,
+                collected_repeat_indices=collected_repeat_indices,
+                run_seeds=collected_run_seeds,
+                variant_keys=variant_keys,
+            )
         )
 
 

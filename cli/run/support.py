@@ -31,7 +31,13 @@ def _splitSolverIds(raw: str) -> tuple[str, ...]:
         raise ValueError("--solver must contain at least one solver id.")
     return values
 
-def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root: Path) -> None:
+def validate_execute_args(
+    spec: ExperimentSpec,
+    problem_root: Path,
+    solver_root: Path,
+    *,
+    param_set_index: int | None = None,
+) -> None:
     """執行模擬前驗證：題目 YAML、solver YAML capability 是否相容。"""
     if len(spec.solver_ids) != 1:
         raise ValueError("cli.run accepts exactly one solver; use cli.exp for multi-solver experiments.")
@@ -52,7 +58,11 @@ def validate_execute_args(spec: ExperimentSpec, problem_root: Path, solver_root:
 
     loader = SolverConfigLoader(config_root=solver_root)
     for solver_id in spec.solver_ids:
-        solver_configs = loader.load_all(solver_id)
+        solver_configs = (
+            (loader.load(solver_id, param_set_index=int(param_set_index)),)
+            if param_set_index is not None
+            else loader.load_all(solver_id)
+        )
         capabilities = solver_configs[0]["capabilities"]
         if problem_type not in {str(v) for v in capabilities["problem_types"]}:
             raise ValueError(
@@ -87,6 +97,7 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--problems", required=True, help="Comma-separated problem ids")
     parser.add_argument("--solver", required=True, help="Single solver id")
+    parser.add_argument("--set", required=True, type=int, dest="param_set_index", help="0-based solver params index")
     parser.add_argument("--repeat", default=20, type=int)
     parser.add_argument("--seed", default=55688, type=int)
     parser.add_argument("--worker", default=1, type=int, dest="worker_count")
@@ -120,18 +131,22 @@ def createExperimentSpec(args: argparse.Namespace) -> ExperimentSpec:
 def buildSimulationBundle(
     spec: ExperimentSpec, # 實驗規格
     *,
+    param_set_index: int,
     seed_strategy: SeedStrategy,
     problem_root: Path,
     solver_root: Path,
 ) -> SimulationBundle:
     """驗證 `cli.run` 參數並建立可執行的 `SimulationBundle`。"""
 
-    validate_execute_args(spec, problem_root, solver_root)
+    if param_set_index < 0:
+        raise ValueError("--set must be >= 0")
+    validate_execute_args(spec, problem_root, solver_root, param_set_index=param_set_index)
     return engine.build(
         spec=spec,
         problem_root=problem_root,
         solver_root=solver_root,
         seed_strategy=seed_strategy,
+        solver_param_set_indices={spec.solver_ids[0]: (int(param_set_index),)},
     )
 
 

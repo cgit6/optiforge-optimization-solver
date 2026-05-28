@@ -28,6 +28,7 @@ packages = [
     "mkp.cli",
     "mkp.cli.convert",
     "mkp.cli.exp",
+    "mkp.cli.replay",
     "mkp.cli.run",
     "mkp.converter",
     "mkp.engine",

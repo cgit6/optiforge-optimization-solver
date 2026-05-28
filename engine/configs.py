@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from ..tools.solver_config_loader import SolverConfigLoader
 from .models import ExperimentSpec
@@ -18,13 +18,50 @@ class SolverConfigsSnapshot:
     _by_key: tuple[tuple[tuple[str, int], dict[str, Any]], ...]
 
     @classmethod
-    def build(cls, spec: ExperimentSpec, solver_root: Path | str) -> SolverConfigsSnapshot:
+    def build(
+        cls,
+        spec: ExperimentSpec,
+        solver_root: Path | str,
+        *,
+        param_set_indices: Mapping[str, tuple[int, ...]] | None = None,
+    ) -> SolverConfigsSnapshot:
         loader = SolverConfigLoader(config_root=solver_root)
         pairs: list[tuple[tuple[str, int], dict[str, Any]]] = []
         for solver_id in spec.solver_ids:
-            for raw in loader.load_all(solver_id):
+            selected_indices = param_set_indices.get(solver_id) if param_set_indices is not None else None
+            if selected_indices is None:
+                configs = loader.load_all(solver_id)
+            else:
+                configs = tuple(
+                    loader.load(solver_id, param_set_index=int(param_set_index))
+                    for param_set_index in selected_indices
+                )
+            for raw in configs:
                 param_set_index = int(raw["param_set_index"])
                 pairs.append(((solver_id, param_set_index), copy.deepcopy(raw)))
+        return cls(_by_key=tuple(pairs))
+
+    @classmethod
+    def from_configs(cls, configs: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> SolverConfigsSnapshot:
+        pairs: list[tuple[tuple[str, int], dict[str, Any]]] = []
+        seen: set[tuple[str, int]] = set()
+        for config in configs:
+            solver_id = str(config.get("solver_id", "")).strip()
+            if not solver_id:
+                raise ValueError("solver config snapshot requires solver_id.")
+            param_set_index = int(config.get("param_set_index", -1))
+            if param_set_index < 0:
+                raise ValueError("solver config snapshot requires param_set_index >= 0.")
+            key = (solver_id, param_set_index)
+            if key in seen:
+                raise ValueError(f"duplicate solver config snapshot: {key!r}")
+            for field in ("solver_class", "capabilities", "stop_condition", "params"):
+                if field not in config:
+                    raise ValueError(f"solver config snapshot missing required field: {field}")
+            seen.add(key)
+            pairs.append((key, copy.deepcopy(config)))
+        if not pairs:
+            raise ValueError("solver config snapshot cannot be empty.")
         return cls(_by_key=tuple(pairs))
 
     def get(self, solver_id: str, param_set_index: int) -> dict[str, Any]:

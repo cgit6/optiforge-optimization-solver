@@ -62,6 +62,8 @@ def test_create_experiment_spec_uses_new_cli_defaults() -> None:
             "weish01",
             "--solver",
             "stub_solver",
+            "--set",
+            "0",
         ]
     )
     spec = createExperimentSpec(args)
@@ -88,6 +90,8 @@ def test_create_experiment_spec_rejects_invalid_worker_count() -> None:
             "weish01",
             "--solver",
             "stub_solver",
+            "--set",
+            "0",
             "--worker",
             "0",
         ]
@@ -97,7 +101,7 @@ def test_create_experiment_spec_rejects_invalid_worker_count() -> None:
         createExperimentSpec(args)
 
 
-def test_app_cli_success_runs_all_solver_params(tmp_path: Path):
+def test_app_cli_success_runs_selected_solver_param(tmp_path: Path):
     problem_root = tmp_path / "problems"
     solver_root = tmp_path / "solvers"
     output_root = tmp_path / "output"
@@ -115,6 +119,8 @@ def test_app_cli_success_runs_all_solver_params(tmp_path: Path):
         "weish01",
         "--solver",
         "stub_solver",
+        "--set",
+        "1",
         "--repeat",
         "1",
         "--seed",
@@ -122,9 +128,9 @@ def test_app_cli_success_runs_all_solver_params(tmp_path: Path):
     ]
 
     result = main(argv, problem_root=problem_root, solver_root=solver_root, output_root=output_root)
-    assert len(result.machine_results) == 2
-    assert len(result.iter_rows()) == 2
-    assert (output_root / "exp_cli_1" / "stub_solver" / "param_0" / "runs.csv").exists()
+    assert len(result.machine_results) == 1
+    assert len(result.iter_rows()) == 1
+    assert not (output_root / "exp_cli_1" / "stub_solver" / "param_0" / "runs.csv").exists()
     assert (output_root / "exp_cli_1" / "stub_solver" / "param_1" / "runs.csv").exists()
 
 
@@ -146,6 +152,8 @@ def test_app_cli_worker_runs_batch(tmp_path: Path):
         "weish01",
         "--solver",
         "stub_solver",
+        "--set",
+        "0",
         "--repeat",
         "1",
         "--seed",
@@ -177,6 +185,8 @@ def test_app_cli_fail_fast_when_problem_yaml_missing(tmp_path: Path):
         "weish01",
         "--solver",
         "stub_solver",
+        "--set",
+        "0",
         "--repeat",
         "1",
         "--seed",
@@ -203,6 +213,8 @@ def test_app_cli_fail_fast_when_solver_yaml_missing(tmp_path: Path):
         "weish01",
         "--solver",
         "stub_solver",
+        "--set",
+        "0",
         "--repeat",
         "1",
         "--seed",
@@ -235,6 +247,62 @@ def test_app_cli_missing_required_arg_rejected(tmp_path: Path):
     ]
 
     with pytest.raises(SystemExit):
+        main(argv, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_app_cli_missing_set_rejected(tmp_path: Path):
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    _write_solver_yaml(solver_root / "stub_solver.yaml")
+
+    argv = [
+        "--experiment-name",
+        "exp_cli_missing_set",
+        "--type",
+        "mkp",
+        "--dataset",
+        "WEISH",
+        "--problems",
+        "weish01",
+        "--solver",
+        "stub_solver",
+        "--repeat",
+        "1",
+        "--seed",
+        "1",
+    ]
+
+    with pytest.raises(SystemExit):
+        main(argv, problem_root=problem_root, solver_root=solver_root)
+
+
+def test_app_cli_rejects_unknown_param_set(tmp_path: Path) -> None:
+    problem_root = tmp_path / "problems"
+    solver_root = tmp_path / "solvers"
+    _write_problem_yaml(problem_root / "mkp" / "WEISH" / "weish01.yaml")
+    _write_solver_yaml(solver_root / "stub_solver.yaml", param_count=1)
+
+    argv = [
+        "--experiment-name",
+        "exp_cli_bad_set",
+        "--type",
+        "mkp",
+        "--dataset",
+        "WEISH",
+        "--problems",
+        "weish01",
+        "--solver",
+        "stub_solver",
+        "--set",
+        "3",
+        "--repeat",
+        "1",
+        "--seed",
+        "1",
+    ]
+
+    with pytest.raises(ValueError, match="param_set_index out of range"):
         main(argv, problem_root=problem_root, solver_root=solver_root)
 
 
