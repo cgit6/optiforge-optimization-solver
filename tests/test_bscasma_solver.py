@@ -11,6 +11,8 @@ from mkp.solver.BSCASMA_rl_rc_numba import (
     BRLSMASCARLRCNumbaCore,
     BRLSMASCARLRCNumbaSolver,
     _archive_add_vector,
+    _build_core_score_cp_payload,
+    _build_freq_gated_v2_payload,
     _build_lp_rc_item_eval_payload,
     _dual_efficiency_fallback,
     _guided_probability,
@@ -371,6 +373,118 @@ def test_bscasma_rl_rc_numba_cp_list_is_complete_permutation():
     assert np.array_equal(np.sort(core.cp_list), np.arange(problem.items))
     assert core.item_eval_payload["base_order"].shape == (problem.items,)
     assert core.item_eval_fallback is False
+
+
+def test_bscasma_rl_rc_core_score_cp_payload_builds_complete_order():
+    problem = _build_problem(best_known=10**9)
+    base_payload = _build_lp_rc_item_eval_payload(
+        problem.values,
+        problem.weights,
+        problem.capacities,
+        eval_group_decimals=1,
+        eval_rc_eps=1.0e-9,
+        eval_x_eps=1.0e-9,
+    )
+
+    payload = _build_core_score_cp_payload(
+        base_payload,
+        core_w_x_lp=0.40,
+        core_w_rc=0.25,
+        core_w_eff=0.20,
+        core_w_bucket=0.15,
+    )
+
+    assert payload["item_eval_method"] == "core_score_cp"
+    assert np.array_equal(np.sort(payload["cp_list"]), np.arange(problem.items))
+    assert payload["core_score"].shape == (problem.items,)
+    assert np.all(np.isfinite(payload["core_score"]))
+
+
+def test_bscasma_rl_rc_freq_gated_v2_payload_is_reproducible_with_seed():
+    problem = _build_problem(best_known=10**9)
+    base_payload = _build_lp_rc_item_eval_payload(
+        problem.values,
+        problem.weights,
+        problem.capacities,
+        eval_group_decimals=1,
+        eval_rc_eps=1.0e-9,
+        eval_x_eps=1.0e-9,
+    )
+    kwargs = {
+        "core_w_x_lp": 0.40,
+        "core_w_rc": 0.25,
+        "core_w_eff": 0.20,
+        "core_w_bucket": 0.15,
+        "eval_group_decimals": 1,
+        "eval_rc_eps": 1.0e-9,
+        "eval_x_eps": 1.0e-9,
+        "freq_cp_noise": 0.03,
+        "freq_elite_ratio": 0.995,
+        "freq_quality_power": 4.0,
+        "freq_samples_dim5": 2,
+        "freq_samples_dim10": 2,
+        "freq_samples_dim30": 2,
+        "freq_blend_rho_dim5": 0.50,
+        "freq_blend_rho_dim10": 0.70,
+        "freq_blend_rho_dim30": 0.75,
+        "freq_gate_probe_margin": 0.0002,
+        "freq_gate_min_elites": 1,
+        "freq_gate_min_std": 0.0,
+        "freq_gate_min_topk_overlap": 0.0,
+        "repair_passes": 1,
+        "repair_swap_limit": 0,
+    }
+
+    payload_a = _build_freq_gated_v2_payload(
+        problem.values,
+        problem.weights,
+        problem.capacities,
+        base_payload,
+        np.random.default_rng(123),
+        **kwargs,
+    )
+    payload_b = _build_freq_gated_v2_payload(
+        problem.values,
+        problem.weights,
+        problem.capacities,
+        base_payload,
+        np.random.default_rng(123),
+        **kwargs,
+    )
+
+    assert np.array_equal(payload_a["cp_list"], payload_b["cp_list"])
+    assert np.array_equal(np.sort(payload_a["cp_list"]), np.arange(problem.items))
+    assert payload_a["freq_samples"] == 2
+    assert "freq_fallback" in payload_a
+
+
+@pytest.mark.parametrize("method", ["core_score_cp", "freq_gated_v2", "freq_gated_v2_gbc"])
+def test_bscasma_rl_rc_item_eval_methods_solve_and_report_metadata(method: str):
+    solver = BRLSMASCARLRCNumbaSolver()
+    problem = _build_problem(best_known=10**9)
+    params = {
+        "pop_size": 8,
+        "item_eval_method": method,
+        "freq_samples_dim5": 2,
+        "freq_samples_dim10": 2,
+        "freq_samples_dim30": 2,
+    }
+    config = _build_numba_config(
+        solver_id="brlsmasca_rl_rc_numba",
+        solver_class="BRLSMASCARLRCNumbaSolver",
+        max_iterations=3,
+        params=params,
+    )
+
+    result = solver.solve(problem, config, np.random.default_rng(123))
+
+    assert set(result.best_solution.tolist()) <= {0, 1}
+    assert np.all(result.best_solution @ problem.weights <= problem.capacities)
+    assert result.metadata["requested_item_eval_method"] == method
+    if method == "core_score_cp":
+        assert result.metadata["item_eval_method"] == "core_score_cp"
+    if method == "freq_gated_v2_gbc":
+        assert result.metadata["guided_binary_enabled"] is True
 
 
 def test_bscasma_rl_rc_numba_default_cp_list_is_ordered_and_seed_independent():
@@ -954,6 +1068,18 @@ def test_bscasma_rl_rc_numba_rejects_invalid_remaining_strategy_params():
     }
 
     invalid_cases = [
+        ({"item_eval_method": "unknown"}, "params.item_eval_method"),
+        ({"core_w_x_lp": -0.1}, "params.core_w_x_lp"),
+        ({"core_w_x_lp": 0, "core_w_rc": 0, "core_w_eff": 0, "core_w_bucket": 0}, "params.core score weights"),
+        ({"freq_cp_noise": -0.1}, "params.freq_cp_noise"),
+        ({"freq_elite_ratio": 0}, "params.freq_elite_ratio"),
+        ({"freq_quality_power": 0}, "params.freq_quality_power"),
+        ({"freq_samples_dim5": 0}, "params.freq_samples_dim5"),
+        ({"freq_blend_rho_dim5": -0.1}, "params.freq_blend_rho_dim5"),
+        ({"freq_gate_probe_margin": -0.1}, "params.freq_gate_probe_margin"),
+        ({"freq_gate_min_elites": 0}, "params.freq_gate_min_elites"),
+        ({"freq_gate_min_std": -0.1}, "params.freq_gate_min_std"),
+        ({"freq_gate_min_topk_overlap": 1.1}, "params.freq_gate_min_topk_overlap"),
         ({"guided_binary_enabled": "maybe"}, "params.guided_binary_enabled"),
         ({"guided_lambda_lp": -0.1}, "params.guided_lambda_lp"),
         ({"guided_lambda_bucket": -0.1}, "params.guided_lambda_bucket"),
