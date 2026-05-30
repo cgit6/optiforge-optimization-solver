@@ -1,0 +1,157 @@
+solver_id: bsma_rc_numba
+solver_class: BSMARCNumbaSolver
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 5000
+  max_seconds: null
+params:
+  - pop_size: 20
+    z: 0.01
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.08
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.15
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+
+  - pop_size: 20
+    z: 0.01
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.08
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.15
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+
+  - pop_size: 20
+    z: 0.01
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.08
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.15
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15

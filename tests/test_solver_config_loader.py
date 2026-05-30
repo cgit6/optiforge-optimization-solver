@@ -299,6 +299,37 @@ params:
         loader.load("stub_solver", param_set_index=1)
 
 
+def test_load_bscasma_rl_rc_numba_param_20_from_default_configs() -> None:
+    loader = SolverConfigLoader()
+
+    config = loader.load("brlsmasca_rl_rc_numba", param_set_index=20)
+
+    assert config["solver_id"] == "brlsmasca_rl_rc_numba"
+    assert config["solver_class"] == "BRLSMASCARLRCNumbaSolver"
+    assert config["params"] == {
+        "pop_size": 20,
+        "z": 0.01,
+        "a": 2.5,
+        "alpha": 0.1,
+        "gamma": 0.9,
+        "ctf": "abs_pow_16",
+        "eval_group_decimals": 1,
+        "eval_group_shuffle": False,
+        "eval_rc_eps": 1.0e-9,
+        "eval_x_eps": 1.0e-9,
+        "repair_passes": 2,
+        "repair_swap_limit": 4,
+        "mixed_init_enabled": True,
+        "restart_enabled": True,
+        "restart_window": 40,
+        "restart_ratio": 0.25,
+        "restart_strong_p": 0.85,
+        "restart_core_p": 0.50,
+        "restart_weak_p": 0.15,
+    }
+    assert config["stop_condition"]["max_iterations"] == 5000
+
+
 def test_concurrent_solver_config_loads(tmp_path: Path) -> None:
     root = tmp_path / "solvers"
     _write_solver_yaml(

@@ -118,92 +118,69 @@ def test_build_sample_exp_cfg_success() -> None:
     experiment = build(Path("cli/exp/exp_cfg.yaml"))
 
     assert isinstance(experiment, Experiment)
-    assert experiment.cfg.experiment_name == "mkp_transfer_param"
-    assert experiment.cfg.collects == 50
+    assert experiment.cfg.experiment_name == "mkp_cb_qpso_rc"
+    assert experiment.cfg.collects == 20
     assert experiment.cfg.repeat == 300000000000
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
-    assert experiment.cfg.solver_ids == (
-        "bsma_numba",
-        "bsca_numba",
-        "brlsmasca_rl_numba",
-    )
-    assert len(experiment.cfg.solver_variants) == 45
-    assert experiment.cfg.solver_variants[:3] == (
-        ("bsma_numba", 0),
-        ("bsma_numba", 1),
-        ("bsma_numba", 2),
-    )
-    assert experiment.cfg.solver_variants[-3:] == (
-        ("brlsmasca_rl_numba", 24),
-        ("brlsmasca_rl_numba", 25),
-        ("brlsmasca_rl_numba", 26),
-    )
+    assert experiment.cfg.solver_ids == ("brlsmasca_rl_rc_numba",)
+    assert experiment.cfg.solver_variants == (("brlsmasca_rl_rc_numba", 20),)
     assert len(experiment.cfg.dataset_settings) == 6
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 8
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 30
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "set1_hp"
-    assert first.dataset == "HP"
+    assert first.experiment_id == "set3_cb1"
+    assert first.dataset == "OR5x100"
     assert first.problem_type == "mkp"
-    assert first.problem_ids == ("hp2",)
-    last = experiment.cfg.dataset_settings[-1]
-    assert last.experiment_id == "set4_gk"
-    assert last.dataset == "GK"
-    assert last.problem_ids == ("mk_gk08", "mk_gk09")
-    assert tuple(
-        problem.problem_id
-        for setting in experiment.cfg.dataset_settings
-        for problem in setting.problem_settings
-    ) == (
-        "hp2",
-        "pb2",
-        "weish22",
-        "weish25",
-        "OR5x250-0.25_4",
-        "OR10x100-0.25_5",
-        "mk_gk08",
-        "mk_gk09",
+    assert first.problem_ids == (
+        "OR5x100-0.25_1",
+        "OR5x100-0.25_2",
+        "OR5x100-0.25_3",
+        "OR5x100-0.25_4",
+        "OR5x100-0.25_5",
     )
-    evaluation_by_problem = {
-        problem.problem_id: problem.evaluation_names
-        for setting in experiment.cfg.dataset_settings
-        for problem in setting.problem_settings
-    }
-    assert evaluation_by_problem == {
-        "hp2": ("mkp_target_combo_front6_lead",),
-        "pb2": ("mkp_target_combo_front6_lead",),
-        "weish22": ("mkp_target_combo_front6_lead",),
-        "weish25": ("mkp_target_combo_front6_lead",),
-        "OR5x250-0.25_4": ("mkp_target_combo_front6_lead",),
-        "OR10x100-0.25_5": ("mkp_target_combo_front6_lead",),
-        "mk_gk08": ("mkp_target_combo_gk_lag",),
-        "mk_gk09": ("mkp_target_combo_gk_lag",),
-    }
+    last = experiment.cfg.dataset_settings[-1]
+    assert last.experiment_id == "set3_cb6"
+    assert last.dataset == "OR10x500"
+    assert last.problem_ids == (
+        "OR10x500-0.25_1",
+        "OR10x500-0.25_2",
+        "OR10x500-0.25_3",
+        "OR10x500-0.25_4",
+        "OR10x500-0.25_5",
+    )
+    for setting in experiment.cfg.dataset_settings:
+        assert setting.experiment_id.startswith("set3_cb")
+        for problem in setting.problem_settings:
+            assert problem.evaluation_names == ("mkp_qpso_mean_gte",)
+            qpsos = [
+                baseline
+                for baseline in problem.evaluations[0].base_line
+                if baseline.name == "QPSO"
+            ]
+            assert len(qpsos) == 1
+            assert qpsos[0].mean is not None
 
     loader = SolverConfigLoader()
-    bsma_cfg = loader.load("bsma_numba", param_set_index=1)
-    assert bsma_cfg["params"] == {
-        "pop_size": 20,
-        "z": 0.08,
-        "ctf": "tanh_abs",
-    }
-    assert bsma_cfg["stop_condition"]["max_iterations"] == 5000
-
-    bsca_cfg = loader.load("bsca_numba", param_set_index=0)
-    assert bsca_cfg["params"] == {
-        "pop_size": 20,
-        "a": 1.5,
-        "ctf": "tanh_abs",
-    }
-    assert bsca_cfg["stop_condition"]["max_iterations"] == 5000
-
-    rl_cfg = loader.load("brlsmasca_rl_numba", param_set_index=5)
+    rl_cfg = loader.load("brlsmasca_rl_rc_numba", param_set_index=20)
     assert rl_cfg["params"] == {
         "pop_size": 20,
-        "z": 0.08,
+        "z": 0.01,
         "a": 2.5,
         "alpha": 0.1,
         "gamma": 0.9,
-        "ctf": "tanh_abs",
+        "ctf": "abs_pow_16",
+        "eval_group_decimals": 1,
+        "eval_group_shuffle": False,
+        "eval_rc_eps": 1.0e-9,
+        "eval_x_eps": 1.0e-9,
+        "repair_passes": 2,
+        "repair_swap_limit": 4,
+        "mixed_init_enabled": True,
+        "restart_enabled": True,
+        "restart_window": 40,
+        "restart_ratio": 0.25,
+        "restart_strong_p": 0.85,
+        "restart_core_p": 0.50,
+        "restart_weak_p": 0.15,
     }
     assert rl_cfg["stop_condition"]["max_iterations"] == 5000
 

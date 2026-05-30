@@ -51,6 +51,7 @@ def test_cli_exp_main_registers_bundled_evaluators_builds_and_runs(monkeypatch, 
         "mkp_target_combo_front6_lead",
         "mkp_target_combo_gk_lag",
         "mkp_target_combo_brlsmasca_margin_004",
+        "mkp_qpso_mean_gte",
         "mkp_random_collect_every_n_5_20",
     ]
     assert calls["run"] == (

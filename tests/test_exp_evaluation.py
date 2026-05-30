@@ -17,6 +17,7 @@ from mkp.cli.exp.mkp_calibration import (
     mkp_transfer_core_strict_evaluator,
     mkp_transfer_paired_strict_evaluator,
 )
+from mkp.cli.exp.mkp_qpso import mkp_qpso_mean_gte_evaluator
 from mkp.cli.exp.mkp_random_collect import mkp_random_collect_every_n_5_20_evaluator
 from mkp.experiment import (
     DatasetSetting,
@@ -173,6 +174,122 @@ def test_random_collect_every_n_5_20_is_deterministic_and_problem_specific() -> 
 
     assert repeat.details == base.details
     assert different_problem.details["interval"] != base.details["interval"]
+
+
+def test_mkp_qpso_mean_gte_passes_when_target_mean_equals_qpso() -> None:
+    decision = mkp_qpso_mean_gte_evaluator(
+        _input(
+            evaluation=EvaluationSpec(
+                name="mkp_qpso_mean_gte",
+                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+            ),
+            variants=(
+                _variant_summary(
+                    solver_id="brlsmasca_rl_rc_numba",
+                    param_set_index=20,
+                    params={},
+                    pdev=0.0,
+                ),
+            ),
+        )
+    )
+
+    assert decision.passed is True
+    assert decision.verdict == PASS
+    assert decision.details["target_mean"] == 100.0
+    assert decision.details["qpso_mean"] == 100.0
+
+
+def test_mkp_qpso_mean_gte_passes_when_target_mean_exceeds_qpso() -> None:
+    decision = mkp_qpso_mean_gte_evaluator(
+        _input(
+            evaluation=EvaluationSpec(
+                name="mkp_qpso_mean_gte",
+                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+            ),
+            variants=(
+                _variant_summary(
+                    solver_id="brlsmasca_rl_rc_numba",
+                    param_set_index=20,
+                    params={},
+                    pdev=-2.0,
+                ),
+            ),
+        )
+    )
+
+    assert decision.passed is True
+    assert decision.details["target_mean"] == 102.0
+    assert decision.details["gap_to_qpso_mean"] == 2.0
+
+
+def test_mkp_qpso_mean_gte_fails_when_target_mean_is_below_qpso() -> None:
+    decision = mkp_qpso_mean_gte_evaluator(
+        _input(
+            evaluation=EvaluationSpec(
+                name="mkp_qpso_mean_gte",
+                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+            ),
+            variants=(
+                _variant_summary(
+                    solver_id="brlsmasca_rl_rc_numba",
+                    param_set_index=20,
+                    params={},
+                    pdev=1.0,
+                ),
+            ),
+        )
+    )
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+    assert decision.details["target_mean"] == 99.0
+
+
+def test_mkp_qpso_mean_gte_fails_when_qpso_mean_is_missing() -> None:
+    decision = mkp_qpso_mean_gte_evaluator(
+        _input(
+            evaluation=EvaluationSpec(
+                name="mkp_qpso_mean_gte",
+                base_line=(EvaluationBaseline(name="QPSO", pdev=0.0),),
+            ),
+            variants=(
+                _variant_summary(
+                    solver_id="brlsmasca_rl_rc_numba",
+                    param_set_index=20,
+                    params={},
+                    pdev=0.0,
+                ),
+            ),
+        )
+    )
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+
+
+def test_mkp_qpso_mean_gte_fails_when_target_summary_is_invalid() -> None:
+    decision = mkp_qpso_mean_gte_evaluator(
+        _input(
+            evaluation=EvaluationSpec(
+                name="mkp_qpso_mean_gte",
+                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+            ),
+            variants=(
+                _variant_summary(
+                    solver_id="brlsmasca_rl_rc_numba",
+                    param_set_index=20,
+                    params={},
+                    pdev=0.0,
+                    valid_run_count=1,
+                ),
+            ),
+        )
+    )
+
+    assert decision.passed is False
+    assert decision.verdict == FAIL
+    assert decision.details["failure"]["valid_run_count"] == 1
 
 
 def test_mkp_base_passes_when_bsma_and_brlsmasca_beat_best_baseline() -> None:

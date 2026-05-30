@@ -1,775 +1,184 @@
-# 最終實驗
-experiment_name: mkp_final_compare(add_QPSO)
+# CB vs QPSO experiment
+experiment_name: mkp_cb_qpso_rc
 collects: 20
 repeat: 300000000000
 
 solvers:
-  - solver: bsma_numba
-    param_idx: [7]
-  - solver: bsca_numba
-    param_idx: [8]
-  - solver: brlsmasca_rl_numba
+  - solver: brlsmasca_rl_rc_numba
     param_idx: [20]
-  - solver: brlsmasca_test_numba
-    param_idx: [8]
 
 dataset_settings:
-  - experiment-id: set1_sent
-    dataset: SENT
-    type: mkp
-    problems:
-      - problem: sent01
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.129
-      - problem: sent02
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.034
+  # - experiment-id: set3_cb1
+  #   dataset: OR5x100
+  #   type: mkp
+  #   problems:
+  #     - problem: OR5x100-0.25_1
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 24381.0
+  #           Pdev: 0.000
+  #     - problem: OR5x100-0.25_2
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 24274.0
+  #           Pdev: 0.000
+  #     - problem: OR5x100-0.25_3
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 23551.0
+  #           Pdev: 0.000
+  #     - problem: OR5x100-0.25_4
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 23534.0
+  #           Pdev: 0.000
+  #     - problem: OR5x100-0.25_5
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 23991.0
+  #           Pdev: 0.000
 
-  - experiment-id: set1_hp
-    dataset: HP
-    type: mkp
-    problems:
-      - problem: hp1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.556
-      - problem: hp2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2] # 稍微放寬標準
-        base_line:
-          - name: HLMS
-            Pdev: 0.879
+  # - experiment-id: set3_cb2
+  #   dataset: OR5x250
+  #   type: mkp
+  #   problems:
+  #     - problem: OR5x250-0.25_1
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 59312.0
+  #           Pdev: 0.000
+  #     - problem: OR5x250-0.25_2
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 61470.0
+  #           Pdev: 0.003
+  #     - problem: OR5x250-0.25_3
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 62130.0
+  #           Pdev: 0.000
+  #     - problem: OR5x250-0.25_4
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 59427.0
+  #           Pdev: 0.061
+  #     - problem: OR5x250-0.25_5
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 58951.0
+  #           Pdev: 0.000
 
-  - experiment-id: set1_pb
-    dataset: PB
-    type: mkp
-    problems:
-      - problem: pb1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.518
-      - problem: pb2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.251
-      - problem: pb4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 2.212
-      - problem: pb5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.655
-      - problem: pb6
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.031
-      - problem: pb7
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.483
+  # - experiment-id: set3_cb3
+  #   dataset: OR5x500
+  #   type: mkp
+  #   problems:
+  #     - problem: OR5x500-0.25_1
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 120105.7
+  #           Pdev: 0.035
+  #     - problem: OR5x500-0.25_2
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 117834.3
+  #           Pdev: 0.038
+  #     - problem: OR5x500-0.25_3
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 121092.0
+  #           Pdev: 0.032
+  #     - problem: OR5x500-0.25_4
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 120740.3
+  #           Pdev: 0.053
+  #     - problem: OR5x500-0.25_5
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 122300.7
+  #           Pdev: 0.015
 
-  - experiment-id: set1_weing
-    dataset: WEING
-    type: mkp
-    problems:
-      - problem: weing1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.013
-      - problem: weing2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.005
-      - problem: weing3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.916
-      - problem: weing4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.319
-      - problem: weing5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.000
-      - problem: weing6
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.010
-      - problem: weing7
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.977
-      - problem: weing8
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.247
-
-  - experiment-id: set2_weish
-    dataset: WEISH
-    type: mkp
-    problems:
-      - problem: weish01
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.180
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.090
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish02
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.020
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish03
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.190
-          - name: BIWOA
-            Pdev: 3.970
-          - name: BMMVO
-            Pdev: 3.050
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish04
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.090
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish05
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.000
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish06
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.090
-          - name: BIWOA
-            Pdev: 0.120
-          - name: BMMVO
-            Pdev: 0.140
-          - name: BSCA
-            Pdev: 0.140
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish07
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.030
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish08
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.010
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.030
-          - name: BSCA
-            Pdev: 0.010
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish09
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.000
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish10
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.040
-          - name: BIWOA
-            Pdev: 0.310
-          - name: BMMVO
-            Pdev: 0.560
-          - name: BSCA
-            Pdev: 0.560
-          - name: IBSMA_U1
-            Pdev: 0.505
-      - problem: weish11
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.000
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish12
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.070
-          - name: BIWOA
-            Pdev: 0.580
-          - name: BMMVO
-            Pdev: 0.590
-          - name: BSCA
-            Pdev: 0.590
-          - name: IBSMA_U1
-            Pdev: 0.584
-      - problem: weish13
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.230
-          - name: BIWOA
-            Pdev: 0.000
-          - name: BMMVO
-            Pdev: 0.000
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish14
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.280
-          - name: BIWOA
-            Pdev: 0.710
-          - name: BMMVO
-            Pdev: 0.570
-          - name: BSCA
-            Pdev: 0.660
-          - name: IBSMA_U1
-            Pdev: 0.479
-      - problem: weish15
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.080
-          - name: BIWOA
-            Pdev: 0.080
-          - name: BMMVO
-            Pdev: 0.110
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish16
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.140
-          - name: BIWOA
-            Pdev: 0.010
-          - name: BMMVO
-            Pdev: 0.100
-          - name: BSCA
-            Pdev: 0.090
-          - name: IBSMA_U1
-            Pdev: 0.003
-      - problem: weish17
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.000
-          - name: BIWOA
-            Pdev: 0.390
-          - name: BMMVO
-            Pdev: 0.960
-          - name: BSCA
-            Pdev: 0.420
-          - name: IBSMA_U1
-            Pdev: 0.014
-      - problem: weish18
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.110
-          - name: BIWOA
-            Pdev: 0.650
-          - name: BMMVO
-            Pdev: 1.920
-          - name: BSCA
-            Pdev: 0.620
-          - name: IBSMA_U1
-            Pdev: 0.044
-      - problem: weish19
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.010
-          - name: BIWOA
-            Pdev: 0.380
-          - name: BMMVO
-            Pdev: 0.350
-          - name: BSCA
-            Pdev: 0.000
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish20
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.030
-          - name: BIWOA
-            Pdev: 0.230
-          - name: BMMVO
-            Pdev: 0.570
-          - name: BSCA
-            Pdev: 0.020
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish21
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.050
-          - name: BIWOA
-            Pdev: 0.190
-          - name: BMMVO
-            Pdev: 0.640
-          - name: BSCA
-            Pdev: 0.030
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish22
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.580
-          - name: BIWOA
-            Pdev: 0.430
-          - name: BMMVO
-            Pdev: 0.680
-          - name: BSCA
-            Pdev: 0.630
-          - name: IBSMA_U1
-            Pdev: 0.201
-      - problem: weish23
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.850
-          - name: BIWOA
-            Pdev: 0.660
-          - name: BMMVO
-            Pdev: 1.160
-          - name: BSCA
-            Pdev: 0.890
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish24
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.160
-          - name: BIWOA
-            Pdev: 1.230
-          - name: BMMVO
-            Pdev: 3.140
-          - name: BSCA
-            Pdev: 0.860
-          - name: IBSMA_U1
-            Pdev: 0.030
-      - problem: weish25
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.030
-          - name: BIWOA
-            Pdev: 0.940
-          - name: BMMVO
-            Pdev: 1.630
-          - name: BSCA
-            Pdev: 0.200
-          - name: IBSMA_U1
-            Pdev: 0.000
-      - problem: weish26
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.190
-          - name: BIWOA
-            Pdev: 0.690
-          - name: BMMVO
-            Pdev: 1.170
-          - name: BSCA
-            Pdev: 0.920
-          - name: IBSMA_U1
-            Pdev: 0.066
-      - problem: weish27
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.500
-          - name: BIWOA
-            Pdev: 0.450
-          - name: BMMVO
-            Pdev: 2.530
-          - name: BSCA
-            Pdev: 0.880
-          - name: IBSMA_U1
-            Pdev: 0.390
-      - problem: weish28
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.190
-          - name: BIWOA
-            Pdev: 0.490
-          - name: BMMVO
-            Pdev: 1.700
-          - name: BSCA
-            Pdev: 0.780
-          - name: IBSMA_U1
-            Pdev: 0.400
-      - problem: weish29
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.400
-          - name: BIWOA
-            Pdev: 0.430
-          - name: BMMVO
-            Pdev: 1.750
-          - name: BSCA
-            Pdev: 0.430
-          - name: IBSMA_U1
-            Pdev: 0.404
-      - problem: weish30
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.080
-          - name: BIWOA
-            Pdev: 1.230
-          - name: BMMVO
-            Pdev: 2.490
-          - name: BSCA
-            Pdev: 0.610
-          - name: IBSMA_U1
-            Pdev: 0.032
-
-  - experiment-id: set3_cb1
-    dataset: OR5x100
-    type: mkp
-    problems:
-      - problem: OR5x100-0.25_1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.328
-          - name: BMMVO
-            Pdev: 1.358
-          - name: QPSO
-            Mean: 24381.0
-            Pdev: 0.000
-      - problem: OR5x100-0.25_2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.177
-          - name: BMMVO
-            Pdev: 0.000
-          - name: QPSO
-            Mean: 24274.0
-            Pdev: 0.000
-      - problem: OR5x100-0.25_3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.127
-          - name: BMMVO
-            Pdev: 0.132
-          - name: QPSO
-            Mean: 23551.0
-            Pdev: 0.000
-      - problem: OR5x100-0.25_4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.484
-          - name: BMMVO
-            Pdev: 1.759
-          - name: QPSO
-            Mean: 23534.0
-            Pdev: 0.000
-      - problem: OR5x100-0.25_5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.225
-          - name: BMMVO
-            Pdev: 0.379
-          - name: QPSO
-            Mean: 23991.0
-            Pdev: 0.000
-
-  - experiment-id: set3_cb2
-    dataset: OR5x250
-    type: mkp
-    problems:
-      - problem: OR5x250-0.25_1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.759
-          - name: BMMVO
-            Pdev: 1.807
-          - name: QPSO
-            Mean: 59312.0
-            Pdev: 0.000
-      - problem: OR5x250-0.25_2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.685
-          - name: BMMVO
-            Pdev: 1.760
-          - name: QPSO
-            Mean: 61470.0
-            Pdev: 0.003
-      - problem: OR5x250-0.25_3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.930
-          - name: BMMVO
-            Pdev: 1.288
-          - name: QPSO
-            Mean: 62130.0
-            Pdev: 0.000
-      - problem: OR5x250-0.25_4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.910
-          - name: BMMVO
-            Pdev: 1.956
-          - name: QPSO
-            Mean: 59427.0
-            Pdev: 0.061
-      - problem: OR5x250-0.25_5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.952
-          - name: BMMVO
-            Pdev: 1.104
-          - name: QPSO
-            Mean: 58951.0
-            Pdev: 0.000
-
-  - experiment-id: set3_cb3
-    dataset: OR5x500
-    type: mkp
-    problems:
-      - problem: OR5x500-0.25_1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.407
-          - name: BMMVO
-            Pdev: 0.206
-          - name: QPSO
-            Mean: 120105.7
-            Pdev: 0.035
-      - problem: OR5x500-0.25_2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.845
-          - name: BMMVO
-            Pdev: 2.103
-          - name: QPSO
-            Mean: 117834.3
-            Pdev: 0.038
-      - problem: OR5x500-0.25_3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.373
-          - name: BMMVO
-            Pdev: 1.842
-          - name: QPSO
-            Mean: 121092.0
-            Pdev: 0.032
-      - problem: OR5x500-0.25_4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 2.002
-          - name: BMMVO
-            Pdev: 1.576
-          - name: QPSO
-            Mean: 120740.3
-            Pdev: 0.053
-      - problem: OR5x500-0.25_5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.669
-          - name: BMMVO
-            Pdev: 1.242
-          - name: QPSO
-            Mean: 122300.7
-            Pdev: 0.015
-
-  - experiment-id: set3_cb4
-    dataset: OR10x100
-    type: mkp
-    problems:
-      - problem: OR10x100-0.25_1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.650
-          - name: QPSO
-            Mean: 23064.0
-            Pdev: 0.000
-      - problem: OR10x100-0.25_2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.754
-          - name: QPSO
-            Mean: 22801.0
-            Pdev: 0.000
-      - problem: OR10x100-0.25_3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.008
-          - name: QPSO
-            Mean: 22131.0
-            Pdev: 0.000
-      - problem: OR10x100-0.25_4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.071
-          - name: QPSO
-            Mean: 22772.0
-            Pdev: 0.000
-      - problem: OR10x100-0.25_5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.651
-          - name: QPSO
-            Mean: 22751.0
-            Pdev: 0.000
+  # - experiment-id: set3_cb4
+  #   dataset: OR10x100
+  #   type: mkp
+  #   problems:
+  #     - problem: OR10x100-0.25_1
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 23064.0
+  #           Pdev: 0.000
+  #     - problem: OR10x100-0.25_2
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 22801.0
+  #           Pdev: 0.000
+  #     - problem: OR10x100-0.25_3
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 22131.0
+  #           Pdev: 0.000
+  #     - problem: OR10x100-0.25_4
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 22772.0
+  #           Pdev: 0.000
+  #     - problem: OR10x100-0.25_5
+  #       evaluation: [mkp_qpso_mean_gte]
+  #       base_line:
+  #         - name: QPSO
+  #           Mean: 22751.0
+  #           Pdev: 0.000
 
   - experiment-id: set3_cb5
     dataset: OR10x250
     type: mkp
     problems:
       - problem: OR10x250-0.25_1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.200
           - name: QPSO
             Mean: 59173.0
             Pdev: 0.024
       - problem: OR10x250-0.25_2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.162
           - name: QPSO
             Mean: 58733.0
             Pdev: 0.082
       - problem: OR10x250-0.25_3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.170
           - name: QPSO
             Mean: 58095.5
             Pdev: 0.003
       - problem: OR10x250-0.25_4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.177
           - name: QPSO
             Mean: 60986.0
             Pdev: 0.023
       - problem: OR10x250-0.25_5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.501
           - name: QPSO
             Mean: 58092.0
             Pdev: 0.000
@@ -779,164 +188,32 @@ dataset_settings:
     type: mkp
     problems:
       - problem: OR10x500-0.25_1
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 2.073
           - name: QPSO
             Mean: 117733.5
             Pdev: 0.074
       - problem: OR10x500-0.25_2
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.800
           - name: QPSO
             Mean: 119148.5
             Pdev: 0.084
       - problem: OR10x500-0.25_3
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 1.991
           - name: QPSO
             Mean: 119146.5
             Pdev: 0.057
       - problem: OR10x500-0.25_4
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 2.005
           - name: QPSO
             Mean: 118747.5
             Pdev: 0.069
       - problem: OR10x500-0.25_5
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
+        evaluation: [mkp_qpso_mean_gte]
         base_line:
-          - name: HLMS
-            Pdev: 2.014
           - name: QPSO
             Mean: 116449.5
             Pdev: 0.069
-
-  - experiment-id: set4_gk
-    dataset: GK
-    type: mkp
-    problems:
-      - problem: mk_gk01
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.637
-          - name: BIWOA
-            Pdev: 0.797
-          - name: BMMVO
-            Pdev: 2.337
-          - name: BSCA
-            Pdev: 1.620
-          - name: IBSMA_U1
-            Pdev: 0.552
-      - problem: mk_gk02
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.505
-          - name: BIWOA
-            Pdev: 0.682
-          - name: BMMVO
-            Pdev: 2.198
-          - name: BSCA
-            Pdev: 1.541
-          - name: IBSMA_U1
-            Pdev: 0.561
-      - problem: mk_gk03
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.061
-          - name: BIWOA
-            Pdev: 1.061
-          - name: BMMVO
-            Pdev: 2.422
-          - name: BSCA
-            Pdev: 1.998
-          - name: IBSMA_U1
-            Pdev: 0.808
-      - problem: mk_gk04
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.988
-          - name: BIWOA
-            Pdev: 1.144
-          - name: BMMVO
-            Pdev: 2.237
-          - name: BSCA
-            Pdev: 1.786
-          - name: IBSMA_U1
-            Pdev: 0.898
-      - problem: mk_gk05
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.138
-          - name: BIWOA
-            Pdev: 0.992
-          - name: BMMVO
-            Pdev: 2.738
-          - name: BSCA
-            Pdev: 2.235
-          - name: IBSMA_U1
-            Pdev: 0.693
-      - problem: mk_gk06
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.107
-          - name: BIWOA
-            Pdev: 1.042
-          - name: BMMVO
-            Pdev: 2.240
-          - name: BSCA
-            Pdev: 1.889
-          - name: IBSMA_U1
-            Pdev: 0.705
-      - problem: mk_gk07
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.801
-          - name: BIWOA
-            Pdev: 0.619
-          - name: BMMVO
-            Pdev: 2.877
-          - name: BSCA
-            Pdev: 2.534
-          - name: IBSMA_U1
-            Pdev: 0.390
-      - problem: mk_gk08
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 1.127
-          - name: BIWOA
-            Pdev: 0.952
-          - name: BMMVO
-            Pdev: 2.366
-          - name: BSCA
-            Pdev: 2.010
-          - name: IBSMA_U1
-            Pdev: 0.663
-      - problem: mk_gk09
-        evaluation: [mkp_base, mkp_base2, mkp_bsca_base_margin_2]
-        base_line:
-          - name: HLMS
-            Pdev: 0.933
-          - name: BIWOA
-            Pdev: 0.423
-          - name: BMMVO
-            Pdev: 2.531
-          - name: BSCA
-            Pdev: 2.358
-          - name: IBSMA_U1
-            Pdev: 0.343

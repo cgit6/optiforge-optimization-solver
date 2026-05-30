@@ -1,0 +1,298 @@
+solver_id: brlsmasca_rl_rc_numba
+solver_class: BRLSMASCARLRCNumbaSolver
+
+# 做一個優化器的開關
+optimal_setting:
+  use_optimal: false
+  seed_bank: [] # seed 檔案
+
+capabilities:
+  problem_types: [mkp]
+  encodings: [binary]
+  directions: [max]
+stop_condition:
+  type: max_iterations
+  max_iterations: 5000
+  max_seconds: null
+params:
+  - pop_size: 20
+    z: 0.01
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.01
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.01
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: tanh_abs
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+
+  - pop_size: 20
+    z: 0.01
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.01
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.01
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: sigmoid_s0
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+
+  - pop_size: 20
+    z: 0.01
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.01
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.01
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+    repair_passes: 2
+    repair_swap_limit: 4
+    mixed_init_enabled: true
+    restart_enabled: true
+    restart_window: 40
+    restart_ratio: 0.25
+    restart_strong_p: 0.85
+    restart_core_p: 0.50
+    restart_weak_p: 0.15
+  - pop_size: 20
+    z: 0.08
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.08
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 1.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 2.0
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
+  - pop_size: 20
+    z: 0.15
+    a: 2.5
+    alpha: 0.1
+    gamma: 0.9
+    ctf: abs_pow_16
+    eval_group_decimals: 1
+    eval_group_shuffle: false
+    eval_rc_eps: 1.0e-9
+    eval_x_eps: 1.0e-9
