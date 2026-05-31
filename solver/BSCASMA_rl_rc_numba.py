@@ -317,6 +317,7 @@ def _repair_solution_by_order(
     pop_fit = np.asarray([float(np.dot(values, pop_sol[0]))], dtype=np.float64)
     resource = np.zeros(capacities.size, dtype=np.float64)
     repair_stats = np.zeros(1, dtype=np.int64)
+    drop_score = np.ones(values.size, dtype=np.float64)
     _repair_bscasma_row_v2_inplace(
         pop_sol,
         0,
@@ -331,6 +332,8 @@ def _repair_solution_by_order(
         int(repair_passes),
         int(repair_swap_limit),
         repair_stats,
+        0,
+        drop_score,
     )
     return np.asarray(pop_sol[0], dtype=np.float64), int(pop_fit[0])
 
@@ -591,6 +594,342 @@ def _build_freq_gated_v2_payload(
     }
 
 
+def _normalize_score(values: np.ndarray) -> np.ndarray:
+    return _robust_minmax(np.asarray(values, dtype=np.float64))
+
+
+def _safe_ratio_for_score(values: np.ndarray, denom: np.ndarray) -> np.ndarray:
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.asarray(values, dtype=np.float64).ravel() / np.asarray(denom, dtype=np.float64).ravel()
+    positive = np.asarray(values, dtype=np.float64).ravel() > 0.0
+    ratio = np.where((np.asarray(denom, dtype=np.float64).ravel() <= 0.0) & positive, np.inf, ratio)
+    return np.nan_to_num(ratio, nan=0.0, posinf=np.finfo(np.float64).max, neginf=0.0)
+
+
+def _lagrangian_multipliers_lite(
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    *,
+    iterations: int = 200,
+    step0: float = 2.0,
+) -> np.ndarray:
+    dim = int(capacities.size)
+    lam = np.zeros(dim, dtype=np.float64)
+    best_lam = lam.copy()
+    best_dual = np.inf
+    values_f = np.asarray(values, dtype=np.float64).ravel()
+    weights_f = np.asarray(weights, dtype=np.float64)
+    capacities_f = np.asarray(capacities, dtype=np.float64).ravel()
+    for t in range(int(iterations)):
+        net = values_f - weights_f @ lam
+        chosen = (net > 0.0).astype(np.float64)
+        usage = weights_f.T @ chosen
+        dual_val = float(capacities_f @ lam + np.maximum(net, 0.0).sum())
+        if dual_val < best_dual:
+            best_dual = dual_val
+            best_lam = lam.copy()
+        subgrad = (usage - capacities_f) / (capacities_f + 1.0e-12)
+        norm = float(np.linalg.norm(subgrad))
+        if norm < 1.0e-12:
+            break
+        lam = np.maximum(0.0, lam + (float(step0) / math.sqrt(float(t + 1))) * subgrad)
+    return best_lam
+
+
+def _score_values_for_method(
+    score_name: str,
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    base_payload: dict[str, Any],
+) -> np.ndarray:
+    name = str(score_name).lower()
+    values_f = np.asarray(values, dtype=np.float64).ravel()
+    weights_f = np.asarray(weights, dtype=np.float64)
+    capacities_f = np.asarray(capacities, dtype=np.float64).ravel()
+    if name == "cnd":
+        density_cost = weights_f @ (1.0 / (capacities_f + 1.0e-12))
+        return _safe_ratio_for_score(values_f, density_cost)
+    if name == "dual":
+        dual_price = np.asarray(base_payload["dual_price"], dtype=np.float64).ravel()
+        return _safe_ratio_for_score(values_f, weights_f @ dual_price)
+    if name == "rc":
+        reduced_pos = np.maximum(np.asarray(base_payload["reduced_cost"], dtype=np.float64).ravel(), 0.0)
+        x_lp = np.asarray(base_payload["x_lp"], dtype=np.float64).ravel()
+        return 0.5 * _normalize_score(reduced_pos) + 0.5 * np.clip(x_lp, 0.0, 1.0)
+    if name == "hyb":
+        dual = _score_values_for_method("dual", values, weights, capacities, base_payload)
+        reduced_pos = np.maximum(np.asarray(base_payload["reduced_cost"], dtype=np.float64).ravel(), 0.0)
+        x_lp = np.asarray(base_payload["x_lp"], dtype=np.float64).ravel()
+        bucket = np.asarray(base_payload["bucket"], dtype=np.int64).ravel()
+        core_flag = (bucket == 1).astype(np.float64)
+        return (
+            0.35 * _normalize_score(dual)
+            + 0.25 * _normalize_score(reduced_pos)
+            + 0.25 * np.clip(x_lp, 0.0, 1.0)
+            + 0.15 * core_flag
+        )
+    if name == "lag":
+        lam = _lagrangian_multipliers_lite(values, weights, capacities)
+        return _safe_ratio_for_score(values_f, weights_f @ lam)
+    raise ValueError(f"unsupported score method: {score_name}")
+
+
+def _build_named_score_cp_payload(
+    score_name: str,
+    mode: str,
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    base_payload: dict[str, Any],
+) -> dict[str, Any]:
+    raw_score = _score_values_for_method(score_name, values, weights, capacities, base_payload)
+    score = _normalize_score(raw_score)
+    item_ids = np.arange(score.size, dtype=np.int64)
+    cp_list = np.ascontiguousarray(np.lexsort((item_ids, -score)).astype(np.int64))
+    method = f"score_{str(score_name).lower()}_{str(mode).lower()}"
+    payload: dict[str, Any] = {
+        "base_order": cp_list,
+        "cp_list": cp_list,
+        "item_score": score,
+        "drop_score": score,
+        "score_method": method,
+        "item_eval_method": method,
+        "guided_mode": "lp_original",
+    }
+    if str(mode).lower() == "weight":
+        payload["guided_x"] = np.clip(score, 0.0, 1.0)
+        payload["guided_mode"] = f"{str(score_name).lower()}_score"
+    return payload
+
+
+def _build_frequency_cp_payload(
+    mode: str,
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    base_payload: dict[str, Any],
+    rng: np.random.Generator,
+    *,
+    core_w_x_lp: float,
+    core_w_rc: float,
+    core_w_eff: float,
+    core_w_bucket: float,
+    eval_group_decimals: int,
+    eval_rc_eps: float,
+    eval_x_eps: float,
+    freq_cp_noise: float,
+    freq_elite_ratio: float,
+    freq_quality_power: float,
+    freq_samples_dim5: int,
+    freq_samples_dim10: int,
+    freq_samples_dim30: int,
+    repair_passes: int,
+    repair_swap_limit: int,
+) -> dict[str, Any]:
+    mode_s = str(mode)
+    values_i = np.asarray(values, dtype=np.int64)
+    weights_i = np.asarray(weights, dtype=np.int64)
+    capacities_i = np.asarray(capacities, dtype=np.int64)
+    values_f = np.asarray(values, dtype=np.float64).ravel()
+    core_payload = _build_core_score_cp_payload(
+        base_payload,
+        core_w_x_lp=core_w_x_lp,
+        core_w_rc=core_w_rc,
+        core_w_eff=core_w_eff,
+        core_w_bucket=core_w_bucket,
+    )
+    core_score = np.asarray(core_payload["core_score"], dtype=np.float64)
+    samples, rho = _freq_samples_and_rho(
+        int(capacities_i.size),
+        freq_samples_dim5=freq_samples_dim5,
+        freq_samples_dim10=freq_samples_dim10,
+        freq_samples_dim30=freq_samples_dim30,
+        freq_blend_rho_dim5=0.50 if mode_s == "freq_gated" else 0.0,
+        freq_blend_rho_dim10=0.50 if mode_s == "freq_gated" else 0.0,
+        freq_blend_rho_dim30=0.50 if mode_s == "freq_gated" else 0.0,
+    )
+    probe_solutions: list[np.ndarray] = []
+    probe_fits: list[int] = []
+    for _ in range(samples):
+        if mode_s.startswith("elite_freq"):
+            score_r = core_score
+            order_r = np.asarray(core_payload["cp_list"], dtype=np.int64)
+        else:
+            noise = rng.uniform(-float(freq_cp_noise), float(freq_cp_noise), size=values_f.size)
+            payload_r = _build_lp_rc_item_eval_payload(
+                values_f * (1.0 + noise),
+                weights_i,
+                capacities_i,
+                eval_group_decimals=eval_group_decimals,
+                eval_rc_eps=eval_rc_eps,
+                eval_x_eps=eval_x_eps,
+            )
+            score_payload_r = _build_core_score_cp_payload(
+                payload_r,
+                core_w_x_lp=core_w_x_lp,
+                core_w_rc=core_w_rc,
+                core_w_eff=core_w_eff,
+                core_w_bucket=core_w_bucket,
+            )
+            score_r = np.asarray(score_payload_r["core_score"], dtype=np.float64)
+            order_r = np.asarray(score_payload_r["cp_list"], dtype=np.int64)
+        sol_r, fit_r = _randomized_probe_solution(
+            order_r,
+            score_r,
+            values_i,
+            weights_i,
+            capacities_i,
+            rng,
+            repair_passes=repair_passes,
+            repair_swap_limit=repair_swap_limit,
+        )
+        probe_solutions.append(sol_r)
+        probe_fits.append(int(fit_r))
+
+    best_probe_fit = int(max(probe_fits)) if probe_fits else 0
+    elite_idx = [
+        idx
+        for idx, fit in enumerate(probe_fits)
+        if best_probe_fit > 0 and fit >= float(best_probe_fit) * float(freq_elite_ratio)
+    ]
+    if not elite_idx:
+        elite_idx = list(range(len(probe_fits)))
+    freq_score = np.zeros(values_f.size, dtype=np.float64)
+    weight_sum = 0.0
+    for idx in elite_idx:
+        quality = float(probe_fits[idx]) / max(float(best_probe_fit), 1.0e-12)
+        q = quality ** float(freq_quality_power)
+        freq_score += q * probe_solutions[idx]
+        weight_sum += q
+    freq_score = freq_score / max(weight_sum, 1.0e-12)
+    if mode_s == "freq_gated":
+        item_score = float(rho) * core_score + (1.0 - float(rho)) * freq_score
+    else:
+        item_score = freq_score
+    item_ids = np.arange(values_f.size, dtype=np.int64)
+    cp_list = np.ascontiguousarray(np.lexsort((item_ids, -core_score, -item_score)).astype(np.int64))
+    return {
+        "base_order": cp_list,
+        "cp_list": cp_list,
+        "item_score": item_score,
+        "core_score": core_score,
+        "freq_score": freq_score,
+        "drop_score": item_score,
+        "score_method": mode_s,
+        "item_eval_method": mode_s,
+        "freq_samples": int(samples),
+        "freq_rho": float(rho),
+        "freq_elite_count": int(len(elite_idx)),
+        "freq_best_probe_fit": int(best_probe_fit),
+        "freq_core_greedy_fit": 0,
+        "freq_topk_overlap": 0.0,
+        "freq_score_std": float(np.std(freq_score)),
+        "freq_fallback": False,
+        "freq_fallback_reason": "",
+        "guided_x": np.clip(item_score, 0.0, 1.0),
+        "guided_mode": f"{mode_s}_score",
+    }
+
+
+def _solve_lp_bound_with_fixed_item(
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    item: int,
+    fixed_value: float,
+) -> float:
+    bounds = [(0.0, 1.0)] * int(values.size)
+    bounds[int(item)] = (float(fixed_value), float(fixed_value))
+    result = linprog(
+        c=-np.asarray(values, dtype=np.float64),
+        A_ub=np.asarray(weights, dtype=np.float64).T,
+        b_ub=np.asarray(capacities, dtype=np.float64),
+        bounds=bounds,
+        method="highs",
+    )
+    if not result.success or result.fun is None:
+        return -np.inf
+    return float(-result.fun)
+
+
+def _build_sbl_lite_cp_payload(
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    base_payload: dict[str, Any],
+    *,
+    core_w_x_lp: float,
+    core_w_rc: float,
+    core_w_eff: float,
+    core_w_bucket: float,
+    sbl_candidate_limit: int,
+) -> dict[str, Any]:
+    core_payload = _build_core_score_cp_payload(
+        base_payload,
+        core_w_x_lp=core_w_x_lp,
+        core_w_rc=core_w_rc,
+        core_w_eff=core_w_eff,
+        core_w_bucket=core_w_bucket,
+    )
+    core_score = np.asarray(core_payload["core_score"], dtype=np.float64)
+    score = core_score.copy()
+    base_bound = float(np.dot(np.asarray(values, dtype=np.float64), np.asarray(base_payload["x_lp"], dtype=np.float64)))
+    candidate_order = np.asarray(core_payload["cp_list"], dtype=np.int64)
+    limit = min(int(max(1, sbl_candidate_limit)), int(candidate_order.size))
+    delta = np.zeros(score.size, dtype=np.float64)
+    for item in candidate_order[:limit]:
+        ub0 = _solve_lp_bound_with_fixed_item(values, weights, capacities, int(item), 0.0)
+        ub1 = _solve_lp_bound_with_fixed_item(values, weights, capacities, int(item), 1.0)
+        loss0 = base_bound - ub0 if np.isfinite(ub0) else 0.0
+        loss1 = base_bound - ub1 if np.isfinite(ub1) else base_bound
+        delta[int(item)] = loss0 - loss1
+    score = 0.70 * core_score + 0.30 * _normalize_score(delta)
+    item_ids = np.arange(score.size, dtype=np.int64)
+    cp_list = np.ascontiguousarray(np.lexsort((item_ids, -core_score, -score)).astype(np.int64))
+    return {
+        "base_order": cp_list,
+        "cp_list": cp_list,
+        "item_score": score,
+        "core_score": core_score,
+        "sbl_delta": delta,
+        "drop_score": score,
+        "score_method": "sbl_lite_cp",
+        "item_eval_method": "sbl_lite_cp",
+        "guided_mode": "lp_original",
+    }
+
+
+_BASE_ITEM_EVAL_METHODS = {
+    "lp_rc_ordered",
+    "lp_rc_groups",
+    "core_score_cp",
+    "freq_cp",
+    "freq_cp_gbc",
+    "elite_freq_cp",
+    "elite_freq_gated",
+    "freq_gated",
+    "freq_gated_v2",
+    "freq_gated_v2_gbc",
+    "sbl_lite_cp",
+}
+_NAMED_SCORE_METHODS = {"cnd", "dual", "rc", "hyb", "lag"}
+_NAMED_SCORE_MODES = {"rank", "weight"}
+
+
+def _parse_named_score_item_eval_method(method: str) -> tuple[str, str] | None:
+    parts = str(method).lower().split("_")
+    if len(parts) == 3 and parts[0] == "score" and parts[1] in _NAMED_SCORE_METHODS and parts[2] in _NAMED_SCORE_MODES:
+        return parts[1], parts[2]
+    return None
+
+
+def _is_supported_item_eval_method(method: str) -> bool:
+    method_s = str(method).lower()
+    return method_s in _BASE_ITEM_EVAL_METHODS or _parse_named_score_item_eval_method(method_s) is not None
+
+
 @njit(cache=True)
 def _sort_bscasma_rl_desc_deterministic_inplace(
     pop_sol: np.ndarray,
@@ -834,6 +1173,84 @@ def _repair_bscasma_row_inplace(
 
 
 @njit(cache=True)
+def _repair_bscasma_row_dynamic_drop_inplace(
+    pop_sol: np.ndarray,
+    row: int,
+    pop_fit: np.ndarray,
+    values: np.ndarray,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    cp_list: np.ndarray,
+    drop_score: np.ndarray,
+    resource: np.ndarray,
+    items: int,
+    dim: int,
+) -> None:
+    for d in range(dim):
+        resource[d] = 0.0
+    fi = 0.0
+    for jj in range(items):
+        x = pop_sol[row, jj]
+        if x != 0.0:
+            for d in range(dim):
+                resource[d] += weights[jj, d] * x
+        if x >= 0.5:
+            fi += float(values[jj])
+
+    while True:
+        over = False
+        for d in range(dim):
+            if resource[d] > capacities[d]:
+                over = True
+                break
+        if not over:
+            break
+
+        best_item = -1
+        best_rank_pos = -1
+        best_merit = 1.0e300
+        for pos in range(items - 1, -1, -1):
+            jj = int(cp_list[pos])
+            if pop_sol[row, jj] != 1.0:
+                continue
+            stress = 0.0
+            for d in range(dim):
+                violation = resource[d] - capacities[d]
+                if violation < 0.0:
+                    violation = 0.0
+                stress += (1.0 + violation / (float(capacities[d]) + 1.0e-12)) * (
+                    float(weights[jj, d]) / (float(capacities[d]) + 1.0e-12)
+                )
+            merit = (float(drop_score[jj]) + 1.0e-12) / (stress + 1.0e-12)
+            if merit < best_merit or (merit == best_merit and pos > best_rank_pos):
+                best_merit = merit
+                best_item = jj
+                best_rank_pos = pos
+        if best_item < 0:
+            break
+        pop_sol[row, best_item] = 0.0
+        fi -= float(values[best_item])
+        for d in range(dim):
+            resource[d] -= weights[best_item, d]
+
+    for pos in range(items):
+        jj = int(cp_list[pos])
+        if pop_sol[row, jj] == 0.0:
+            ok = True
+            for d in range(dim):
+                if resource[d] + weights[jj, d] > capacities[d]:
+                    ok = False
+                    break
+            if ok:
+                pop_sol[row, jj] = 1.0
+                fi += float(values[jj])
+                for d in range(dim):
+                    resource[d] += weights[jj, d]
+
+    pop_fit[row] = fi
+
+
+@njit(cache=True)
 def _repair_bscasma_swap_once_inplace(
     pop_sol: np.ndarray,
     row: int,
@@ -887,21 +1304,38 @@ def _repair_bscasma_row_v2_inplace(
     repair_passes: int,
     repair_swap_limit: int,
     repair_stats: np.ndarray,
+    repair_drop_mode: int,
+    drop_score: np.ndarray,
 ) -> None:
     accepted_swaps = 0
     for _ in range(repair_passes):
-        _repair_bscasma_row_inplace(
-            pop_sol,
-            row,
-            pop_fit,
-            values,
-            weights,
-            capacities,
-            cp_list,
-            resource,
-            items,
-            dim,
-        )
+        if repair_drop_mode == 1:
+            _repair_bscasma_row_dynamic_drop_inplace(
+                pop_sol,
+                row,
+                pop_fit,
+                values,
+                weights,
+                capacities,
+                cp_list,
+                drop_score,
+                resource,
+                items,
+                dim,
+            )
+        else:
+            _repair_bscasma_row_inplace(
+                pop_sol,
+                row,
+                pop_fit,
+                values,
+                weights,
+                capacities,
+                cp_list,
+                resource,
+                items,
+                dim,
+            )
         while accepted_swaps < repair_swap_limit:
             accepted = _repair_bscasma_swap_once_inplace(
                 pop_sol,
@@ -920,18 +1354,33 @@ def _repair_bscasma_row_v2_inplace(
             accepted_swaps += accepted
             repair_stats[0] += accepted
         if repair_swap_limit > 0 and accepted_swaps > 0:
-            _repair_bscasma_row_inplace(
-                pop_sol,
-                row,
-                pop_fit,
-                values,
-                weights,
-                capacities,
-                cp_list,
-                resource,
-                items,
-                dim,
-            )
+            if repair_drop_mode == 1:
+                _repair_bscasma_row_dynamic_drop_inplace(
+                    pop_sol,
+                    row,
+                    pop_fit,
+                    values,
+                    weights,
+                    capacities,
+                    cp_list,
+                    drop_score,
+                    resource,
+                    items,
+                    dim,
+                )
+            else:
+                _repair_bscasma_row_inplace(
+                    pop_sol,
+                    row,
+                    pop_fit,
+                    values,
+                    weights,
+                    capacities,
+                    cp_list,
+                    resource,
+                    items,
+                    dim,
+                )
 
 
 @njit(cache=True)
@@ -969,6 +1418,8 @@ def _local_search_bscasma_row_inplace(
     repair_passes: int,
     repair_swap_limit: int,
     repair_stats: np.ndarray,
+    repair_drop_mode: int,
+    drop_score: np.ndarray,
     ls_work_row: np.ndarray,
     ls_max_passes: int,
     ls_add_cap: int,
@@ -1009,6 +1460,8 @@ def _local_search_bscasma_row_inplace(
                 repair_passes,
                 repair_swap_limit,
                 repair_stats,
+                repair_drop_mode,
+                drop_score,
             )
             ls_stats[1] += 1
             ls_stats[3] += 1
@@ -1045,6 +1498,8 @@ def _local_search_bscasma_row_inplace(
                 repair_passes,
                 repair_swap_limit,
                 repair_stats,
+                repair_drop_mode,
+                drop_score,
             )
             ls_stats[1] += 1
             ls_stats[3] += 1
@@ -1239,6 +1694,8 @@ def _path_relink_bscasma_inplace(
     repair_passes: int,
     repair_swap_limit: int,
     repair_stats: np.ndarray,
+    repair_drop_mode: int,
+    drop_score: np.ndarray,
     pr_max_steps: int,
     pr_core_only: bool,
     pr_stats: np.ndarray,
@@ -1292,6 +1749,8 @@ def _path_relink_bscasma_inplace(
                 repair_passes,
                 repair_swap_limit,
                 repair_stats,
+                repair_drop_mode,
+                drop_score,
             )
             pr_stats[1] += 1
             steps += 1
@@ -1734,6 +2193,8 @@ def _bscasma_rl_main_loop_numba(
     repair_passes: int,
     repair_swap_limit: int,
     repair_stats: np.ndarray,
+    repair_drop_mode: int,
+    drop_score: np.ndarray,
     bucket: np.ndarray,
     x_lp: np.ndarray,
     guided_binary_enabled: bool,
@@ -1896,6 +2357,8 @@ def _bscasma_rl_main_loop_numba(
                 repair_passes,
                 repair_swap_limit,
                 repair_stats,
+                repair_drop_mode,
+                drop_score,
             )
 
             if (
@@ -1918,6 +2381,8 @@ def _bscasma_rl_main_loop_numba(
                     repair_passes,
                     repair_swap_limit,
                     repair_stats,
+                    repair_drop_mode,
+                    drop_score,
                     ls_work_row,
                     ls_max_passes,
                     ls_add_cap,
@@ -1982,7 +2447,7 @@ def _bscasma_rl_main_loop_numba(
             tmp_hamming,
             idx_work,
             pop_size,
-                items,
+            items,
         )
         if iteration_improved:
             stagnation_iters = 0
@@ -2012,6 +2477,8 @@ def _bscasma_rl_main_loop_numba(
                 repair_passes,
                 repair_swap_limit,
                 repair_stats,
+                repair_drop_mode,
+                drop_score,
                 pr_max_steps,
                 pr_core_only,
                 pr_stats,
@@ -2059,6 +2526,8 @@ def _bscasma_rl_main_loop_numba(
                     repair_passes,
                     repair_swap_limit,
                     repair_stats,
+                    repair_drop_mode,
+                    drop_score,
                 )
                 density_sum = _update_density_state_for_row(
                     pop_sol,
@@ -2155,8 +2624,11 @@ class BRLSMASCARLRCNumbaCore:
         freq_gate_min_elites: int = 2,
         freq_gate_min_std: float = 0.08,
         freq_gate_min_topk_overlap: float = 0.65,
+        sbl_candidate_limit: int = 24,
         repair_passes: int = 1,
         repair_swap_limit: int = 0,
+        repair_drop_mode: str = "rank",
+        repair_drop_score_mode: str = "hyb",
         mixed_init_enabled: bool = False,
         restart_enabled: bool = False,
         restart_window: int = 40,
@@ -2212,9 +2684,12 @@ class BRLSMASCARLRCNumbaCore:
         self.freq_gate_min_elites = int(freq_gate_min_elites)
         self.freq_gate_min_std = float(freq_gate_min_std)
         self.freq_gate_min_topk_overlap = float(freq_gate_min_topk_overlap)
+        self.sbl_candidate_limit = int(sbl_candidate_limit)
         self.item_eval_method = self.requested_item_eval_method
         self.repair_passes = int(repair_passes)
         self.repair_swap_limit = int(repair_swap_limit)
+        self.repair_drop_mode = str(repair_drop_mode)
+        self.repair_drop_score_mode = str(repair_drop_score_mode)
         self.repair_swap_accepts = 0
         self.mixed_init_enabled = bool(mixed_init_enabled)
         self.restart_enabled = bool(restart_enabled)
@@ -2279,13 +2754,7 @@ class BRLSMASCARLRCNumbaCore:
             raise ValueError("eval_rc_eps must be >= 0")
         if self.eval_x_eps < 0.0:
             raise ValueError("eval_x_eps must be >= 0")
-        if self.requested_item_eval_method not in {
-            "lp_rc_ordered",
-            "lp_rc_groups",
-            "core_score_cp",
-            "freq_gated_v2",
-            "freq_gated_v2_gbc",
-        }:
+        if not _is_supported_item_eval_method(self.requested_item_eval_method):
             raise ValueError("item_eval_method is unsupported")
         if self.requested_item_eval_method == "lp_rc_groups":
             self.eval_group_shuffle = True
@@ -2327,10 +2796,16 @@ class BRLSMASCARLRCNumbaCore:
             raise ValueError("freq_gate_min_std must be >= 0")
         if not (0.0 <= self.freq_gate_min_topk_overlap <= 1.0):
             raise ValueError("freq_gate_min_topk_overlap must satisfy 0 <= value <= 1")
+        if self.sbl_candidate_limit < 1:
+            raise ValueError("sbl_candidate_limit must be >= 1")
         if self.repair_passes < 1:
             raise ValueError("repair_passes must be >= 1")
         if self.repair_swap_limit < 0:
             raise ValueError("repair_swap_limit must be >= 0")
+        if self.repair_drop_mode not in {"rank", "dynamic_weight"}:
+            raise ValueError("repair_drop_mode is unsupported")
+        if self.repair_drop_score_mode not in {"core_score", "dual_efficiency", "hyb"}:
+            raise ValueError("repair_drop_score_mode is unsupported")
         if self.restart_window < 1:
             raise ValueError("restart_window must be >= 1")
         if not (0.0 < self.restart_ratio <= 1.0):
@@ -2397,12 +2872,22 @@ class BRLSMASCARLRCNumbaCore:
         actual_method_for_cache = method
         if method == "lp_rc_ordered" and self.eval_group_shuffle:
             actual_method_for_cache = "lp_rc_groups"
-        freq_seed = int(self.seed) if method in {"freq_gated_v2", "freq_gated_v2_gbc"} and self.seed is not None else None
+        freq_methods = {
+            "freq_cp",
+            "freq_cp_gbc",
+            "elite_freq_cp",
+            "elite_freq_gated",
+            "freq_gated",
+            "freq_gated_v2",
+            "freq_gated_v2_gbc",
+        }
+        freq_seed = int(self.seed) if method in freq_methods and self.seed is not None else None
         extra_params = (
             self.core_w_x_lp,
             self.core_w_rc,
             self.core_w_eff,
             self.core_w_bucket,
+            self.sbl_candidate_limit,
             self.freq_cp_noise,
             self.freq_elite_ratio,
             self.freq_quality_power,
@@ -2418,6 +2903,8 @@ class BRLSMASCARLRCNumbaCore:
             self.freq_gate_min_topk_overlap,
             self.repair_passes,
             self.repair_swap_limit,
+            self.repair_drop_mode,
+            self.repair_drop_score_mode,
         )
         cache_key = _item_eval_cache_key(
             self.values,
@@ -2446,6 +2933,7 @@ class BRLSMASCARLRCNumbaCore:
                 eval_rc_eps=self.eval_rc_eps,
                 eval_x_eps=self.eval_x_eps,
             )
+            named_score = _parse_named_score_item_eval_method(method)
             if method == "core_score_cp":
                 score_payload = _build_core_score_cp_payload(
                     payload,
@@ -2453,6 +2941,43 @@ class BRLSMASCARLRCNumbaCore:
                     core_w_rc=self.core_w_rc,
                     core_w_eff=self.core_w_eff,
                     core_w_bucket=self.core_w_bucket,
+                )
+                payload = {**payload, **score_payload}
+            elif named_score is not None:
+                score_name, score_mode = named_score
+                score_payload = _build_named_score_cp_payload(
+                    score_name,
+                    score_mode,
+                    self.values,
+                    self.weights,
+                    self.capacities,
+                    payload,
+                )
+                payload = {**payload, **score_payload}
+            elif method in {"freq_cp", "freq_cp_gbc", "elite_freq_cp", "elite_freq_gated", "freq_gated"}:
+                rng = np.random.default_rng(int(self.seed) if self.seed is not None else 0)
+                score_payload = _build_frequency_cp_payload(
+                    method,
+                    self.values,
+                    self.weights,
+                    self.capacities,
+                    payload,
+                    rng,
+                    core_w_x_lp=self.core_w_x_lp,
+                    core_w_rc=self.core_w_rc,
+                    core_w_eff=self.core_w_eff,
+                    core_w_bucket=self.core_w_bucket,
+                    eval_group_decimals=self.eval_group_decimals,
+                    eval_rc_eps=self.eval_rc_eps,
+                    eval_x_eps=self.eval_x_eps,
+                    freq_cp_noise=self.freq_cp_noise,
+                    freq_elite_ratio=self.freq_elite_ratio,
+                    freq_quality_power=self.freq_quality_power,
+                    freq_samples_dim5=self.freq_samples_dim5,
+                    freq_samples_dim10=self.freq_samples_dim10,
+                    freq_samples_dim30=self.freq_samples_dim30,
+                    repair_passes=self.repair_passes,
+                    repair_swap_limit=self.repair_swap_limit,
                 )
                 payload = {**payload, **score_payload}
             elif method in {"freq_gated_v2", "freq_gated_v2_gbc"}:
@@ -2485,6 +3010,19 @@ class BRLSMASCARLRCNumbaCore:
                     freq_gate_min_topk_overlap=self.freq_gate_min_topk_overlap,
                     repair_passes=self.repair_passes,
                     repair_swap_limit=self.repair_swap_limit,
+                )
+                payload = {**payload, **score_payload}
+            elif method == "sbl_lite_cp":
+                score_payload = _build_sbl_lite_cp_payload(
+                    self.values,
+                    self.weights,
+                    self.capacities,
+                    payload,
+                    core_w_x_lp=self.core_w_x_lp,
+                    core_w_rc=self.core_w_rc,
+                    core_w_eff=self.core_w_eff,
+                    core_w_bucket=self.core_w_bucket,
+                    sbl_candidate_limit=self.sbl_candidate_limit,
                 )
                 payload = {**payload, **score_payload}
             self.linprog_runtime = time.perf_counter() - t_lp0
@@ -2525,35 +3063,35 @@ class BRLSMASCARLRCNumbaCore:
         self.individual_best_sol[row] = self.pop_sol[row]
         self.individual_best_fit[row] = self.pop_fit[row]
 
-    def _fill_initial_random_greedy_row(self, row: int) -> None:
+    def _fill_initial_random_greedy_row(self, row: int, order: np.ndarray) -> None:
         accumulated_resources = np.zeros([self.dim])
-        for j in self.cp_list:
+        for j in order:
             if np.random.random() < 0.5:
                 candidate_resources = accumulated_resources + self.weights[j]
                 if np.all(candidate_resources <= self.capacities):
                     accumulated_resources = candidate_resources
                     self.pop_sol[row, j] = 1
 
-    def _fill_initial_deterministic_greedy_row(self, row: int) -> None:
+    def _fill_initial_deterministic_greedy_row(self, row: int, order: np.ndarray) -> None:
         accumulated_resources = np.zeros([self.dim])
-        for j in self.cp_list:
+        for j in order:
             candidate_resources = accumulated_resources + self.weights[j]
             if np.all(candidate_resources <= self.capacities):
                 accumulated_resources = candidate_resources
                 self.pop_sol[row, j] = 1
 
-    def _fill_initial_lp_rounding_row(self, row: int, threshold: float) -> None:
+    def _fill_initial_lp_rounding_row(self, row: int, threshold: float, order: np.ndarray) -> None:
         x_lp = np.asarray(self.item_eval_payload.get("x_lp", np.zeros(self.items)), dtype=np.float64)
         accumulated_resources = np.zeros([self.dim])
-        for j in self.cp_list:
+        for j in order:
             if x_lp[j] >= threshold:
                 candidate_resources = accumulated_resources + self.weights[j]
                 if np.all(candidate_resources <= self.capacities):
                     accumulated_resources = candidate_resources
                     self.pop_sol[row, j] = 1
 
-    def _fill_initial_rcl_greedy_row(self, row: int) -> None:
-        order = np.ascontiguousarray(self.cp_list.copy())
+    def _fill_initial_rcl_greedy_row(self, row: int, order: np.ndarray) -> None:
+        order = np.ascontiguousarray(order.copy())
         rcl_size = max(2, int(math.sqrt(self.items)))
         accumulated_resources = np.zeros([self.dim])
         for start in range(0, self.items, rcl_size):
@@ -2570,7 +3108,7 @@ class BRLSMASCARLRCNumbaCore:
         self.pop_sol = np.zeros([self.pop_size, self.items])
         if not self.mixed_init_enabled:
             for i in range(self.pop_size):
-                self._fill_initial_random_greedy_row(i)
+                self._fill_initial_random_greedy_row(i, self.cp_list)
                 self._finish_initial_row(i)
             return
 
@@ -2580,19 +3118,19 @@ class BRLSMASCARLRCNumbaCore:
         thresholds = (0.35, 0.50, 0.65, 0.80)
         row = 0
         for _ in range(deterministic_count):
-            self._fill_initial_deterministic_greedy_row(row)
+            self._fill_initial_deterministic_greedy_row(row, self.cp_list)
             self._finish_initial_row(row)
             row += 1
         for k in range(lp_count):
-            self._fill_initial_lp_rounding_row(row, thresholds[k % len(thresholds)])
+            self._fill_initial_lp_rounding_row(row, thresholds[k % len(thresholds)], self.cp_list)
             self._finish_initial_row(row)
             row += 1
         for _ in range(rcl_count):
-            self._fill_initial_rcl_greedy_row(row)
+            self._fill_initial_rcl_greedy_row(row, self.cp_list)
             self._finish_initial_row(row)
             row += 1
         while row < self.pop_size:
-            self._fill_initial_random_greedy_row(row)
+            self._fill_initial_random_greedy_row(row, self.cp_list)
             self._finish_initial_row(row)
             row += 1
 
@@ -2641,6 +3179,19 @@ class BRLSMASCARLRCNumbaCore:
         bucket = np.ascontiguousarray(np.asarray(self.item_eval_payload["bucket"], dtype=np.int64))
         guidance_values = self.item_eval_payload.get("guided_x", self.item_eval_payload["x_lp"])
         x_lp = np.ascontiguousarray(np.asarray(guidance_values, dtype=np.float64))
+        if self.repair_drop_score_mode == "dual_efficiency":
+            drop_score_values = _normalize_score(np.asarray(self.item_eval_payload["efficiency"], dtype=np.float64))
+        elif self.repair_drop_score_mode == "hyb":
+            drop_score_values = _normalize_score(
+                _score_values_for_method("hyb", self.values, self.weights, self.capacities, self.item_eval_payload)
+            )
+        else:
+            drop_score_values = self.item_eval_payload.get(
+                "drop_score",
+                self.item_eval_payload.get("item_score", self.item_eval_payload.get("core_score", np.ones(it))),
+            )
+        drop_score = np.ascontiguousarray(np.asarray(drop_score_values, dtype=np.float64))
+        repair_drop_mode_id = 1 if self.repair_drop_mode == "dynamic_weight" else 0
         ls_work_row = np.empty(it, dtype=np.float64)
         ls_stats = np.zeros(4, dtype=np.int64)
         pr_stats = np.zeros(3, dtype=np.int64)
@@ -2696,6 +3247,8 @@ class BRLSMASCARLRCNumbaCore:
             int(self.repair_passes),
             int(self.repair_swap_limit),
             repair_stats,
+            int(repair_drop_mode_id),
+            drop_score,
             bucket,
             x_lp,
             bool(self.guided_binary_enabled),
@@ -2792,8 +3345,11 @@ class BRLSMASCARLRCNumbaSolver:
         freq_gate_min_elites = int(raw_params.get("freq_gate_min_elites", 2))
         freq_gate_min_std = float(raw_params.get("freq_gate_min_std", 0.08))
         freq_gate_min_topk_overlap = float(raw_params.get("freq_gate_min_topk_overlap", 0.65))
+        sbl_candidate_limit = int(raw_params.get("sbl_candidate_limit", 24))
         repair_passes = int(raw_params.get("repair_passes", 1))
         repair_swap_limit = int(raw_params.get("repair_swap_limit", 0))
+        repair_drop_mode = str(raw_params.get("repair_drop_mode", "rank"))
+        repair_drop_score_mode = str(raw_params.get("repair_drop_score_mode", "hyb"))
         mixed_init_enabled = _coerce_bool_param(
             raw_params.get("mixed_init_enabled", False),
             name="mixed_init_enabled",
@@ -2811,11 +3367,12 @@ class BRLSMASCARLRCNumbaSolver:
             raw_params.get("guided_binary_enabled", False),
             name="guided_binary_enabled",
         )
-        if item_eval_method == "freq_gated_v2_gbc":
+        if item_eval_method.endswith("_gbc") or item_eval_method.endswith("_weight"):
             guided_binary_enabled = True
-        guided_lambda_lp_default = 0.10 if item_eval_method == "freq_gated_v2_gbc" else 0.30
-        guided_lambda_bucket_default = 0.05 if item_eval_method == "freq_gated_v2_gbc" else 0.08
-        guided_lambda_slack_default = 0.05 if item_eval_method == "freq_gated_v2_gbc" else 0.10
+        conservative_guided = item_eval_method.endswith("_gbc") or item_eval_method.endswith("_weight")
+        guided_lambda_lp_default = 0.10 if conservative_guided else 0.30
+        guided_lambda_bucket_default = 0.05 if conservative_guided else 0.08
+        guided_lambda_slack_default = 0.05 if conservative_guided else 0.10
         guided_lambda_lp = float(raw_params.get("guided_lambda_lp", guided_lambda_lp_default))
         guided_lambda_bucket = float(raw_params.get("guided_lambda_bucket", guided_lambda_bucket_default))
         guided_lambda_slack = float(raw_params.get("guided_lambda_slack", guided_lambda_slack_default))
@@ -2855,13 +3412,7 @@ class BRLSMASCARLRCNumbaSolver:
             raise ValueError("params.eval_rc_eps must be >= 0")
         if eval_x_eps < 0.0:
             raise ValueError("params.eval_x_eps must be >= 0")
-        if item_eval_method not in {
-            "lp_rc_ordered",
-            "lp_rc_groups",
-            "core_score_cp",
-            "freq_gated_v2",
-            "freq_gated_v2_gbc",
-        }:
+        if not _is_supported_item_eval_method(item_eval_method):
             raise ValueError("params.item_eval_method is unsupported")
         for name, value in (
             ("core_w_x_lp", core_w_x_lp),
@@ -2901,10 +3452,16 @@ class BRLSMASCARLRCNumbaSolver:
             raise ValueError("params.freq_gate_min_std must be >= 0")
         if not (0.0 <= freq_gate_min_topk_overlap <= 1.0):
             raise ValueError("params.freq_gate_min_topk_overlap must satisfy 0 <= value <= 1")
+        if sbl_candidate_limit < 1:
+            raise ValueError("params.sbl_candidate_limit must be >= 1")
         if repair_passes < 1:
             raise ValueError("params.repair_passes must be >= 1")
         if repair_swap_limit < 0:
             raise ValueError("params.repair_swap_limit must be >= 0")
+        if repair_drop_mode not in {"rank", "dynamic_weight"}:
+            raise ValueError("params.repair_drop_mode is unsupported")
+        if repair_drop_score_mode not in {"core_score", "dual_efficiency", "hyb"}:
+            raise ValueError("params.repair_drop_score_mode is unsupported")
         if restart_window < 1:
             raise ValueError("params.restart_window must be >= 1")
         if not (0.0 < restart_ratio <= 1.0):
@@ -2981,8 +3538,11 @@ class BRLSMASCARLRCNumbaSolver:
             freq_gate_min_elites=freq_gate_min_elites,
             freq_gate_min_std=freq_gate_min_std,
             freq_gate_min_topk_overlap=freq_gate_min_topk_overlap,
+            sbl_candidate_limit=sbl_candidate_limit,
             repair_passes=repair_passes,
             repair_swap_limit=repair_swap_limit,
+            repair_drop_mode=repair_drop_mode,
+            repair_drop_score_mode=repair_drop_score_mode,
             mixed_init_enabled=mixed_init_enabled,
             restart_enabled=restart_enabled,
             restart_window=restart_window,
@@ -3051,9 +3611,12 @@ class BRLSMASCARLRCNumbaSolver:
                 "freq_score_std": float(core.freq_score_std),
                 "freq_fallback": bool(core.freq_fallback),
                 "freq_fallback_reason": str(core.freq_fallback_reason),
+                "sbl_candidate_limit": int(core.sbl_candidate_limit),
                 "guided_mode": str(core.guided_mode),
                 "repair_passes": int(core.repair_passes),
                 "repair_swap_limit": int(core.repair_swap_limit),
+                "repair_drop_mode": str(core.repair_drop_mode),
+                "repair_drop_score_mode": str(core.repair_drop_score_mode),
                 "repair_swap_accepts": int(core.repair_swap_accepts),
                 "mixed_init_enabled": bool(core.mixed_init_enabled),
                 "restart_enabled": bool(core.restart_enabled),

@@ -124,18 +124,18 @@ def test_build_sample_exp_cfg_success() -> None:
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
     assert experiment.cfg.solver_ids == ("brlsmasca_rl_rc_numba",)
     assert experiment.cfg.solver_variants == (("brlsmasca_rl_rc_numba", 20),)
-    assert len(experiment.cfg.dataset_settings) == 6
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 30
+    assert len(experiment.cfg.dataset_settings) == 2
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 10
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "set3_cb1"
-    assert first.dataset == "OR5x100"
+    assert first.experiment_id == "set3_cb5"
+    assert first.dataset == "OR10x250"
     assert first.problem_type == "mkp"
     assert first.problem_ids == (
-        "OR5x100-0.25_1",
-        "OR5x100-0.25_2",
-        "OR5x100-0.25_3",
-        "OR5x100-0.25_4",
-        "OR5x100-0.25_5",
+        "OR10x250-0.25_1",
+        "OR10x250-0.25_2",
+        "OR10x250-0.25_3",
+        "OR10x250-0.25_4",
+        "OR10x250-0.25_5",
     )
     last = experiment.cfg.dataset_settings[-1]
     assert last.experiment_id == "set3_cb6"
@@ -181,6 +181,21 @@ def test_build_sample_exp_cfg_success() -> None:
         "restart_strong_p": 0.85,
         "restart_core_p": 0.50,
         "restart_weak_p": 0.15,
+        "guided_binary_enabled": True,
+        "guided_lambda_lp": 0.30,
+        "guided_lambda_bucket": 0.08,
+        "guided_lambda_slack": 0.10,
+        "local_search_enabled": True,
+        "ls_budget_per_run": 1500,
+        "ls_max_passes": 2,
+        "ls_cooldown": 10,
+        "ls_add_cap": 80,
+        "ls_drop_cap": 80,
+        "archive_pr_enabled": True,
+        "archive_size": 8,
+        "pr_interval": 15,
+        "pr_max_steps": 15,
+        "pr_core_only": True,
     }
     assert rl_cfg["stop_condition"]["max_iterations"] == 5000
 

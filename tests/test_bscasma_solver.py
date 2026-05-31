@@ -458,7 +458,25 @@ def test_bscasma_rl_rc_freq_gated_v2_payload_is_reproducible_with_seed():
     assert "freq_fallback" in payload_a
 
 
-@pytest.mark.parametrize("method", ["core_score_cp", "freq_gated_v2", "freq_gated_v2_gbc"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        "core_score_cp",
+        "freq_cp",
+        "freq_cp_gbc",
+        "elite_freq_cp",
+        "elite_freq_gated",
+        "freq_gated",
+        "freq_gated_v2",
+        "freq_gated_v2_gbc",
+        "sbl_lite_cp",
+        "score_cnd_rank",
+        "score_dual_weight",
+        "score_rc_rank",
+        "score_hyb_weight",
+        "score_lag_rank",
+    ],
+)
 def test_bscasma_rl_rc_item_eval_methods_solve_and_report_metadata(method: str):
     solver = BRLSMASCARLRCNumbaSolver()
     problem = _build_problem(best_known=10**9)
@@ -468,6 +486,7 @@ def test_bscasma_rl_rc_item_eval_methods_solve_and_report_metadata(method: str):
         "freq_samples_dim5": 2,
         "freq_samples_dim10": 2,
         "freq_samples_dim30": 2,
+        "sbl_candidate_limit": 2,
     }
     config = _build_numba_config(
         solver_id="brlsmasca_rl_rc_numba",
@@ -483,7 +502,7 @@ def test_bscasma_rl_rc_item_eval_methods_solve_and_report_metadata(method: str):
     assert result.metadata["requested_item_eval_method"] == method
     if method == "core_score_cp":
         assert result.metadata["item_eval_method"] == "core_score_cp"
-    if method == "freq_gated_v2_gbc":
+    if method.endswith("_gbc") or method.endswith("_weight"):
         assert result.metadata["guided_binary_enabled"] is True
 
 
@@ -780,6 +799,7 @@ def test_bscasma_rl_rc_local_search_improves_toy_solution_and_keeps_feasible():
     repair_stats = np.zeros(1, dtype=np.int64)
     ls_stats = np.zeros(4, dtype=np.int64)
     work_row = np.empty(3, dtype=np.float64)
+    drop_score = np.ones(values.size, dtype=np.float64)
 
     _local_search_bscasma_row_inplace(
         pop_sol,
@@ -795,6 +815,8 @@ def test_bscasma_rl_rc_local_search_improves_toy_solution_and_keeps_feasible():
         1,
         0,
         repair_stats,
+        0,
+        drop_score,
         work_row,
         2,
         3,
@@ -831,6 +853,7 @@ def test_bscasma_rl_rc_archive_path_relink_improves_without_downgrading_best():
     resource = np.zeros(1, dtype=np.float64)
     repair_stats = np.zeros(1, dtype=np.int64)
     pr_stats = np.zeros(3, dtype=np.int64)
+    drop_score = np.ones(values.size, dtype=np.float64)
 
     best_fit = _path_relink_bscasma_inplace(
         archive_sol,
@@ -850,6 +873,8 @@ def test_bscasma_rl_rc_archive_path_relink_improves_without_downgrading_best():
         1,
         0,
         repair_stats,
+        0,
+        drop_score,
         2,
         True,
         pr_stats,
@@ -908,6 +933,7 @@ def test_bscasma_rl_rc_repair_v2_default_matches_current_repair():
     resource_old = np.zeros(2, dtype=np.float64)
     resource_v2 = np.zeros(2, dtype=np.float64)
     repair_stats = np.zeros(1, dtype=np.int64)
+    drop_score = np.ones(values.size, dtype=np.float64)
 
     _repair_bscasma_rl_rc_row_inplace(
         pop_sol_old,
@@ -935,6 +961,8 @@ def test_bscasma_rl_rc_repair_v2_default_matches_current_repair():
         1,
         0,
         repair_stats,
+        0,
+        drop_score,
     )
 
     assert np.array_equal(pop_sol_v2, pop_sol_old)
@@ -951,6 +979,7 @@ def test_bscasma_rl_rc_repair_v2_repairs_infeasible_solution():
     pop_fit = np.array([17.0], dtype=np.float64)
     resource = np.zeros(1, dtype=np.float64)
     repair_stats = np.zeros(1, dtype=np.int64)
+    drop_score = np.ones(values.size, dtype=np.float64)
 
     _repair_bscasma_row_v2_inplace(
         pop_sol,
@@ -966,6 +995,8 @@ def test_bscasma_rl_rc_repair_v2_repairs_infeasible_solution():
         2,
         3,
         repair_stats,
+        0,
+        drop_score,
     )
 
     assert set(pop_sol[0].tolist()) <= {0.0, 1.0}
@@ -982,6 +1013,7 @@ def test_bscasma_rl_rc_repair_v2_can_improve_with_bounded_swap():
     pop_fit = np.array([10.0], dtype=np.float64)
     resource = np.zeros(1, dtype=np.float64)
     repair_stats = np.zeros(1, dtype=np.int64)
+    drop_score = np.ones(values.size, dtype=np.float64)
 
     _repair_bscasma_row_v2_inplace(
         pop_sol,
@@ -997,6 +1029,8 @@ def test_bscasma_rl_rc_repair_v2_can_improve_with_bounded_swap():
         2,
         3,
         repair_stats,
+        0,
+        drop_score,
     )
 
     assert pop_fit[0] == 12
@@ -1080,6 +1114,9 @@ def test_bscasma_rl_rc_numba_rejects_invalid_remaining_strategy_params():
         ({"freq_gate_min_elites": 0}, "params.freq_gate_min_elites"),
         ({"freq_gate_min_std": -0.1}, "params.freq_gate_min_std"),
         ({"freq_gate_min_topk_overlap": 1.1}, "params.freq_gate_min_topk_overlap"),
+        ({"sbl_candidate_limit": 0}, "params.sbl_candidate_limit"),
+        ({"repair_drop_mode": "unknown"}, "params.repair_drop_mode"),
+        ({"repair_drop_score_mode": "unknown"}, "params.repair_drop_score_mode"),
         ({"guided_binary_enabled": "maybe"}, "params.guided_binary_enabled"),
         ({"guided_lambda_lp": -0.1}, "params.guided_lambda_lp"),
         ({"guided_lambda_bucket": -0.1}, "params.guided_lambda_bucket"),

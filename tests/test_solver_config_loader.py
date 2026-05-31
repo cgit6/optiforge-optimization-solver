@@ -326,6 +326,21 @@ def test_load_bscasma_rl_rc_numba_param_20_from_default_configs() -> None:
         "restart_strong_p": 0.85,
         "restart_core_p": 0.50,
         "restart_weak_p": 0.15,
+        "guided_binary_enabled": True,
+        "guided_lambda_lp": 0.30,
+        "guided_lambda_bucket": 0.08,
+        "guided_lambda_slack": 0.10,
+        "local_search_enabled": True,
+        "ls_budget_per_run": 1500,
+        "ls_max_passes": 2,
+        "ls_cooldown": 10,
+        "ls_add_cap": 80,
+        "ls_drop_cap": 80,
+        "archive_pr_enabled": True,
+        "archive_size": 8,
+        "pr_interval": 15,
+        "pr_max_steps": 15,
+        "pr_core_only": True,
     }
     assert config["stop_condition"]["max_iterations"] == 5000
 

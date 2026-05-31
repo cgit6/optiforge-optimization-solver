@@ -236,6 +236,21 @@ params:
     restart_strong_p: 0.85
     restart_core_p: 0.50
     restart_weak_p: 0.15
+    guided_binary_enabled: true
+    guided_lambda_lp: 0.30
+    guided_lambda_bucket: 0.08
+    guided_lambda_slack: 0.10
+    local_search_enabled: true
+    ls_budget_per_run: 1500
+    ls_max_passes: 2
+    ls_cooldown: 10
+    ls_add_cap: 80
+    ls_drop_cap: 80
+    archive_pr_enabled: true
+    archive_size: 8
+    pr_interval: 15
+    pr_max_steps: 15
+    pr_core_only: true
   - pop_size: 20
     z: 0.08
     a: 1.5
