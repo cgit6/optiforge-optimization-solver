@@ -12,7 +12,7 @@ from ..problem import buildProblemRegistry, problemBuilders
 from ..tools.solver_config_loader import SolverConfigLoader
 
 
-DEFAULT_WORKER_COUNT = 15 # 併發數
+DEFAULT_WORKER_COUNT = 11 # 併發數
 
 _REQUIRED_TOP_LEVEL_KEYS = frozenset(
     {"experiment_name", "collects", "solvers", "repeat", "dataset_settings"}
@@ -24,23 +24,25 @@ _REQUIRED_DATASET_KEYS = frozenset({"experiment-id", "dataset", "problems", "typ
 _ALLOWED_DATASET_KEYS = _REQUIRED_DATASET_KEYS
 _REQUIRED_PROBLEM_KEYS = frozenset({"problem", "evaluation"})
 _ALLOWED_PROBLEM_KEYS = _REQUIRED_PROBLEM_KEYS | {"base_line"}
-_REQUIRED_BASELINE_KEYS = frozenset({"name"})
-_ALLOWED_BASELINE_KEYS = _REQUIRED_BASELINE_KEYS | {"Mean", "Pdev"}
+_REQUIRED_BASELINE_KEYS = frozenset({"name", "eval", "value"})
+_ALLOWED_BASELINE_KEYS = _REQUIRED_BASELINE_KEYS
+_ALLOWED_BASELINE_METRICS = frozenset({"mean", "best", "worst"})
 
 
 @dataclass(frozen=True)
 class EvaluationBaseline:
     name: str
-    mean: float | None = None
-    pdev: float | None = None
+    metric: str
+    value: float
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("base_line.name cannot be empty.")
-        if self.mean is None and self.pdev is None:
-            raise ValueError("base_line must contain Mean or Pdev.")
-        object.__setattr__(self, "mean", _validate_optional_float(self.mean, "base_line.Mean"))
-        object.__setattr__(self, "pdev", _validate_optional_float(self.pdev, "base_line.Pdev"))
+        metric = self.metric.strip().lower()
+        if metric not in _ALLOWED_BASELINE_METRICS:
+            raise ValueError("base_line.eval must be one of: mean, best, worst.")
+        object.__setattr__(self, "metric", metric)
+        object.__setattr__(self, "value", _validate_float(self.value, "base_line.value"))
 
 
 @dataclass(frozen=True)
@@ -381,18 +383,19 @@ def _parse_base_line(value: Any, *, field_name: str) -> tuple[EvaluationBaseline
 def _parse_baseline_entry(value: Any, *, field_name: str) -> EvaluationBaseline:
     if not isinstance(value, dict):
         raise ValueError(f"{field_name} must be a mapping.")
+    unknown = sorted({str(k) for k in value} - _ALLOWED_BASELINE_KEYS)
+    if unknown:
+        raise ValueError(f"{field_name} has unknown key(s): {unknown}")
     _validate_keys(
         value,
         required=_REQUIRED_BASELINE_KEYS,
         allowed=_ALLOWED_BASELINE_KEYS,
         context=field_name,
     )
-    if "Mean" not in value and "Pdev" not in value:
-        raise ValueError(f"{field_name} must contain Mean or Pdev.")
     return EvaluationBaseline(
         name=_parse_non_empty_string(value["name"], f"{field_name}.name"),
-        mean=_parse_optional_float(value["Mean"], f"{field_name}.Mean") if "Mean" in value else None,
-        pdev=_parse_optional_float(value["Pdev"], f"{field_name}.Pdev") if "Pdev" in value else None,
+        metric=_parse_baseline_metric(value["eval"], f"{field_name}.eval"),
+        value=_parse_float(value["value"], f"{field_name}.value"),
     )
 
 
@@ -493,6 +496,13 @@ def _parse_non_empty_string(value: Any, field_name: str) -> str:
     return parsed
 
 
+def _parse_baseline_metric(value: Any, field_name: str) -> str:
+    parsed = _parse_non_empty_string(value, field_name).lower()
+    if parsed not in _ALLOWED_BASELINE_METRICS:
+        raise ValueError(f"{field_name} must be one of: mean, best, worst.")
+    return parsed
+
+
 def _parse_positive_int(value: Any, field_name: str) -> int:
     parsed = _parse_int(value, field_name)
     if parsed <= 0:
@@ -507,16 +517,11 @@ def _parse_non_negative_int(value: Any, field_name: str) -> int:
     return parsed
 
 
-def _parse_optional_float(value: Any, field_name: str) -> float:
-    parsed = _validate_optional_float(value, field_name)
-    if parsed is None:
-        raise ValueError(f"{field_name} cannot be empty.")
-    return parsed
+def _parse_float(value: Any, field_name: str) -> float:
+    return _validate_float(value, field_name)
 
 
-def _validate_optional_float(value: Any, field_name: str) -> float | None:
-    if value is None:
-        return None
+def _validate_float(value: Any, field_name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field_name} must be numeric.")
     return float(value)

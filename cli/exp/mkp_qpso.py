@@ -16,7 +16,7 @@ def mkp_qpso_mean_gte_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision
         return RoundEvalDecision(
             passed=False,
             verdict=FAIL,
-            message="mkp_qpso_mean_gte requires a QPSO baseline Mean.",
+            message="mkp_qpso_mean_gte requires a QPSO baseline with eval=mean.",
         )
 
     target = _target_variant(input_data.variant_summaries)
@@ -58,8 +58,8 @@ def mkp_qpso_mean_gte_evaluator(input_data: RoundEvalInput) -> RoundEvalDecision
 
 def _qpso_mean(input_data: RoundEvalInput) -> float | None:
     for baseline in input_data.evaluation.base_line:
-        if baseline.name.strip().lower() == "qpso" and baseline.mean is not None:
-            return float(baseline.mean)
+        if baseline.name.strip().lower() == "qpso" and baseline.metric == "mean":
+            return float(baseline.value)
     return None
 
 

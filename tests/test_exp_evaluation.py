@@ -99,7 +99,7 @@ def _input(
 ) -> RoundEvalInput:
     eval_spec = evaluation or EvaluationSpec(
         name="mkp_base",
-        base_line=(EvaluationBaseline(name="baseline", pdev=2.0),),
+        base_line=(EvaluationBaseline(name="baseline", metric="mean", value=98.0),),
     )
     problem_setting = ProblemSetting(problem_id=problem_id, evaluations=(eval_spec,))
     dataset_setting = DatasetSetting(
@@ -181,7 +181,7 @@ def test_mkp_qpso_mean_gte_passes_when_target_mean_equals_qpso() -> None:
         _input(
             evaluation=EvaluationSpec(
                 name="mkp_qpso_mean_gte",
-                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+                base_line=(EvaluationBaseline(name="QPSO", metric="mean", value=100.0),),
             ),
             variants=(
                 _variant_summary(
@@ -205,7 +205,7 @@ def test_mkp_qpso_mean_gte_passes_when_target_mean_exceeds_qpso() -> None:
         _input(
             evaluation=EvaluationSpec(
                 name="mkp_qpso_mean_gte",
-                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+                base_line=(EvaluationBaseline(name="QPSO", metric="mean", value=100.0),),
             ),
             variants=(
                 _variant_summary(
@@ -228,7 +228,7 @@ def test_mkp_qpso_mean_gte_fails_when_target_mean_is_below_qpso() -> None:
         _input(
             evaluation=EvaluationSpec(
                 name="mkp_qpso_mean_gte",
-                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+                base_line=(EvaluationBaseline(name="QPSO", metric="mean", value=100.0),),
             ),
             variants=(
                 _variant_summary(
@@ -251,7 +251,7 @@ def test_mkp_qpso_mean_gte_fails_when_qpso_mean_is_missing() -> None:
         _input(
             evaluation=EvaluationSpec(
                 name="mkp_qpso_mean_gte",
-                base_line=(EvaluationBaseline(name="QPSO", pdev=0.0),),
+                base_line=(EvaluationBaseline(name="QPSO", metric="best", value=100.0),),
             ),
             variants=(
                 _variant_summary(
@@ -273,7 +273,7 @@ def test_mkp_qpso_mean_gte_fails_when_target_summary_is_invalid() -> None:
         _input(
             evaluation=EvaluationSpec(
                 name="mkp_qpso_mean_gte",
-                base_line=(EvaluationBaseline(name="QPSO", mean=100.0, pdev=0.0),),
+                base_line=(EvaluationBaseline(name="QPSO", metric="mean", value=100.0),),
             ),
             variants=(
                 _variant_summary(
@@ -292,101 +292,28 @@ def test_mkp_qpso_mean_gte_fails_when_target_summary_is_invalid() -> None:
     assert decision.details["failure"]["valid_run_count"] == 1
 
 
-def test_mkp_base_passes_when_bsma_and_brlsmasca_beat_best_baseline() -> None:
+def test_mkp_base_reports_pdev_baseline_schema_is_unsupported() -> None:
     decision = mkp_base_evaluator(
         _input(
             variants=(
                 _variant_summary(solver_id="bsma_numba", param_set_index=1, params={}, pdev=1.0),
-                _variant_summary(solver_id="bsca_numba", param_set_index=0, params={}, pdev=5.0),
-                _variant_summary(solver_id="brlsmasca_rl_numba", param_set_index=5, params={}, pdev=2.0),
-                _variant_summary(solver_id="brlsmasca_test_numba", param_set_index=2, params={}, pdev=5.0),
-            )
-        )
-    )
-
-    assert decision.passed is True
-    assert decision.verdict == PASS
-    assert decision.details["threshold_pdev"] == 2.0
-    assert sorted(decision.details["target_pdevs"]) == [
-        "brlsmasca_rl_numba/param_5",
-        "bsma_numba/param_1",
-    ]
-
-
-def test_mkp_base_fails_when_bsma_or_brlsmasca_is_worse_than_best_baseline() -> None:
-    decision = mkp_base_evaluator(
-        _input(
-            variants=(
-                _variant_summary(solver_id="bsma_numba", param_set_index=1, params={}, pdev=1.0),
-                _variant_summary(solver_id="bsca_numba", param_set_index=0, params={}, pdev=1.0),
-                _variant_summary(solver_id="brlsmasca_rl_numba", param_set_index=5, params={}, pdev=2.1),
-            )
-        )
-    )
-
-    assert decision.passed is False
-    assert decision.verdict == FAIL
-    assert decision.details["worse_variants"][0]["variant"] == "brlsmasca_rl_numba/param_5"
-
-
-def test_mkp_base_zero_pdev_baseline_is_strict() -> None:
-    decision = mkp_base_evaluator(
-        _input(
-            evaluation=EvaluationSpec(
-                name="mkp_base",
-                base_line=(EvaluationBaseline(name="zero", pdev=0.0),),
-            ),
-            variants=(
-                _variant_summary(solver_id="bsma_numba", param_set_index=1, params={}, pdev=0.0),
                 _variant_summary(solver_id="brlsmasca_rl_numba", param_set_index=5, params={}, pdev=0.1),
             ),
         )
     )
 
     assert decision.passed is False
-
-
-def test_mkp_base_fails_on_invalid_summary() -> None:
-    bad_variant = _variant_summary(
-        solver_id="bsma_numba",
-        param_set_index=1,
-        params={"z": 0.08},
-        pdev=1.0,
-        valid_run_count=1,
-    )
-    decision = mkp_base_evaluator(_input(variants=(bad_variant,)))
-
-    assert decision.passed is False
     assert decision.verdict == FAIL
-    assert decision.details["failures"][0]["solver_id"] == "bsma_numba"
+    assert "Pdev baseline" in decision.message
+    assert "eval/value" in decision.message
 
 
-def test_mkp_bsca_base_margin_2_passes_when_bsca_is_within_margin() -> None:
+def test_mkp_bsca_base_margin_2_reports_pdev_baseline_schema_is_unsupported() -> None:
     decision = mkp_bsca_base_margin_2_evaluator(
         _input(
             evaluation=EvaluationSpec(
                 name="mkp_bsca_base_margin_2",
-                base_line=(EvaluationBaseline(name="baseline", pdev=0.879),),
-            ),
-            variants=(
-                _variant_summary(solver_id="bsma_numba", param_set_index=1, params={}, pdev=0.1),
-                _variant_summary(solver_id="bsca_numba", param_set_index=0, params={}, pdev=2.879),
-                _variant_summary(solver_id="brlsmasca_rl_numba", param_set_index=5, params={}, pdev=0.1),
-            ),
-        )
-    )
-
-    assert decision.passed is True
-    assert decision.verdict == PASS
-    assert decision.details["threshold_pdev"] == 2.879
-
-
-def test_mkp_bsca_base_margin_2_fails_when_bsca_exceeds_margin() -> None:
-    decision = mkp_bsca_base_margin_2_evaluator(
-        _input(
-            evaluation=EvaluationSpec(
-                name="mkp_bsca_base_margin_2",
-                base_line=(EvaluationBaseline(name="baseline", pdev=0.879),),
+                base_line=(EvaluationBaseline(name="baseline", metric="mean", value=99.0),),
             ),
             variants=(
                 _variant_summary(solver_id="bsma_numba", param_set_index=1, params={}, pdev=0.1),
@@ -398,7 +325,8 @@ def test_mkp_bsca_base_margin_2_fails_when_bsca_exceeds_margin() -> None:
 
     assert decision.passed is False
     assert decision.verdict == FAIL
-    assert decision.details["worse_variants"][0]["variant"] == "bsca_numba/param_0"
+    assert "Pdev baseline" in decision.message
+    assert "eval/value" in decision.message
 
 
 def test_mkp_base2_passes_when_brlsmasca_is_best_or_tied() -> None:

@@ -157,7 +157,7 @@ def test_build_sample_exp_cfg_success() -> None:
                 if baseline.name == "QPSO"
             ]
             assert len(qpsos) == 1
-            assert qpsos[0].mean is not None
+            assert qpsos[0].metric == "mean"
 
     loader = SolverConfigLoader()
     rl_cfg = loader.load("brlsmasca_rl_rc_numba", param_set_index=20)
@@ -208,7 +208,8 @@ def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:
             problem_extra="""
         base_line:
           - name: Easy
-            Pdev: 200
+            eval: mean
+            value: 200
 """,
         ),
     )
@@ -386,13 +387,15 @@ def test_load_config_parses_problem_baselines(tmp_path: Path) -> None:
         config_text=_valid_config_text(
             problem_extra="""
         base_line:
-          - name: PdevOnly
-            Pdev: 0.154
-          - name: MeanOnly
-            Mean: 123.5
-          - name: Both
-            Mean: 456
-            Pdev: 1.25
+          - name: MeanBaseline
+            eval: mean
+            value: 123.5
+          - name: BestBaseline
+            eval: best
+            value: 456
+          - name: WorstBaseline
+            eval: WORST
+            value: 111
 """,
         ),
     )
@@ -400,10 +403,78 @@ def test_load_config_parses_problem_baselines(tmp_path: Path) -> None:
     cfg = load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
     assert cfg.dataset_settings[0].problem_settings[0].evaluations[0].base_line == (
-        EvaluationBaseline(name="PdevOnly", pdev=0.154),
-        EvaluationBaseline(name="MeanOnly", mean=123.5),
-        EvaluationBaseline(name="Both", mean=456.0, pdev=1.25),
+        EvaluationBaseline(name="MeanBaseline", metric="mean", value=123.5),
+        EvaluationBaseline(name="BestBaseline", metric="best", value=456.0),
+        EvaluationBaseline(name="WorstBaseline", metric="worst", value=111.0),
     )
+
+
+@pytest.mark.parametrize(
+    ("baseline_yaml", "error_match"),
+    [
+        (
+            """
+          - name: OldMean
+            Mean: 123
+""",
+            "unknown key",
+        ),
+        (
+            """
+          - name: OldPdev
+            Pdev: 0.154
+""",
+            "unknown key",
+        ),
+        (
+            """
+          - name: MissingEval
+            value: 123
+""",
+            "missing required key",
+        ),
+        (
+            """
+          - name: MissingValue
+            eval: mean
+""",
+            "missing required key",
+        ),
+        (
+            """
+          - name: Unsupported
+            eval: pdev
+            value: 0.154
+""",
+            "eval",
+        ),
+        (
+            """
+          - name: NonNumeric
+            eval: mean
+            value: high
+""",
+            "numeric",
+        ),
+    ],
+)
+def test_load_config_rejects_invalid_problem_baselines(
+    tmp_path: Path,
+    baseline_yaml: str,
+    error_match: str,
+) -> None:
+    exp_path, problem_root, solver_root = _write_valid_project(
+        tmp_path,
+        config_text=_valid_config_text(
+            problem_extra=f"""
+        base_line:
+{baseline_yaml.rstrip()}
+""",
+        ),
+    )
+
+    with pytest.raises(ValueError, match=error_match):
+        load_config(exp_path, problem_root=problem_root, solver_root=solver_root)
 
 
 def test_load_config_rejects_missing_problem_yaml(tmp_path: Path) -> None:
