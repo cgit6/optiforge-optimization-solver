@@ -53,6 +53,8 @@ def _bsca_rc_main_loop_numba(
     repair_passes: int,
     repair_swap_limit: int,
     repair_stats: np.ndarray,
+    repair_drop_mode: int,
+    drop_score: np.ndarray,
     bucket: np.ndarray,
     restart_enabled: bool,
     restart_window: int,
@@ -105,6 +107,8 @@ def _bsca_rc_main_loop_numba(
                 repair_passes,
                 repair_swap_limit,
                 repair_stats,
+                repair_drop_mode,
+                drop_score,
             )
             if pop_fit[i] > gbest_fit:
                 gbest_fit = pop_fit[i]
@@ -157,6 +161,8 @@ def _bsca_rc_main_loop_numba(
                     repair_passes,
                     repair_swap_limit,
                     repair_stats,
+                    repair_drop_mode,
+                    drop_score,
                 )
                 if pop_fit[row] > gbest_fit:
                     gbest_fit = pop_fit[row]
@@ -412,6 +418,7 @@ class BSCARCNumbaCore:
         acc_res = np.zeros(dm, dtype=np.float64)
         gbest_sol = np.empty(it, dtype=np.float64)
         repair_stats = np.zeros(1, dtype=np.int64)
+        drop_score = np.ones(it, dtype=np.float64)
         restart_stats = np.zeros(2, dtype=np.int64)
         bucket = np.ascontiguousarray(np.asarray(self.item_eval_payload["bucket"], dtype=np.int64))
         restart_rows = int(math.ceil(self.pop_size * self.restart_ratio)) if self.restart_enabled else 0
@@ -444,6 +451,8 @@ class BSCARCNumbaCore:
             int(self.repair_passes),
             int(self.repair_swap_limit),
             repair_stats,
+            0,
+            drop_score,
             bucket,
             bool(self.restart_enabled),
             int(self.restart_window),

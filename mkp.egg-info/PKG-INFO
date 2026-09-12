@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: mkp
-Version: 0.0.1
-Summary: MKP simulation system
-Requires-Python: >=3.11
-Provides-Extra: numba
-Requires-Dist: numba>=0.59; extra == "numba"

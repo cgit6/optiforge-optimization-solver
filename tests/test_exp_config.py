@@ -16,7 +16,6 @@ from mkp.experiment import (
     load_config,
     register,
 )
-from mkp.tools.solver_config_loader import SolverConfigLoader
 
 
 def _write_problem_yaml(path: Path, *, problem_id: str = "p1", dataset: str = "DATA") -> None:
@@ -118,86 +117,30 @@ def test_build_sample_exp_cfg_success() -> None:
     experiment = build(Path("cli/exp/exp_cfg.yaml"))
 
     assert isinstance(experiment, Experiment)
-    assert experiment.cfg.experiment_name == "mkp_cb_qpso_rc"
+    assert experiment.cfg.experiment_name == "mkp_transfer_param2"
     assert experiment.cfg.collects == 20
     assert experiment.cfg.repeat == 300000000000
     assert experiment.cfg.worker_count == DEFAULT_WORKER_COUNT
-    assert experiment.cfg.solver_ids == ("brlsmasca_rl_rc_numba",)
-    assert experiment.cfg.solver_variants == (("brlsmasca_rl_rc_numba", 20),)
-    assert len(experiment.cfg.dataset_settings) == 2
-    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 10
+    assert experiment.cfg.solver_ids == (
+        "bsma_numba",
+        "bsca_numba",
+        "brlsmasca_rl_numba",
+    )
+    assert len(experiment.cfg.solver_variants) == 45
+    assert len(experiment.cfg.dataset_settings) == 6
+    assert sum(len(setting.problem_settings) for setting in experiment.cfg.dataset_settings) == 8
     first = experiment.cfg.dataset_settings[0]
-    assert first.experiment_id == "set3_cb5"
-    assert first.dataset == "OR10x250"
+    assert first.experiment_id == "set1_sent"
+    assert first.dataset == "SENT"
     assert first.problem_type == "mkp"
-    assert first.problem_ids == (
-        "OR10x250-0.25_1",
-        "OR10x250-0.25_2",
-        "OR10x250-0.25_3",
-        "OR10x250-0.25_4",
-        "OR10x250-0.25_5",
-    )
+    assert first.problem_ids == ("sent02",)
     last = experiment.cfg.dataset_settings[-1]
-    assert last.experiment_id == "set3_cb6"
-    assert last.dataset == "OR10x500"
-    assert last.problem_ids == (
-        "OR10x500-0.25_1",
-        "OR10x500-0.25_2",
-        "OR10x500-0.25_3",
-        "OR10x500-0.25_4",
-        "OR10x500-0.25_5",
-    )
+    assert last.experiment_id == "set4_gk"
+    assert last.dataset == "GK"
+    assert last.problem_ids == ("mk_gk06", "mk_gk08")
     for setting in experiment.cfg.dataset_settings:
-        assert setting.experiment_id.startswith("set3_cb")
         for problem in setting.problem_settings:
-            assert problem.evaluation_names == ("mkp_qpso_mean_gte",)
-            qpsos = [
-                baseline
-                for baseline in problem.evaluations[0].base_line
-                if baseline.name == "QPSO"
-            ]
-            assert len(qpsos) == 1
-            assert qpsos[0].metric == "mean"
-
-    loader = SolverConfigLoader()
-    rl_cfg = loader.load("brlsmasca_rl_rc_numba", param_set_index=20)
-    assert rl_cfg["params"] == {
-        "pop_size": 20,
-        "z": 0.01,
-        "a": 2.5,
-        "alpha": 0.1,
-        "gamma": 0.9,
-        "ctf": "abs_pow_16",
-        "eval_group_decimals": 1,
-        "eval_group_shuffle": False,
-        "eval_rc_eps": 1.0e-9,
-        "eval_x_eps": 1.0e-9,
-        "repair_passes": 2,
-        "repair_swap_limit": 4,
-        "mixed_init_enabled": True,
-        "restart_enabled": True,
-        "restart_window": 40,
-        "restart_ratio": 0.25,
-        "restart_strong_p": 0.85,
-        "restart_core_p": 0.50,
-        "restart_weak_p": 0.15,
-        "guided_binary_enabled": True,
-        "guided_lambda_lp": 0.30,
-        "guided_lambda_bucket": 0.08,
-        "guided_lambda_slack": 0.10,
-        "local_search_enabled": True,
-        "ls_budget_per_run": 1500,
-        "ls_max_passes": 2,
-        "ls_cooldown": 10,
-        "ls_add_cap": 80,
-        "ls_drop_cap": 80,
-        "archive_pr_enabled": True,
-        "archive_size": 8,
-        "pr_interval": 15,
-        "pr_max_steps": 15,
-        "pr_core_only": True,
-    }
-    assert rl_cfg["stop_condition"]["max_iterations"] == 5000
+            assert problem.evaluation_names == ("mkp_transfer_paired_strict",)
 
 
 def test_cli_exp_main_runs_experiment(tmp_path: Path) -> None:

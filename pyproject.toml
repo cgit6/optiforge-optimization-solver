@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mkp"
 version = "0.0.1"
-description = "MKP simulation system"
+description = "Reproducible experimentation framework for combinatorial optimization solvers"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0",
@@ -33,7 +33,9 @@ packages = [
     "mkp.converter",
     "mkp.engine",
     "mkp.experiment",
+    "mkp.machine",
     "mkp.problem",
+    "mkp.rng",
     "mkp.simulator",
     "mkp.solver",
     "mkp.tools",
