@@ -28,3 +28,6 @@ build/
 .cursor/
 
 output/
+
+# Large local archive (exceeds GitHub's 100 MB file limit)
+/note/SCRP.rar
